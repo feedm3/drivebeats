@@ -38,16 +38,18 @@ export function PlayControls() {
   return (
     <div className="flex items-center justify-center gap-2">
       <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn("h-8 w-8", shuffle && "bg-primary/15 text-primary")}
-            onClick={toggleShuffle}
-          >
-            <ShuffleIcon />
-          </Button>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-8 w-8", shuffle && "bg-primary/15 text-primary")}
+              onClick={toggleShuffle}
+            >
+              <ShuffleIcon />
+            </Button>
+          }
+        />
         <TooltipContent>Shuffle is {shuffle ? "on" : "off"}</TooltipContent>
       </Tooltip>
 
@@ -83,16 +85,18 @@ export function PlayControls() {
       </Button>
 
       <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn("h-8 w-8", repeat !== "off" && "bg-primary/15 text-primary")}
-            onClick={cycleRepeat}
-          >
-            {repeat === "one" ? <RepeatOneIcon /> : <RepeatIcon />}
-          </Button>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-8 w-8", repeat !== "off" && "bg-primary/15 text-primary")}
+              onClick={cycleRepeat}
+            >
+              {repeat === "one" ? <RepeatOneIcon /> : <RepeatIcon />}
+            </Button>
+          }
+        />
         <TooltipContent>
           {repeat === "off" ? "Repeat is off" : repeat === "one" ? "Repeat one track" : "Repeat all"}
         </TooltipContent>

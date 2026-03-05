@@ -21,7 +21,7 @@ export function ProgressBar() {
         value={[currentTime]}
         max={duration || 100}
         step={0.1}
-        onValueChange={([v]) => seek(v)}
+        onValueChange={(v) => seek(Array.isArray(v) ? v[0] : v)}
         className="flex-1"
       />
       <span className="w-10 text-xs text-muted-foreground">

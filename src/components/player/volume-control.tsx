@@ -23,7 +23,7 @@ export function VolumeControl() {
         value={[isMuted ? 0 : volume]}
         max={1}
         step={0.01}
-        onValueChange={([v]) => setVolume(v)}
+        onValueChange={(v) => setVolume(Array.isArray(v) ? v[0] : v)}
         className="hidden w-24 sm:flex"
       />
     </div>

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
-import { LoginButton } from "@/components/login-button";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { setTokens, isAuthenticated, refreshAccessToken } = useAuthStore();
@@ -18,7 +17,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       } catch {
         // ignore parse errors
       }
-      window.history.replaceState({}, "", "/");
+      window.history.replaceState({}, "", "/app");
       setReady(true);
       return;
     }
@@ -36,7 +35,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated()) {
-    return <LoginButton />;
+    window.location.href = "/";
+    return null;
   }
 
   return <>{children}</>;

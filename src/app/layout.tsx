@@ -1,8 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Footer } from "@/components/footer";
-import { Header } from "@/components/header";
-import { Providers } from "@/components/providers";
 import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
@@ -112,7 +109,7 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en" className="h-dvh overflow-hidden" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -125,13 +122,9 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} flex h-full flex-col antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Providers>
-          <Header />
-          <main className="flex-1 overflow-hidden">{children}</main>
-          <Footer />
-        </Providers>
+        {children}
         <Analytics />
       </body>
     </html>

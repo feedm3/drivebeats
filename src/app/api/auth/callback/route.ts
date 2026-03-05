@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   const encoded = Buffer.from(JSON.stringify(tokens)).toString("base64");
   const response = NextResponse.redirect(
-    `${process.env.NEXT_PUBLIC_APP_URL}/?tokens=${encoded}`,
+    `${process.env.NEXT_PUBLIC_APP_URL}/app?tokens=${encoded}`,
   );
 
   response.cookies.set("refresh_token", data.refresh_token, {

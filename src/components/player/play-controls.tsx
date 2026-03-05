@@ -42,7 +42,7 @@ export function PlayControls() {
           <Button
             variant="ghost"
             size="icon"
-            className={cn("h-8 w-8", shuffle && "text-primary")}
+            className={cn("h-8 w-8", shuffle && "bg-primary/15 text-primary")}
             onClick={toggleShuffle}
           >
             <ShuffleIcon />
@@ -87,7 +87,7 @@ export function PlayControls() {
           <Button
             variant="ghost"
             size="icon"
-            className={cn("h-8 w-8", repeat !== "off" && "text-primary")}
+            className={cn("h-8 w-8", repeat !== "off" && "bg-primary/15 text-primary")}
             onClick={cycleRepeat}
           >
             {repeat === "one" ? <RepeatOneIcon /> : <RepeatIcon />}

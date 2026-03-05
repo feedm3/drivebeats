@@ -8,7 +8,7 @@ import { BreadcrumbNav } from "@/components/breadcrumb-nav";
 import { FileList } from "@/components/file-list";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ThemeToggle } from "@/components/theme-toggle";
+
 
 export function FileBrowser() {
   const { getValidAccessToken, clearTokens } = useAuthStore();
@@ -75,12 +75,9 @@ export function FileBrowser() {
           folderStack={folderStack}
           onNavigate={onBreadcrumbNavigate}
         />
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={clearTokens}>
-            Sign out
-          </Button>
-        </div>
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={clearTokens}>
+          Sign out
+        </Button>
       </div>
       <Separator className="my-3" />
       <FileList

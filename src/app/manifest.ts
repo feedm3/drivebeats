@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Drive Player — Free MP3 Player for Google Drive",
-    short_name: "Drive Player",
+    name: "Google Drive MP3 Player",
+    short_name: "GDrive MP3",
     description:
       "Stream your MP3 collection directly from Google Drive. Free, no uploads needed.",
     start_url: "/",

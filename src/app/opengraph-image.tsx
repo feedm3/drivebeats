@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
 export const alt =
-  "Drive Player — Free MP3 Player for Google Drive";
+  "Google Drive MP3 Player — Stream Your Music Collection Online for Free";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -57,7 +57,7 @@ export default function Image() {
             marginBottom: 16,
           }}
         >
-          Drive Player
+          Google Drive MP3 Player
         </div>
         <div
           style={{
@@ -67,7 +67,7 @@ export default function Image() {
             textAlign: "center",
           }}
         >
-          Free MP3 Player for Google Drive
+          Stream your music collection online for free
         </div>
         <div
           style={{

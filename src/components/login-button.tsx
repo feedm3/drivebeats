@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
+
 
 export function LoginButton() {
   return (
@@ -14,7 +14,7 @@ export function LoginButton() {
           </svg>
         </div>
         <h1 className="max-w-lg text-4xl font-bold tracking-tight">
-          Free MP3 Player for Google Drive
+          Google Drive MP3 Player
         </h1>
         <p className="max-w-md text-lg text-muted-foreground">
           Stream your music collection directly from Google Drive — no downloads, no uploads, no syncing needed.
@@ -69,12 +69,11 @@ export function LoginButton() {
         </div>
       </section>
 
-      <footer className="flex w-full max-w-3xl items-center justify-between border-t border-border/50 py-6 text-xs text-muted-foreground">
-        <p className="flex-1">
-          Drive Player is a free, open-source MP3 player for Google Drive.
+      <footer className="w-full max-w-3xl border-t border-border/50 py-6 text-center text-xs text-muted-foreground">
+        <p>
+          Google Drive MP3 Player is a free, open-source MP3 player for Google Drive.
           Play music stored in your Google Drive without downloading. Works on desktop and mobile browsers.
         </p>
-        <ThemeToggle />
       </footer>
     </div>
   );

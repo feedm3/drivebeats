@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Header } from "@/components/header";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
@@ -18,8 +19,8 @@ const siteUrl = `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`;
 export const metadata: Metadata = {
   title: {
     default:
-      "Drive Player — Free MP3 Player for Google Drive | Stream Music Online",
-    template: "%s | Drive Player",
+      "Google Drive MP3 Player — Stream Your Music Collection Online for Free",
+    template: "%s | Google Drive MP3 Player",
   },
   description:
     "Free online MP3 player for Google Drive. Stream your music collection directly from Drive — no downloads, no uploads, no storage limits. Spotify-style playback with shuffle, repeat, and full controls.",
@@ -40,8 +41,8 @@ export const metadata: Metadata = {
     "browser mp3 player",
     "listen to music google drive",
   ],
-  authors: [{ name: "Drive Player" }],
-  creator: "Drive Player",
+  authors: [{ name: "Google Drive MP3 Player" }],
+  creator: "Google Drive MP3 Player",
   metadataBase: new URL(siteUrl),
   alternates: {
     canonical: "/",
@@ -50,14 +51,14 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     url: siteUrl,
-    siteName: "Drive Player",
-    title: "Drive Player — Free MP3 Player for Google Drive",
+    siteName: "Google Drive MP3 Player",
+    title: "Google Drive MP3 Player — Stream Your Music Collection Online for Free",
     description:
       "Stream your MP3 collection directly from Google Drive. Free, no uploads, Spotify-style controls.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Drive Player — Free MP3 Player for Google Drive",
+    title: "Google Drive MP3 Player — Stream Your Music Collection Online for Free",
     description:
       "Stream your MP3 collection directly from Google Drive. Free, no uploads, Spotify-style controls.",
   },
@@ -72,7 +73,7 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
-  applicationName: "Drive Player",
+  applicationName: "Google Drive MP3 Player",
   category: "music",
 };
 
@@ -84,7 +85,7 @@ export default function RootLayout({
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "WebApplication",
-    name: "Drive Player",
+    name: "Google Drive MP3 Player",
     url: siteUrl,
     description:
       "Free online MP3 player for Google Drive. Stream your music collection directly from Drive with Spotify-style controls.",
@@ -121,7 +122,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          <Header />
+          {children}
+        </Providers>
       </body>
     </html>
   );

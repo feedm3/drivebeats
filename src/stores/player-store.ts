@@ -5,6 +5,8 @@ type RepeatMode = "off" | "one" | "all";
 
 const MAX_CACHE_SIZE = 20;
 
+let fetchAbortController: AbortController | null = null;
+
 interface PlayerState {
   currentTrack: DriveFile | null;
   playlist: DriveFile[];
@@ -61,10 +63,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   fetchAndPlay: async (fileId, accessToken) => {
+    // Abort any in-flight fetch so a stale download can't overwrite audio.src
+    fetchAbortController?.abort();
+    const controller = new AbortController();
+    fetchAbortController = controller;
+
     const { blobCache } = get();
     const cached = blobCache.get(fileId);
 
     if (cached) {
+      if (controller.signal.aborted) return;
       const audio = get().audio;
       if (audio) {
         audio.src = cached;
@@ -78,7 +86,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     try {
       const res = await fetch(
         `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-        { headers: { Authorization: `Bearer ${accessToken}` } },
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: controller.signal,
+        },
       );
       if (!res.ok) throw new Error(`Drive API returned ${res.status}`);
 
@@ -93,6 +104,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       }
       blobCache.set(fileId, blobUrl);
 
+      // If a newer fetch started while we were downloading, don't touch audio
+      if (controller.signal.aborted) return;
+
       const audio = get().audio;
       if (audio) {
         audio.src = blobUrl;
@@ -100,6 +114,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       }
       set({ isLoading: false });
     } catch (e) {
+      if (controller.signal.aborted) return;
       set({ isLoading: false });
       throw e;
     }

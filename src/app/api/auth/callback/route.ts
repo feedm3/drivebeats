@@ -23,6 +23,6 @@ export async function GET(request: NextRequest) {
 
   const encoded = Buffer.from(JSON.stringify(tokens)).toString("base64");
   return NextResponse.redirect(
-    `${process.env.NEXT_PUBLIC_APP_URL}/?tokens=${encoded}`,
+    `https://${process.env.NEXT_PUBLIC_VERCEL_URL}/?tokens=${encoded}`,
   );
 }

@@ -111,7 +111,7 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="h-dvh overflow-hidden" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -124,11 +124,11 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} flex h-full flex-col antialiased`}
       >
         <Providers>
           <Header />
-          {children}
+          <main className="flex-1 overflow-hidden">{children}</main>
         </Providers>
         <Analytics />
       </body>

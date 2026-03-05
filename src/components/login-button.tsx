@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 
 export function LoginButton() {
   return (
-    <div className="flex min-h-screen flex-col items-center px-4">
+    <div className="flex h-full flex-col items-center overflow-y-auto px-4">
       {/* Hero */}
       <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
         <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground">

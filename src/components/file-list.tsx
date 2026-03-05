@@ -42,8 +42,8 @@ export function FileList({
   }
 
   return (
-    <ScrollArea className="h-[calc(100vh-12rem)]">
-      <div className="space-y-1 p-2">
+    <ScrollArea className="min-h-0 flex-1">
+      <div className="space-y-1 p-2 pb-36">
         {files.map((file) => (
           <FileItem
             key={file.id}

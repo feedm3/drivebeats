@@ -35,7 +35,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <div className="text-muted-foreground animate-pulse">Getting things ready...</div>
       </div>
     );

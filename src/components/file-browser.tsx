@@ -69,7 +69,7 @@ export function FileBrowser() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-4 pt-8 pb-36">
+    <div className="mx-auto flex h-full max-w-4xl flex-col overflow-hidden px-4 pt-8">
       <div className="flex items-center justify-between">
         <BreadcrumbNav
           folderStack={folderStack}

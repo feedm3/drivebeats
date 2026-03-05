@@ -16,7 +16,7 @@ interface PlayerState {
   repeat: RepeatMode;
   audio: HTMLAudioElement | null;
   initAudio: () => HTMLAudioElement;
-  playTrack: (track: DriveFile, playlist: DriveFile[], accessToken: string) => Promise<void>;
+  playTrack: (track: DriveFile, playlist: DriveFile[], accessToken: string) => void;
   togglePlay: () => void;
   next: (accessToken: string) => void;
   previous: (accessToken: string) => void;
@@ -52,18 +52,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     return audio;
   },
 
-  playTrack: async (track, playlist, accessToken) => {
+  playTrack: (track, playlist, accessToken) => {
     const audio = get().initAudio();
     const index = playlist.findIndex((f) => f.id === track.id);
 
-    // Set httpOnly cookie for secure streaming
-    await fetch("/api/drive/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accessToken }),
-    });
-
-    audio.src = `/api/drive/stream/${track.id}`;
+    audio.src = `https://www.googleapis.com/drive/v3/files/${track.id}?alt=media&access_token=${encodeURIComponent(accessToken)}`;
     audio.play();
     set({
       currentTrack: track,

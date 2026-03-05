@@ -64,13 +64,27 @@ export function PlayerBar() {
       const token = await useAuthStore.getState().getValidAccessToken();
       if (token) next(token);
     };
-    const onError = () => {
-      const { currentTrack } = usePlayerStore.getState();
-      if (currentTrack) {
-        import("sonner").then(({ toast }) =>
-          toast.error(`Failed to play "${currentTrack.name}"`),
-        );
+    const onError = async () => {
+      const { currentTrack, playlist } = usePlayerStore.getState();
+      if (!currentTrack) return;
+
+      // Try refreshing the token and retrying once
+      const freshToken = await useAuthStore.getState().getValidAccessToken();
+      if (freshToken) {
+        const savedTime = el.currentTime;
+        el.src = `https://www.googleapis.com/drive/v3/files/${currentTrack.id}?alt=media&access_token=${encodeURIComponent(freshToken)}`;
+        el.currentTime = savedTime;
+        try {
+          await el.play();
+          return;
+        } catch {
+          // Retry failed, fall through to toast
+        }
       }
+
+      import("sonner").then(({ toast }) =>
+        toast.error(`Failed to play "${currentTrack.name}"`),
+      );
     };
 
     el.addEventListener("timeupdate", onTimeUpdate);

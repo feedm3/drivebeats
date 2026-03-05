@@ -4,7 +4,7 @@ const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 export function getGoogleAuthUrl() {
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
-    redirect_uri: `https://${process.env.NEXT_PUBLIC_VERCEL_URL}/api/auth/callback`,
+    redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback`,
     response_type: "code",
     scope: "https://www.googleapis.com/auth/drive.readonly",
     access_type: "offline",
@@ -21,7 +21,7 @@ export async function exchangeCodeForTokens(code: string) {
       code,
       client_id: process.env.GOOGLE_CLIENT_ID!,
       client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      redirect_uri: `https://${process.env.NEXT_PUBLIC_VERCEL_URL}/api/auth/callback`,
+      redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback`,
       grant_type: "authorization_code",
     }),
   });

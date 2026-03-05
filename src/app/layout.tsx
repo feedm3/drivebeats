@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const siteUrl = `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`;
+const siteUrl = `${process.env.NEXT_PUBLIC_APP_URL}`;
 
 export const metadata: Metadata = {
   title: {

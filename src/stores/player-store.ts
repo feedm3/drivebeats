@@ -3,6 +3,8 @@ import type { DriveFile } from "@/types";
 
 type RepeatMode = "off" | "one" | "all";
 
+const MAX_CACHE_SIZE = 20;
+
 interface PlayerState {
   currentTrack: DriveFile | null;
   playlist: DriveFile[];
@@ -16,7 +18,7 @@ interface PlayerState {
   repeat: RepeatMode;
   isLoading: boolean;
   audio: HTMLAudioElement | null;
-  blobUrl: string | null;
+  blobCache: Map<string, string>;
   initAudio: () => HTMLAudioElement;
   playTrack: (track: DriveFile, playlist: DriveFile[], accessToken: string) => void;
   fetchAndPlay: (fileId: string, accessToken: string) => Promise<void>;
@@ -31,6 +33,7 @@ interface PlayerState {
   setCurrentTime: (t: number) => void;
   setDuration: (d: number) => void;
   setIsPlaying: (p: boolean) => void;
+  clearCache: () => void;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -46,7 +49,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   repeat: "off",
   isLoading: false,
   audio: null,
-  blobUrl: null,
+  blobCache: new Map(),
 
   initAudio: () => {
     const existing = get().audio;
@@ -58,8 +61,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   fetchAndPlay: async (fileId, accessToken) => {
-    const { blobUrl: prevBlobUrl } = get();
-    if (prevBlobUrl) URL.revokeObjectURL(prevBlobUrl);
+    const { blobCache } = get();
+    const cached = blobCache.get(fileId);
+
+    if (cached) {
+      const audio = get().audio;
+      if (audio) {
+        audio.src = cached;
+        await audio.play();
+      }
+      set({ isLoading: false });
+      return;
+    }
 
     set({ isLoading: true });
     try {
@@ -71,12 +84,21 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
+
+      // LRU eviction: remove oldest entry if cache is full
+      if (blobCache.size >= MAX_CACHE_SIZE) {
+        const oldestKey = blobCache.keys().next().value!;
+        URL.revokeObjectURL(blobCache.get(oldestKey)!);
+        blobCache.delete(oldestKey);
+      }
+      blobCache.set(fileId, blobUrl);
+
       const audio = get().audio;
       if (audio) {
         audio.src = blobUrl;
         await audio.play();
       }
-      set({ blobUrl, isLoading: false });
+      set({ isLoading: false });
     } catch (e) {
       set({ isLoading: false });
       throw e;
@@ -185,4 +207,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setCurrentTime: (t) => set({ currentTime: t }),
   setDuration: (d) => set({ duration: d }),
   setIsPlaying: (p) => set({ isPlaying: p }),
+
+  clearCache: () => {
+    const { blobCache } = get();
+    for (const url of blobCache.values()) {
+      URL.revokeObjectURL(url);
+    }
+    blobCache.clear();
+  },
 }));

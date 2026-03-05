@@ -100,8 +100,7 @@ export function PlayerBar() {
       el.removeEventListener("pause", onPause);
       el.removeEventListener("ended", onEnded);
       el.removeEventListener("error", onError);
-      const { blobUrl } = usePlayerStore.getState();
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      usePlayerStore.getState().clearCache();
     };
   }, []);
 

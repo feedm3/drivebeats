@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { DriveFile, FolderEntry } from "@/types";
 import { useAuthStore } from "@/stores/auth-store";
+import { usePlayerStore } from "@/stores/player-store";
 import { BreadcrumbNav } from "@/components/breadcrumb-nav";
 import { FileList } from "@/components/file-list";
 import { Button } from "@/components/ui/button";
@@ -75,7 +76,7 @@ export function FileBrowser() {
           folderStack={folderStack}
           onNavigate={onBreadcrumbNavigate}
         />
-        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={logout}>
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { usePlayerStore.getState().clearCache(); logout(); }}>
           Sign out
         </Button>
       </div>

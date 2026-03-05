@@ -69,12 +69,6 @@ export function LoginButton() {
         </div>
       </section>
 
-      <footer className="w-full max-w-3xl border-t border-border/50 py-6 text-center text-xs text-muted-foreground">
-        <p>
-          Google Drive MP3 Player is a free, open-source MP3 player for Google Drive.
-          Play music stored in your Google Drive without downloading. Works on desktop and mobile browsers.
-        </p>
-      </footer>
     </div>
   );
 }

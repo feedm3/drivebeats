@@ -75,6 +75,9 @@ export const metadata: Metadata = {
   },
   applicationName: "Google Drive MP3 Player",
   category: "music",
+  verification: {
+    google: "dGWsSgB_brN-xE3wkcEu5mWwjhYirjf5f6-_xgqncww",
+  },
 };
 
 export default function RootLayout({

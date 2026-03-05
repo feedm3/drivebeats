@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { refreshAccessToken } from "@/lib/google";
 
 export async function POST(request: NextRequest) {
-  const { refresh_token } = await request.json();
+  const refresh_token = request.cookies.get("refresh_token")?.value;
   if (!refresh_token) {
     return NextResponse.json(
       { error: "No refresh token provided" },

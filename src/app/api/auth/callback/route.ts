@@ -17,12 +17,21 @@ export async function GET(request: NextRequest) {
 
   const tokens = {
     access_token: data.access_token,
-    refresh_token: data.refresh_token,
     expires_at: Date.now() + data.expires_in * 1000,
   };
 
   const encoded = Buffer.from(JSON.stringify(tokens)).toString("base64");
-  return NextResponse.redirect(
+  const response = NextResponse.redirect(
     `${process.env.NEXT_PUBLIC_APP_URL}/?tokens=${encoded}`,
   );
+
+  response.cookies.set("refresh_token", data.refresh_token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/api/auth",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  });
+
+  return response;
 }

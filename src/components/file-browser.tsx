@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 
 
 export function FileBrowser() {
-  const { getValidAccessToken, clearTokens } = useAuthStore();
+  const { getValidAccessToken, logout } = useAuthStore();
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [accessToken, setAccessToken] = useState<string>("");
@@ -26,7 +26,7 @@ export function FileBrowser() {
       setLoading(true);
       const token = await getValidAccessToken();
       if (!token) {
-        clearTokens();
+        logout();
         return;
       }
       setAccessToken(token);
@@ -39,7 +39,7 @@ export function FileBrowser() {
           setFiles(await res.json());
         } else if (res.status === 401) {
           toast.error("Session expired. Please sign in again.");
-          clearTokens();
+          logout();
         } else if (res.status === 403) {
           toast.error("Access denied. Check your Google Drive permissions.");
         } else if (res.status === 429) {
@@ -53,7 +53,7 @@ export function FileBrowser() {
         setLoading(false);
       }
     },
-    [getValidAccessToken, clearTokens],
+    [getValidAccessToken, logout],
   );
 
   useEffect(() => {
@@ -75,7 +75,7 @@ export function FileBrowser() {
           folderStack={folderStack}
           onNavigate={onBreadcrumbNavigate}
         />
-        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={clearTokens}>
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={logout}>
           Sign out
         </Button>
       </div>

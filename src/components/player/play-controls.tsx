@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 export function PlayControls() {
   const {
     isPlaying,
+    isLoading,
     shuffle,
     repeat,
     togglePlay,
@@ -64,11 +65,11 @@ export function PlayControls() {
         variant="default"
         size="icon"
         className="h-10 w-10 rounded-full"
-        aria-label={isPlaying ? "Pause" : "Play"}
+        aria-label={isLoading ? "Loading" : isPlaying ? "Pause" : "Play"}
         onClick={togglePlay}
-        disabled={!currentTrack}
+        disabled={!currentTrack || isLoading}
       >
-        {isPlaying ? <PauseIcon /> : <PlayIcon />}
+        {isLoading ? <LoadingIcon /> : isPlaying ? <PauseIcon /> : <PlayIcon />}
       </Button>
 
       <Button
@@ -112,6 +113,14 @@ function PrevIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="19 20 9 12 19 4 19 20" /><line x1="5" y1="19" x2="5" y2="5" />
+    </svg>
+  );
+}
+
+function LoadingIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin">
+      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
     </svg>
   );
 }

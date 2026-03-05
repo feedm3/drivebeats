@@ -2,41 +2,30 @@ import { create } from "zustand";
 
 interface AuthState {
   accessToken: string | null;
-  refreshToken: string | null;
   expiresAt: number | null;
-  setTokens: (
-    accessToken: string,
-    refreshToken: string,
-    expiresAt: number,
-  ) => void;
+  setTokens: (accessToken: string, expiresAt: number) => void;
   clearTokens: () => void;
   isAuthenticated: () => boolean;
   isTokenExpired: () => boolean;
   refreshAccessToken: () => Promise<boolean>;
   getValidAccessToken: () => Promise<string | null>;
+  logout: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   accessToken: null,
-  refreshToken:
-    typeof window !== "undefined"
-      ? sessionStorage.getItem("refresh_token")
-      : null,
   expiresAt: null,
 
-  setTokens: (accessToken, refreshToken, expiresAt) => {
-    sessionStorage.setItem("refresh_token", refreshToken);
-    set({ accessToken, refreshToken, expiresAt });
+  setTokens: (accessToken, expiresAt) => {
+    set({ accessToken, expiresAt });
   },
 
   clearTokens: () => {
-    sessionStorage.removeItem("refresh_token");
-    set({ accessToken: null, refreshToken: null, expiresAt: null });
+    set({ accessToken: null, expiresAt: null });
   },
 
   isAuthenticated: () => {
-    const { accessToken, refreshToken } = get();
-    return !!(accessToken || refreshToken);
+    return !!get().accessToken;
   },
 
   isTokenExpired: () => {
@@ -46,14 +35,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   refreshAccessToken: async () => {
-    const { refreshToken } = get();
-    if (!refreshToken) return false;
-
     try {
       const res = await fetch("/api/auth/refresh", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refreshToken }),
       });
 
       if (!res.ok) {
@@ -76,5 +60,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     const ok = await state.refreshAccessToken();
     return ok ? get().accessToken : null;
+  },
+
+  logout: async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    get().clearTokens();
   },
 }));

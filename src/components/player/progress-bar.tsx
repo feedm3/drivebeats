@@ -1,0 +1,32 @@
+"use client";
+
+import { usePlayerStore } from "@/stores/player-store";
+import { Slider } from "@/components/ui/slider";
+
+function formatTime(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+export function ProgressBar() {
+  const { currentTime, duration, seek } = usePlayerStore();
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-10 text-right text-xs text-muted-foreground">
+        {formatTime(currentTime)}
+      </span>
+      <Slider
+        value={[currentTime]}
+        max={duration || 100}
+        step={0.1}
+        onValueChange={([v]) => seek(v)}
+        className="flex-1"
+      />
+      <span className="w-10 text-xs text-muted-foreground">
+        {formatTime(duration)}
+      </span>
+    </div>
+  );
+}

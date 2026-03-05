@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 
 
@@ -8,11 +9,13 @@ export function LoginButton() {
     <div className="flex h-full flex-col items-center overflow-y-auto px-4">
       {/* Hero */}
       <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-        <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
-          </svg>
-        </div>
+        <Image
+          src="/web-app-manifest-192x192.png"
+          alt="Google Drive MP3 Player"
+          width={64}
+          height={64}
+          className="mb-2 rounded-2xl"
+        />
         <h1 className="max-w-lg text-4xl font-bold tracking-tight">
           Google Drive MP3 Player
         </h1>

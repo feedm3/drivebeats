@@ -21,8 +21,8 @@ const siteUrl = `${process.env.NEXT_PUBLIC_APP_URL}`;
 export const metadata: Metadata = {
   title: {
     default:
-      "Google Drive MP3 Player — Stream Your Music Collection Online for Free",
-    template: "%s | Google Drive MP3 Player",
+      "DriveBeats — Stream Your Music Collection from Google Drive",
+    template: "%s | DriveBeats",
   },
   description:
     "Free online MP3 player for Google Drive. Stream your music collection directly from Drive — no downloads, no uploads, no storage limits. Spotify-style playback with shuffle, repeat, and full controls.",
@@ -43,8 +43,8 @@ export const metadata: Metadata = {
     "browser mp3 player",
     "listen to music google drive",
   ],
-  authors: [{ name: "Google Drive MP3 Player" }],
-  creator: "Google Drive MP3 Player",
+  authors: [{ name: "DriveBeats" }],
+  creator: "DriveBeats",
   metadataBase: new URL(siteUrl),
   alternates: {
     canonical: "/",
@@ -53,14 +53,14 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     url: siteUrl,
-    siteName: "Google Drive MP3 Player",
-    title: "Google Drive MP3 Player — Stream Your Music Collection Online for Free",
+    siteName: "DriveBeats",
+    title: "DriveBeats — Stream Your Music Collection from Google Drive",
     description:
       "Stream your MP3 collection directly from Google Drive. Free, no uploads, Spotify-style controls.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Google Drive MP3 Player — Stream Your Music Collection Online for Free",
+    title: "DriveBeats — Stream Your Music Collection from Google Drive",
     description:
       "Stream your MP3 collection directly from Google Drive. Free, no uploads, Spotify-style controls.",
   },
@@ -75,7 +75,7 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
-  applicationName: "Google Drive MP3 Player",
+  applicationName: "DriveBeats",
   category: "music",
   verification: {
     google: "dGWsSgB_brN-xE3wkcEu5mWwjhYirjf5f6-_xgqncww",
@@ -90,7 +90,7 @@ export default function RootLayout({
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "WebApplication",
-    name: "Google Drive MP3 Player",
+    name: "DriveBeats",
     url: siteUrl,
     description:
       "Free online MP3 player for Google Drive. Stream your music collection directly from Drive with Spotify-style controls.",

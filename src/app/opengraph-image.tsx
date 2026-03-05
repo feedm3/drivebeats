@@ -1,12 +1,18 @@
 import { ImageResponse } from "next/og";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
-export const runtime = "edge";
 export const alt =
-  "Google Drive MP3 Player — Stream Your Music Collection Online for Free";
+  "DriveBeats — Stream Your Music Collection from Google Drive";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default function Image() {
+export default async function Image() {
+  const iconData = await readFile(
+    join(process.cwd(), "public", "web-app-manifest-192x192.png"),
+  );
+  const iconBase64 = `data:image/png;base64,${iconData.toString("base64")}`;
+
   return new ImageResponse(
     (
       <div
@@ -22,33 +28,12 @@ export default function Image() {
           color: "white",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 80,
-            height: 80,
-            borderRadius: 20,
-            background: "#2dd4a8",
-            marginBottom: 24,
-          }}
-        >
-          <svg
-            width="40"
-            height="40"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#0a0a0a"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M9 18V5l12-2v13" />
-            <circle cx="6" cy="18" r="3" />
-            <circle cx="18" cy="16" r="3" />
-          </svg>
-        </div>
+        <img
+          src={iconBase64}
+          width={96}
+          height={96}
+          style={{ marginBottom: 24, borderRadius: 20 }}
+        />
         <div
           style={{
             fontSize: 56,
@@ -57,7 +42,7 @@ export default function Image() {
             marginBottom: 16,
           }}
         >
-          Google Drive MP3 Player
+          DriveBeats
         </div>
         <div
           style={{

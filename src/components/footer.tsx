@@ -2,8 +2,8 @@ import Link from "next/link";
 
 export function Footer() {
   return (
-    <footer className="border-t border-border/50 py-3 text-center text-xs text-muted-foreground">
-      <div className="flex items-center justify-center gap-3">
+    <footer className="border-t border-border/50 py-6 text-center text-sm text-muted-foreground">
+      <div className="flex items-center justify-center gap-4">
         <Link href="/privacy-policy" className="hover:underline">
           Privacy Policy
         </Link>

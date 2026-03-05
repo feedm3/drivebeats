@@ -48,20 +48,6 @@ export function AppHeader() {
                   onClick={() => setMenuOpen(false)}
                 />
                 <div className="absolute right-0 z-20 mt-1 w-48 rounded-md border bg-background py-1 shadow-lg">
-                  <Link
-                    href="/privacy-policy"
-                    className="block px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    Privacy Policy
-                  </Link>
-                  <Link
-                    href="/imprint"
-                    className="block px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    Imprint
-                  </Link>
                   <button
                     type="button"
                     onClick={handleLogout}

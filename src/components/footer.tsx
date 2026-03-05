@@ -8,7 +8,7 @@ export function Footer() {
 
   return (
     <footer
-      className={`border-t border-border/50 py-3 text-center text-xs text-muted-foreground ${currentTrack ? "pb-20" : ""}`}
+      className={`border-t border-border/50 py-3 text-center text-xs text-muted-foreground ${currentTrack ? "relative z-50 mb-24" : ""}`}
     >
       <div className="flex items-center justify-center gap-3">
         <Link href="/privacy-policy" className="hover:underline">

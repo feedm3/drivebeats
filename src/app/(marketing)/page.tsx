@@ -17,12 +17,13 @@ export default function LandingPage() {
           Google Drive MP3 Player
         </h1>
         <p className="max-w-md text-lg text-muted-foreground">
-          Stream your music collection directly from Google Drive — no
-          downloads, no uploads, no syncing needed.
+          Stream your music collection directly from Google Drive in your
+          browser. No uploads, no syncing, and no server-side media proxy.
         </p>
         <SignInButton className="mt-4 inline-flex h-11 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90" />
         <p className="text-xs text-muted-foreground">
-          Free to use. We only request read-only access to your Drive.
+          Client-side playback with read-only Drive access. Your MP3 files stay
+          between Google and your browser.
         </p>
       </div>
 
@@ -94,8 +95,8 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Private and secure</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Read-only access. Your files never leave Google servers. No data
-              stored.
+              Read-only access only. We do not store your music or proxy MP3
+              streams through our servers.
             </p>
           </div>
         </div>
@@ -113,8 +114,8 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Sign in</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Connect your Google account with one click. We only request
-              read-only access.
+              Connect your Google account with read-only access so the app can
+              browse and play files directly in your browser.
             </p>
           </div>
           <div className="text-center">
@@ -178,8 +179,9 @@ export default function LandingPage() {
               Do my files get downloaded or stored on your servers?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              No. Files are streamed directly from Google&apos;s servers to your
-              browser. Nothing is stored on our end.
+              No. DriveBeats is client-side for browsing and playback. Your
+              files stream from Google Drive to your browser and are not stored
+              or re-hosted by us.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">

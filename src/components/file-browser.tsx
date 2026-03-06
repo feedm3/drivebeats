@@ -16,11 +16,22 @@ export function FileBrowser() {
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [accessToken, setAccessToken] = useState<string>("");
-  const [folderStack, setFolderStack] = useState<FolderEntry[]>([
-    { id: "root", name: "My Drive" },
-  ]);
-
+  const initialStack: FolderEntry[] = [{ id: "root", name: "My Drive" }];
+  const [folderStack, setFolderStack] = useState<FolderEntry[]>(initialStack);
   const currentFolderId = folderStack[folderStack.length - 1].id;
+
+  // Seed initial history state & listen for back/forward
+  useEffect(() => {
+    window.history.replaceState({ folderStack: initialStack }, "");
+
+    const onPopState = (e: PopStateEvent) => {
+      if (e.state?.folderStack) {
+        setFolderStack(e.state.folderStack);
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchFiles = useCallback(
     async (folderId: string) => {
@@ -62,11 +73,19 @@ export function FileBrowser() {
   }, [currentFolderId, fetchFiles]);
 
   const onFolderClick = (id: string, name: string) => {
-    setFolderStack((s) => [...s, { id, name }]);
+    setFolderStack((s) => {
+      const newStack = [...s, { id, name }];
+      window.history.pushState({ folderStack: newStack }, "");
+      return newStack;
+    });
   };
 
   const onBreadcrumbNavigate = (index: number) => {
-    setFolderStack((s) => s.slice(0, index + 1));
+    setFolderStack((s) => {
+      const newStack = s.slice(0, index + 1);
+      window.history.pushState({ folderStack: newStack }, "");
+      return newStack;
+    });
   };
 
   return (

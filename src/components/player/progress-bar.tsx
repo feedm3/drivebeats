@@ -14,7 +14,7 @@ export function ProgressBar() {
 
   return (
     <div className="flex items-center gap-2">
-      <span className="w-10 text-right text-xs text-muted-foreground">
+      <span className="w-10 text-left tabular-nums text-xs text-muted-foreground">
         {formatTime(currentTime)}
       </span>
       <Slider
@@ -22,9 +22,9 @@ export function ProgressBar() {
         max={duration || 100}
         step={0.1}
         onValueChange={(v) => seek(Array.isArray(v) ? v[0] : v)}
-        className="flex-1"
+        className="group flex-1"
       />
-      <span className="w-10 text-xs text-muted-foreground">
+      <span className="w-10 text-right tabular-nums text-xs text-muted-foreground">
         {formatTime(duration)}
       </span>
     </div>

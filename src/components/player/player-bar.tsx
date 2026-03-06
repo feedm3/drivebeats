@@ -170,10 +170,17 @@ export function PlayerBar() {
         <div className="pt-3">
           <ProgressBar />
         </div>
-        <div className="grid grid-cols-3 items-center gap-4 py-3">
+        <div className="py-3 sm:hidden">
           <TrackInfo />
+        </div>
+        <div className="relative flex items-center justify-center pb-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:py-3">
+          <div className="hidden sm:block">
+            <TrackInfo />
+          </div>
           <PlayControls />
-          <VolumeControl />
+          <div className="absolute right-0 sm:static">
+            <VolumeControl />
+          </div>
         </div>
       </div>
     </div>

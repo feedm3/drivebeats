@@ -3,13 +3,18 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useAuthStore } from "@/stores/auth-store";
+import { usePlayerStore } from "@/stores/player-store";
+import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export function AppHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
+    usePlayerStore.getState().clearCache();
+    useFolderCacheStore.getState().clear();
+    await useAuthStore.getState().logout();
     window.location.href = "/";
   }
 

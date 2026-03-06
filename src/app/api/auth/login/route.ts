@@ -1,21 +1,29 @@
-import { redirect } from "next/navigation";
+import { type NextRequest, NextResponse } from "next/server";
 import { getGoogleAuthUrl, refreshAccessToken } from "@/lib/google";
 
-export async function GET(request: Request) {
-  const refreshToken =
-    request.headers
-      .get("cookie")
-      ?.split(";")
-      .map((part) => part.trim())
-      .find((part) => part.startsWith("refresh_token="))
-      ?.slice("refresh_token=".length) ?? null;
+const OAUTH_STATE_COOKIE = "oauth_state";
 
+export async function GET(request: NextRequest) {
+  const refreshToken = request.cookies.get("refresh_token")?.value ?? null;
   if (refreshToken) {
     const data = await refreshAccessToken(refreshToken);
     if (!data.error) {
-      redirect("/app");
+      return NextResponse.redirect(new URL("/app", request.url));
     }
   }
 
-  redirect(getGoogleAuthUrl());
+  const state = crypto.randomUUID();
+  const response = NextResponse.redirect(
+    getGoogleAuthUrl({ state, prompt: "consent" }),
+  );
+
+  response.cookies.set(OAUTH_STATE_COOKIE, state, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/api/auth",
+    maxAge: 10 * 60,
+  });
+
+  return response;
 }

@@ -25,7 +25,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   isAuthenticated: () => {
-    return !!get().accessToken;
+    return !!get().accessToken && !get().isTokenExpired();
   },
 
   isTokenExpired: () => {
@@ -49,6 +49,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ accessToken: data.access_token, expiresAt: data.expires_at });
       return true;
     } catch {
+      get().clearTokens();
       return false;
     }
   },

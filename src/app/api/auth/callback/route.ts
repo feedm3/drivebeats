@@ -1,9 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { exchangeCodeForTokens } from "@/lib/google";
 
+const OAUTH_STATE_COOKIE = "oauth_state";
+
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
-  if (!code) {
+  const state = request.nextUrl.searchParams.get("state");
+  const expectedState = request.cookies.get(OAUTH_STATE_COOKIE)?.value;
+
+  if (!code || !state || !expectedState || state !== expectedState) {
     return NextResponse.json({ error: "No code provided" }, { status: 400 });
   }
 
@@ -15,23 +20,25 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const tokens = {
-    access_token: data.access_token,
-    expires_at: Date.now() + data.expires_in * 1000,
-  };
+  const response = NextResponse.redirect(new URL("/app", request.url));
 
-  const encoded = Buffer.from(JSON.stringify(tokens)).toString("base64");
-  const response = NextResponse.redirect(
-    `${process.env.NEXT_PUBLIC_APP_URL}/app?tokens=${encoded}`,
-  );
-
-  response.cookies.set("refresh_token", data.refresh_token, {
+  response.cookies.set(OAUTH_STATE_COOKIE, "", {
     httpOnly: true,
     secure: true,
     sameSite: "lax",
     path: "/api/auth",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 0,
   });
+
+  if (data.refresh_token) {
+    response.cookies.set("refresh_token", data.refresh_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/api/auth",
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+    });
+  }
 
   return response;
 }

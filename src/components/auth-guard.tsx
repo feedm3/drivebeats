@@ -4,32 +4,26 @@ import { useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { setTokens, isAuthenticated, refreshAccessToken } = useAuthStore();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const refreshAccessToken = useAuthStore((state) => state.refreshAccessToken);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tokensParam = params.get("tokens");
-    if (tokensParam) {
-      try {
-        const tokens = JSON.parse(atob(tokensParam));
-        setTokens(tokens.access_token, tokens.expires_at);
-      } catch {
-        // ignore parse errors
-      }
-      window.history.replaceState({}, "", "/app");
+    if (isAuthenticated()) {
       setReady(true);
       return;
     }
 
-    // Always attempt refresh — server checks HttpOnly cookie
+    // Attempt refresh from the HttpOnly refresh-token cookie.
     refreshAccessToken().then(() => setReady(true));
-  }, [setTokens, refreshAccessToken]);
+  }, [isAuthenticated, refreshAccessToken]);
 
   if (!ready) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground animate-pulse">Getting things ready...</div>
+        <div className="text-muted-foreground animate-pulse">
+          Getting things ready...
+        </div>
       </div>
     );
   }

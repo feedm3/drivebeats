@@ -97,13 +97,24 @@ export function FileBrowser() {
       syncAccessToken(token);
 
       try {
+        const query = `'${folderId}' in parents and trashed = false and (mimeType = 'application/vnd.google-apps.folder' or mimeType = 'audio/mpeg' or mimeType = 'audio/mp3')`;
+        const params = new URLSearchParams({
+          q: query,
+          fields: "files(id,name,mimeType,size)",
+          orderBy: "folder,name",
+          pageSize: "1000",
+        });
         const res = await fetch(
-          `/api/drive/files?folderId=${encodeURIComponent(folderId)}&accessToken=${encodeURIComponent(token)}`,
+          `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
         );
         if (res.ok) {
-          const data: DriveFile[] = await res.json();
-          setCachedFiles(folderId, data);
-          return data;
+          const data: { files?: DriveFile[] } = await res.json();
+          const files = data.files ?? [];
+          setCachedFiles(folderId, files);
+          return files;
         }
         if (res.status === 401) {
           toast.error("Session expired. Please sign in again.");

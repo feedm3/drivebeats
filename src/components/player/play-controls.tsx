@@ -8,7 +8,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+
+const toggleControlClass =
+  "h-8 w-8 aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:hover:bg-primary/20 aria-pressed:hover:text-primary dark:aria-pressed:hover:bg-primary/25";
 
 export function PlayControls() {
   const {
@@ -43,7 +45,9 @@ export function PlayControls() {
             <Button
               variant="ghost"
               size="icon"
-              className={cn("h-8 w-8", shuffle && "bg-primary/15 text-primary")}
+              className={toggleControlClass}
+              aria-pressed={shuffle}
+              aria-label={`Shuffle ${shuffle ? "on" : "off"}`}
               onClick={toggleShuffle}
             >
               <ShuffleIcon />
@@ -90,7 +94,15 @@ export function PlayControls() {
             <Button
               variant="ghost"
               size="icon"
-              className={cn("h-8 w-8", repeat !== "off" && "bg-primary/15 text-primary")}
+              className={toggleControlClass}
+              aria-pressed={repeat !== "off"}
+              aria-label={
+                repeat === "off"
+                  ? "Repeat off"
+                  : repeat === "one"
+                    ? "Repeat one track"
+                    : "Repeat all tracks"
+              }
               onClick={cycleRepeat}
             >
               {repeat === "one" ? <RepeatOneIcon /> : <RepeatIcon />}

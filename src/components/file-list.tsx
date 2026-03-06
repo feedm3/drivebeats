@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Folder, Music4 } from "lucide-react";
+import { Folder, Music4, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -12,6 +13,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  filterFilesBySearch,
+  getHighlightedTextParts,
+} from "@/lib/file-search";
 import { cn } from "@/lib/utils";
 import { usePlayerStore } from "@/stores/player-store";
 import type { DriveFile, FolderEntry } from "@/types";
@@ -21,6 +26,8 @@ interface FileListProps {
   loading: boolean;
   accessToken: string;
   folderStack: FolderEntry[];
+  searchQuery: string;
+  onClearSearch: () => void;
   onFolderClick: (id: string, name: string) => void;
 }
 
@@ -127,11 +134,40 @@ function sortFilesByName(files: DriveFile[], direction: NameSortDirection) {
   });
 }
 
+function HighlightedName({
+  name,
+  searchQuery,
+}: {
+  name: string;
+  searchQuery: string;
+}) {
+  const parts = getHighlightedTextParts(name, searchQuery);
+
+  return (
+    <span className="block truncate font-medium">
+      {parts.map((part, index) =>
+        part.isMatch ? (
+          <mark
+            key={`${part.start}-${part.value}`}
+            className="rounded-sm bg-primary/12 px-0.5 text-foreground"
+          >
+            {part.value}
+          </mark>
+        ) : (
+          <span key={`${part.start}-${part.value}`}>{part.value}</span>
+        ),
+      )}
+    </span>
+  );
+}
+
 export function FileList({
   files,
   loading,
   accessToken,
   folderStack,
+  searchQuery,
+  onClearSearch,
   onFolderClick,
 }: FileListProps) {
   const playTrack = usePlayerStore((state) => state.playTrack);
@@ -147,7 +183,12 @@ export function FileList({
     () => sortFilesByName(files, nameSortDirection),
     [files, nameSortDirection],
   );
-  const mp3s = sortedFiles.filter((file) => !isFolder(file));
+  const filteredFiles = useMemo(
+    () => filterFilesBySearch(sortedFiles, searchQuery),
+    [sortedFiles, searchQuery],
+  );
+  const mp3s = filteredFiles.filter((file) => !isFolder(file));
+  const hasActiveSearch = searchQuery.trim().length > 0;
 
   if (loading) {
     return (
@@ -208,6 +249,35 @@ export function FileList({
     );
   }
 
+  if (filteredFiles.length === 0) {
+    return (
+      <div className="flex min-h-0 flex-1 items-start">
+        <div className={cn("w-full", currentTrack ? "pb-32 md:pb-36" : "pb-6")}>
+          <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-[1.75rem] border border-dashed border-border/70 bg-muted/20 px-6 py-10 text-center">
+            <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <Search className="size-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-semibold tracking-tight">
+                No matches in this folder
+              </h3>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                {hasActiveSearch
+                  ? `Nothing in this view matches "${searchQuery}". Try a shorter term or clear the filter.`
+                  : "There are no visible items in this view."}
+              </p>
+            </div>
+            {hasActiveSearch ? (
+              <Button variant="outline" size="sm" onClick={onClearSearch}>
+                Clear search
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <ScrollArea className="min-h-0 flex-1">
       <div className={cn(currentTrack ? "pb-32 md:pb-36" : "pb-6")}>
@@ -246,7 +316,7 @@ export function FileList({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedFiles.map((file) => {
+              {filteredFiles.map((file) => {
                 const folder = isFolder(file);
                 const isActive = currentTrackId === file.id;
                 const isPlayingAncestor =
@@ -293,9 +363,10 @@ export function FileList({
                           )}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate font-medium">
-                            {file.name}
-                          </span>
+                          <HighlightedName
+                            name={file.name}
+                            searchQuery={searchQuery}
+                          />
                         </span>
                       </div>
                     </TableCell>

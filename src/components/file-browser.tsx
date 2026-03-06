@@ -1,10 +1,17 @@
 "use client";
 
 import { RotateCw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { BreadcrumbNav } from "@/components/breadcrumb-nav";
 import { FileList } from "@/components/file-list";
+import { FolderSearch } from "@/components/folder-search";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useAuthStore } from "@/stores/auth-store";
@@ -32,6 +39,7 @@ export function FileBrowser() {
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [accessToken, setAccessToken] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [folderStack, setFolderStack] = useState<FolderEntry[]>(INITIAL_STACK);
   const currentFolderId = folderStack[folderStack.length - 1].id;
   const folderStackRef = useRef(folderStack);
@@ -39,6 +47,7 @@ export function FileBrowser() {
   const isMountedRef = useRef(true);
   const navigationRequestRef = useRef(0);
   const latestAccessTokenRef = useRef("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   // Seed initial history state & listen for back/forward
   useEffect(() => {
@@ -53,6 +62,7 @@ export function FileBrowser() {
     }
 
     const onPopState = (e: PopStateEvent) => {
+      setSearchQuery("");
       if (
         Array.isArray(e.state?.folderStack) &&
         e.state.folderStack.length > 0
@@ -199,6 +209,7 @@ export function FileBrowser() {
 
   const pushFolderStack = useCallback((newStack: FolderEntry[]) => {
     folderStackRef.current = newStack;
+    setSearchQuery("");
     setFolderStack(newStack);
     window.history.pushState(getHistoryStateWithFolderStack(newStack), "");
   }, []);
@@ -219,18 +230,21 @@ export function FileBrowser() {
 
   return (
     <div className="mx-auto flex h-full max-w-4xl flex-col overflow-hidden px-4 pt-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <BreadcrumbNav
           folderStack={folderStack}
           onNavigate={onBreadcrumbNavigate}
         />
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <FolderSearch value={searchQuery} onChange={setSearchQuery} />
           <Button
             variant="ghost"
             size="icon"
             className="text-muted-foreground h-8 w-8"
             onClick={onRefresh}
             disabled={refreshing}
+            title={refreshing ? "Refreshing folder" : "Refresh folder"}
+            aria-label={refreshing ? "Refreshing folder" : "Refresh folder"}
           >
             <RotateCw
               className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
@@ -244,6 +258,8 @@ export function FileBrowser() {
         loading={loading}
         accessToken={accessToken}
         folderStack={folderStack}
+        searchQuery={deferredSearchQuery}
+        onClearSearch={() => setSearchQuery("")}
         onFolderClick={onFolderClick}
       />
     </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { Folder, Music4 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,6 +36,7 @@ const LOADING_ROWS = [
 ];
 const TABLE_SHELL_CLASS =
   "rounded-2xl border border-border/60 bg-background/80 shadow-xs";
+type NameSortDirection = "asc" | "desc";
 
 function isFolder(file: DriveFile) {
   return file.mimeType === FOLDER_MIME;
@@ -111,6 +113,20 @@ function onRowKeyDown(
   }
 }
 
+function sortFilesByName(files: DriveFile[], direction: NameSortDirection) {
+  return [...files].sort((a, b) => {
+    const folderOrder = Number(isFolder(b)) - Number(isFolder(a));
+    if (folderOrder !== 0) return folderOrder;
+
+    const comparedName = a.name.localeCompare(b.name, undefined, {
+      sensitivity: "base",
+      numeric: true,
+    });
+
+    return direction === "asc" ? comparedName : -comparedName;
+  });
+}
+
 export function FileList({
   files,
   loading,
@@ -120,12 +136,18 @@ export function FileList({
 }: FileListProps) {
   const playTrack = usePlayerStore((state) => state.playTrack);
   const currentTrack = usePlayerStore((state) => state.currentTrack);
+  const [nameSortDirection, setNameSortDirection] =
+    useState<NameSortDirection>("asc");
   const currentTrackId = currentTrack?.id;
   const playingFolderStack = usePlayerStore(
     (state) => state.playingFolderStack,
   );
   const playingFolderIds = new Set(playingFolderStack.map((f) => f.id));
-  const mp3s = files.filter((file) => !isFolder(file));
+  const sortedFiles = useMemo(
+    () => sortFilesByName(files, nameSortDirection),
+    [files, nameSortDirection],
+  );
+  const mp3s = sortedFiles.filter((file) => !isFolder(file));
 
   if (loading) {
     return (
@@ -133,13 +155,17 @@ export function FileList({
         <div className={cn(currentTrack ? "pb-32 md:pb-36" : "pb-6")}>
           <div className={TABLE_SHELL_CLASS}>
             <Table aria-label="Loading files">
-              <TableHeader className="[&_tr]:border-0">
-                <TableRow className="h-0 border-0 hover:bg-transparent">
-                  <TableHead className="h-0 p-0">
-                    <span className="sr-only">Name</span>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="h-11 px-4">
+                    <span className="text-xs font-semibold tracking-[0.16em] uppercase">
+                      Name
+                    </span>
                   </TableHead>
-                  <TableHead className="h-0 w-[96px] p-0 text-right">
-                    <span className="sr-only">Size</span>
+                  <TableHead className="h-11 w-[96px] px-4 text-right">
+                    <span className="text-xs font-semibold tracking-[0.16em] uppercase">
+                      Size
+                    </span>
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -187,18 +213,40 @@ export function FileList({
       <div className={cn(currentTrack ? "pb-32 md:pb-36" : "pb-6")}>
         <div className={TABLE_SHELL_CLASS}>
           <Table aria-label="Files and folders">
-            <TableHeader className="[&_tr]:border-0">
-              <TableRow className="h-0 border-0 hover:bg-transparent">
-                <TableHead className="h-0 p-0">
-                  <span className="sr-only">Name</span>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="h-11 px-4">
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 text-xs font-semibold tracking-[0.16em] uppercase transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                    aria-label={`Sort by name ${nameSortDirection === "asc" ? "descending" : "ascending"}`}
+                    onClick={() =>
+                      setNameSortDirection((direction) =>
+                        direction === "asc" ? "desc" : "asc",
+                      )
+                    }
+                  >
+                    <span>Name</span>
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "text-[10px] transition-transform",
+                        nameSortDirection === "desc" && "rotate-180",
+                      )}
+                    >
+                      ▲
+                    </span>
+                  </button>
                 </TableHead>
-                <TableHead className="h-0 w-[96px] p-0 text-right">
-                  <span className="sr-only">Size</span>
+                <TableHead className="h-11 w-[96px] px-4 text-right">
+                  <span className="text-xs font-semibold tracking-[0.16em] uppercase">
+                    Size
+                  </span>
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {files.map((file) => {
+              {sortedFiles.map((file) => {
                 const folder = isFolder(file);
                 const isActive = currentTrackId === file.id;
                 const isPlayingAncestor =

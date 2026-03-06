@@ -24,7 +24,7 @@ export function VolumeControl() {
         max={1}
         step={0.01}
         onValueChange={(v) => setVolume(Array.isArray(v) ? v[0] : v)}
-        className="hidden w-24 sm:flex"
+        className="group hidden w-24 sm:flex"
       />
     </div>
   );

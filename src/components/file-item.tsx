@@ -38,7 +38,7 @@ export function FileItem({
       onClick={() =>
         folder
           ? onFolderClick(file.id, file.name)
-          : playTrack(file, allMp3s, accessToken)
+          : playTrack(file, allMp3s, accessToken, [])
       }
       className={cn(
         "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-accent",

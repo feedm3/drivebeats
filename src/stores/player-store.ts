@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { DriveFile } from "@/types";
+import type { DriveFile, FolderEntry } from "@/types";
 
 type RepeatMode = "off" | "one" | "all";
 
@@ -9,6 +9,7 @@ let fetchAbortController: AbortController | null = null;
 
 interface PlayerState {
   currentTrack: DriveFile | null;
+  playingFolderStack: FolderEntry[];
   playlist: DriveFile[];
   currentIndex: number;
   isPlaying: boolean;
@@ -22,7 +23,7 @@ interface PlayerState {
   audio: HTMLAudioElement | null;
   blobCache: Map<string, string>;
   initAudio: () => HTMLAudioElement;
-  playTrack: (track: DriveFile, playlist: DriveFile[], accessToken: string) => void;
+  playTrack: (track: DriveFile, playlist: DriveFile[], accessToken: string, folderStack: FolderEntry[]) => void;
   fetchAndPlay: (fileId: string, accessToken: string) => Promise<void>;
   togglePlay: () => void;
   next: (accessToken: string) => void;
@@ -40,6 +41,7 @@ interface PlayerState {
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
   currentTrack: null,
+  playingFolderStack: [],
   playlist: [],
   currentIndex: -1,
   isPlaying: false,
@@ -120,12 +122,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
   },
 
-  playTrack: (track, playlist, accessToken) => {
+  playTrack: (track, playlist, accessToken, folderStack) => {
     const audio = get().initAudio();
     const index = playlist.findIndex((f) => f.id === track.id);
 
     set({
       currentTrack: track,
+      playingFolderStack: folderStack,
       playlist,
       currentIndex: index,
       isPlaying: true,
@@ -165,7 +168,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       }
     }
 
-    get().playTrack(playlist[nextIndex], playlist, accessToken);
+    get().playTrack(playlist[nextIndex], playlist, accessToken, get().playingFolderStack);
   },
 
   previous: (accessToken) => {
@@ -179,7 +182,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     const prevIndex =
       currentIndex - 1 < 0 ? playlist.length - 1 : currentIndex - 1;
-    get().playTrack(playlist[prevIndex], playlist, accessToken);
+    get().playTrack(playlist[prevIndex], playlist, accessToken, get().playingFolderStack);
   },
 
   seek: (time) => {

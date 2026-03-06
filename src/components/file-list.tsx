@@ -13,12 +13,13 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { usePlayerStore } from "@/stores/player-store";
-import type { DriveFile } from "@/types";
+import type { DriveFile, FolderEntry } from "@/types";
 
 interface FileListProps {
   files: DriveFile[];
   loading: boolean;
   accessToken: string;
+  folderStack: FolderEntry[];
   onFolderClick: (id: string, name: string) => void;
 }
 
@@ -34,7 +35,6 @@ const LOADING_ROWS = [
 ];
 const TABLE_SHELL_CLASS =
   "rounded-2xl border border-border/60 bg-background/80 shadow-xs";
-const TABLE_SCROLL_PADDING_CLASS = "pb-32 md:pb-36";
 
 function isFolder(file: DriveFile) {
   return file.mimeType === FOLDER_MIME;
@@ -45,6 +45,60 @@ function formatSize(bytes: string | undefined) {
   const n = Number(bytes);
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function NowPlayingBars({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="1" y="6" width="3" height="10" rx="1">
+        <animate
+          attributeName="height"
+          values="10;4;8;10"
+          dur="0.9s"
+          repeatCount="indefinite"
+        />
+        <animate
+          attributeName="y"
+          values="6;12;8;6"
+          dur="0.9s"
+          repeatCount="indefinite"
+        />
+      </rect>
+      <rect x="6.5" y="2" width="3" height="14" rx="1">
+        <animate
+          attributeName="height"
+          values="14;6;10;14"
+          dur="0.7s"
+          repeatCount="indefinite"
+        />
+        <animate
+          attributeName="y"
+          values="2;10;6;2"
+          dur="0.7s"
+          repeatCount="indefinite"
+        />
+      </rect>
+      <rect x="12" y="4" width="3" height="12" rx="1">
+        <animate
+          attributeName="height"
+          values="12;8;4;12"
+          dur="1.1s"
+          repeatCount="indefinite"
+        />
+        <animate
+          attributeName="y"
+          values="4;8;12;4"
+          dur="1.1s"
+          repeatCount="indefinite"
+        />
+      </rect>
+    </svg>
+  );
 }
 
 function onRowKeyDown(
@@ -61,16 +115,22 @@ export function FileList({
   files,
   loading,
   accessToken,
+  folderStack,
   onFolderClick,
 }: FileListProps) {
   const playTrack = usePlayerStore((state) => state.playTrack);
-  const currentTrackId = usePlayerStore((state) => state.currentTrack?.id);
+  const currentTrack = usePlayerStore((state) => state.currentTrack);
+  const currentTrackId = currentTrack?.id;
+  const playingFolderStack = usePlayerStore(
+    (state) => state.playingFolderStack,
+  );
+  const playingFolderIds = new Set(playingFolderStack.map((f) => f.id));
   const mp3s = files.filter((file) => !isFolder(file));
 
   if (loading) {
     return (
       <ScrollArea className="min-h-0 flex-1">
-        <div className={TABLE_SCROLL_PADDING_CLASS}>
+        <div className={cn(currentTrack ? "pb-32 md:pb-36" : "pb-6")}>
           <div className={TABLE_SHELL_CLASS}>
             <Table aria-label="Loading files">
               <TableHeader className="[&_tr]:border-0">
@@ -124,7 +184,7 @@ export function FileList({
 
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className={TABLE_SCROLL_PADDING_CLASS}>
+      <div className={cn(currentTrack ? "pb-32 md:pb-36" : "pb-6")}>
         <div className={TABLE_SHELL_CLASS}>
           <Table aria-label="Files and folders">
             <TableHeader className="[&_tr]:border-0">
@@ -141,10 +201,12 @@ export function FileList({
               {files.map((file) => {
                 const folder = isFolder(file);
                 const isActive = currentTrackId === file.id;
+                const isPlayingAncestor =
+                  folder && currentTrackId && playingFolderIds.has(file.id);
                 const onActivate = () =>
                   folder
                     ? onFolderClick(file.id, file.name)
-                    : playTrack(file, mp3s, accessToken);
+                    : playTrack(file, mp3s, accessToken, folderStack);
 
                 return (
                   <TableRow
@@ -166,8 +228,17 @@ export function FileList({
                           isActive && "text-primary",
                         )}
                       >
-                        <span className="text-muted-foreground shrink-0">
-                          {folder ? (
+                        <span
+                          className={cn(
+                            "shrink-0",
+                            isPlayingAncestor
+                              ? "text-primary"
+                              : "text-muted-foreground",
+                          )}
+                        >
+                          {isPlayingAncestor ? (
+                            <NowPlayingBars className="size-4" />
+                          ) : folder ? (
                             <Folder className="size-4" />
                           ) : (
                             <Music4 className="size-4" />

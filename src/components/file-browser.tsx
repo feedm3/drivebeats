@@ -243,6 +243,7 @@ export function FileBrowser() {
         files={files}
         loading={loading}
         accessToken={accessToken}
+        folderStack={folderStack}
         onFolderClick={onFolderClick}
       />
     </div>

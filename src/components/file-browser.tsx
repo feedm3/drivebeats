@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { RotateCw } from "lucide-react";
 import type { DriveFile, FolderEntry } from "@/types";
 import { useAuthStore } from "@/stores/auth-store";
 import { usePlayerStore } from "@/stores/player-store";
+import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { BreadcrumbNav } from "@/components/breadcrumb-nav";
 import { FileList } from "@/components/file-list";
 import { Button } from "@/components/ui/button";
@@ -33,13 +35,15 @@ export function FileBrowser() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchFiles = useCallback(
-    async (folderId: string) => {
-      setLoading(true);
+  const { getFiles: getCachedFiles, setFiles: setCachedFiles, isStale } = useFolderCacheStore();
+  const bgFetchRef = useRef(false);
+
+  const fetchFromApi = useCallback(
+    async (folderId: string): Promise<DriveFile[] | null> => {
       const token = await getValidAccessToken();
       if (!token) {
         logout();
-        return;
+        return null;
       }
       setAccessToken(token);
 
@@ -48,8 +52,11 @@ export function FileBrowser() {
           `/api/drive/files?folderId=${encodeURIComponent(folderId)}&accessToken=${encodeURIComponent(token)}`,
         );
         if (res.ok) {
-          setFiles(await res.json());
-        } else if (res.status === 401) {
+          const data: DriveFile[] = await res.json();
+          setCachedFiles(folderId, data);
+          return data;
+        }
+        if (res.status === 401) {
           toast.error("Session expired. Please sign in again.");
           logout();
         } else if (res.status === 403) {
@@ -61,16 +68,50 @@ export function FileBrowser() {
         }
       } catch {
         toast.error("Network error. Check your connection.");
-      } finally {
+      }
+      return null;
+    },
+    [getValidAccessToken, logout, setCachedFiles],
+  );
+
+  const navigateToFolder = useCallback(
+    async (folderId: string) => {
+      const cached = getCachedFiles(folderId);
+
+      if (cached) {
+        // Cache hit — show cached data immediately
+        setFiles(cached.files);
+        setLoading(false);
+
+        if (isStale(folderId)) {
+          // Background revalidate
+          bgFetchRef.current = true;
+          const fresh = await fetchFromApi(folderId);
+          bgFetchRef.current = false;
+          if (fresh) setFiles(fresh);
+        }
+      } else {
+        // Cache miss — loading state + fetch
+        setLoading(true);
+        const data = await fetchFromApi(folderId);
+        if (data) setFiles(data);
         setLoading(false);
       }
     },
-    [getValidAccessToken, logout],
+    [getCachedFiles, isStale, fetchFromApi],
   );
 
   useEffect(() => {
-    fetchFiles(currentFolderId);
-  }, [currentFolderId, fetchFiles]);
+    navigateToFolder(currentFolderId);
+  }, [currentFolderId, navigateToFolder]);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    const data = await fetchFromApi(currentFolderId);
+    if (data) setFiles(data);
+    setRefreshing(false);
+  }, [currentFolderId, fetchFromApi]);
 
   const onFolderClick = (id: string, name: string) => {
     setFolderStack((s) => {
@@ -95,9 +136,14 @@ export function FileBrowser() {
           folderStack={folderStack}
           onNavigate={onBreadcrumbNavigate}
         />
-        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { usePlayerStore.getState().clearCache(); logout(); }}>
-          Sign out
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="text-muted-foreground h-8 w-8" onClick={onRefresh} disabled={refreshing}>
+            <RotateCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+          </Button>
+          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { usePlayerStore.getState().clearCache(); useFolderCacheStore.getState().clear(); logout(); }}>
+            Sign out
+          </Button>
+        </div>
       </div>
       <Separator className="my-3" />
       <FileList

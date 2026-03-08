@@ -30,11 +30,21 @@ export function PlaylistTrackItem({
   return (
     <div
       data-track-index={index}
+      data-active={isActive ? true : undefined}
       className={cn(
-        "group relative flex items-center border-b border-border/40 transition-colors hover:bg-muted/50",
-        isActive && "bg-primary/6",
+        "group relative flex items-center border-b py-4 transition-colors cursor-pointer hover:bg-muted/50 data-[active]:bg-primary/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 last:border-b-0",
         isDragging && "opacity-30",
       )}
+      role="button"
+      tabIndex={0}
+      aria-label={`Play ${track.fileName}`}
+      onClick={onPlay}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onPlay();
+        }
+      }}
     >
       {dropIndicator === "above" && (
         <div className="absolute inset-x-0 top-0 z-10 h-0.5 bg-primary" />
@@ -45,21 +55,11 @@ export function PlaylistTrackItem({
       <div
         className="flex shrink-0 items-center justify-center w-9 self-stretch cursor-grab active:cursor-grabbing text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
         data-drag-handle
+        onClick={(e) => e.stopPropagation()}
       >
         <GripVertical className="size-4" />
       </div>
-      <div
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 py-2.5 pr-1"
-        role="button"
-        tabIndex={0}
-        onClick={onPlay}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onPlay();
-          }
-        }}
-      >
+      <div className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-1.5">
         <span
           className={cn(
             "shrink-0",

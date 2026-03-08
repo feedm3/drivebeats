@@ -313,8 +313,14 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
             <div
               ref={listRef}
               className="rounded-2xl border border-border/60 bg-background/80 shadow-xs overflow-hidden touch-none"
+              aria-label="Playlist tracks"
               onPointerDown={onPointerDown}
             >
+              <div className="flex h-11 items-center border-b px-4">
+                <span className="text-xs font-semibold tracking-[0.16em] uppercase text-muted-foreground">
+                  Name
+                </span>
+              </div>
               {playlist.tracks.map((track, index) => (
                 <PlaylistTrackItem
                   key={track.fileId}

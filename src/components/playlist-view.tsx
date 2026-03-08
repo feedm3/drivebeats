@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, ListMusic, Pencil, Play, Trash2 } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PlaylistTrackItem } from "@/components/playlist-track-item";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,13 +13,6 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import {
-  Table,
-  TableBody,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -40,6 +33,137 @@ function tracksToFiles(playlist: Playlist): DriveFile[] {
   }));
 }
 
+// --- Drag-reorder logic isolated in a hook, driven by refs to avoid per-mousemove renders ---
+
+interface DragState {
+  fromIndex: number | null;
+  overIndex: number | null;
+  position: "above" | "below" | null;
+}
+
+const EMPTY_DRAG: DragState = {
+  fromIndex: null,
+  overIndex: null,
+  position: null,
+};
+
+function useTrackDrag(
+  listRef: React.RefObject<HTMLDivElement | null>,
+  onReorder: (from: number, to: number) => void,
+) {
+  const dragRef = useRef<DragState>({ ...EMPTY_DRAG });
+  // Rendered state — only updated when the visual indicator needs to change
+  const [drag, setDrag] = useState<DragState>(EMPTY_DRAG);
+
+  const getItemIndex = useCallback((el: HTMLElement): number | null => {
+    const row = el.closest("[data-track-index]") as HTMLElement | null;
+    if (!row) return null;
+    const idx = Number(row.dataset.trackIndex);
+    return Number.isFinite(idx) ? idx : null;
+  }, []);
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      // Only start drag from the grip handle
+      const handle = (e.target as HTMLElement).closest("[data-drag-handle]");
+      if (!handle) return;
+
+      const idx = getItemIndex(e.target as HTMLElement);
+      if (idx === null) return;
+
+      const listEl = listRef.current;
+      if (!listEl) return;
+
+      const row = (e.target as HTMLElement).closest(
+        "[data-track-index]",
+      ) as HTMLElement;
+      const startY = e.clientY;
+      const pointerId = e.pointerId;
+
+      // Capture pointer on the list so we get all move/up events
+      listEl.setPointerCapture(pointerId);
+
+      let started = false;
+      const cur = dragRef.current;
+
+      const onMove = (ev: PointerEvent) => {
+        if (!started) {
+          // Dead-zone: require 4px movement before starting drag
+          if (Math.abs(ev.clientY - startY) < 4) return;
+          started = true;
+          cur.fromIndex = idx;
+          row.style.opacity = "0.3";
+          document.body.style.cursor = "grabbing";
+          document.body.style.userSelect = "none";
+        }
+
+        // Determine which row we're over
+        const items = listEl.querySelectorAll("[data-track-index]");
+        let overIdx: number | null = null;
+        let pos: "above" | "below" = "below";
+
+        for (const item of items) {
+          const rect = item.getBoundingClientRect();
+          if (ev.clientY >= rect.top && ev.clientY < rect.bottom) {
+            overIdx = Number((item as HTMLElement).dataset.trackIndex);
+            pos = ev.clientY < rect.top + rect.height / 2 ? "above" : "below";
+            break;
+          }
+        }
+
+        if (overIdx !== null && overIdx !== cur.fromIndex) {
+          if (overIdx !== cur.overIndex || pos !== cur.position) {
+            cur.overIndex = overIdx;
+            cur.position = pos;
+            setDrag({ ...cur });
+          }
+        } else if (cur.overIndex !== null) {
+          cur.overIndex = null;
+          cur.position = null;
+          setDrag({ ...cur });
+        }
+      };
+
+      const onUp = () => {
+        listEl.removeEventListener("pointermove", onMove);
+        listEl.removeEventListener("pointerup", onUp);
+        listEl.removeEventListener("pointercancel", onUp);
+
+        try {
+          listEl.releasePointerCapture(pointerId);
+        } catch {
+          /* already released */
+        }
+
+        row.style.opacity = "";
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+
+        if (started && cur.fromIndex !== null && cur.overIndex !== null) {
+          let toIndex =
+            cur.position === "above" ? cur.overIndex : cur.overIndex + 1;
+          if (cur.fromIndex < toIndex) toIndex--;
+          if (cur.fromIndex !== toIndex) {
+            onReorder(cur.fromIndex, toIndex);
+          }
+        }
+
+        dragRef.current = { ...EMPTY_DRAG };
+        setDrag(EMPTY_DRAG);
+      };
+
+      listEl.addEventListener("pointermove", onMove);
+      listEl.addEventListener("pointerup", onUp);
+      listEl.addEventListener("pointercancel", onUp);
+    },
+    [listRef, getItemIndex, onReorder],
+  );
+
+  return { drag, onPointerDown };
+}
+
+// --- Component ---
+
 export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -57,14 +181,18 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const editRef = useRef<HTMLInputElement>(null);
-
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const [dragFromIndex, setDragFromIndex] = useState<number | null>(null);
-  const [dropTarget, setDropTarget] = useState<{
-    index: number;
-    position: "above" | "below";
-  } | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const handleReorder = useCallback(
+    (from: number, to: number) => {
+      reorderTracks(playlist.id, from, to);
+    },
+    [playlist.id, reorderTracks],
+  );
+
+  const { drag, onPointerDown } = useTrackDrag(listRef, handleReorder);
 
   const playFromPlaylist = useCallback(
     async (index: number) => {
@@ -81,13 +209,6 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
     playFromPlaylist(0);
   }, [playlist.tracks.length, playFromPlaylist]);
 
-  const handlePlayTrack = useCallback(
-    (index: number) => {
-      playFromPlaylist(index);
-    },
-    [playFromPlaylist],
-  );
-
   const handleRename = useCallback(() => {
     const name = editName.trim();
     if (name) {
@@ -101,29 +222,6 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
     setActivePlaylist(null);
     setDeleteOpen(false);
   }, [playlist.id, deletePlaylist, setActivePlaylist]);
-
-  const handleDragOver = useCallback(
-    (e: React.DragEvent, index: number) => {
-      if (dragFromIndex === null) return;
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      const position = e.clientY < midY ? "above" : "below";
-      setDropTarget({ index, position });
-    },
-    [dragFromIndex],
-  );
-
-  const handleDrop = useCallback(() => {
-    if (dragFromIndex === null || dropTarget === null) return;
-    let toIndex =
-      dropTarget.position === "above" ? dropTarget.index : dropTarget.index + 1;
-    if (dragFromIndex < toIndex) toIndex--;
-    if (dragFromIndex !== toIndex) {
-      reorderTracks(playlist.id, dragFromIndex, toIndex);
-    }
-    setDragFromIndex(null);
-    setDropTarget(null);
-  }, [dragFromIndex, dropTarget, playlist.id, reorderTracks]);
 
   const isPlayingThisPlaylist = playingPlaylistId === playlist.id;
 
@@ -212,48 +310,28 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
       ) : (
         <ScrollArea className="min-h-0 flex-1">
           <div className={cn(playerBarPadding)}>
-            <div className="rounded-2xl border border-border/60 bg-background/80 shadow-xs">
-              <Table aria-label="Playlist tracks">
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="h-11 w-8 px-1" />
-                    <TableHead className="h-11 px-4">
-                      <span className="text-xs font-semibold tracking-[0.16em] uppercase">
-                        Name
-                      </span>
-                    </TableHead>
-                    <TableHead className="h-11 w-10 px-1" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody
-                  onDragLeave={(e) => {
-                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                      setDropTarget(null);
-                    }
-                  }}
-                >
-                  {playlist.tracks.map((track, index) => (
-                    <PlaylistTrackItem
-                      key={track.fileId}
-                      track={track}
-                      index={index}
-                      isActive={
-                        isPlayingThisPlaylist &&
-                        currentTrack?.id === track.fileId
-                      }
-                      isPlaying={isPlaying}
-                      onPlay={() => handlePlayTrack(index)}
-                      onRemove={() => removeTrack(playlist.id, track.fileId)}
-                      onDragStart={setDragFromIndex}
-                      onDragOver={handleDragOver}
-                      onDrop={handleDrop}
-                      dropPosition={
-                        dropTarget?.index === index ? dropTarget.position : null
-                      }
-                    />
-                  ))}
-                </TableBody>
-              </Table>
+            <div
+              ref={listRef}
+              className="rounded-2xl border border-border/60 bg-background/80 shadow-xs overflow-hidden touch-none"
+              onPointerDown={onPointerDown}
+            >
+              {playlist.tracks.map((track, index) => (
+                <PlaylistTrackItem
+                  key={track.fileId}
+                  track={track}
+                  index={index}
+                  isActive={
+                    isPlayingThisPlaylist && currentTrack?.id === track.fileId
+                  }
+                  isPlaying={isPlaying}
+                  isDragging={drag.fromIndex === index}
+                  dropIndicator={
+                    drag.overIndex === index ? drag.position : null
+                  }
+                  onPlay={() => playFromPlaylist(index)}
+                  onRemove={() => removeTrack(playlist.id, track.fileId)}
+                />
+              ))}
             </div>
           </div>
         </ScrollArea>

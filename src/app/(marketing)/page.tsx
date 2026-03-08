@@ -17,8 +17,10 @@ export default function LandingPage() {
           Google Drive MP3 Player
         </h1>
         <p className="max-w-md text-lg text-muted-foreground">
-          Stream your music collection directly from Google Drive in your
-          browser. No uploads, no syncing, and no server-side media proxy.
+          Stream your music collection directly from Google Drive. Build
+          playlists across folders, reorder with drag and drop, and pick up
+          right where you left off. No uploads, no syncing, no server-side
+          proxy.
         </p>
         <SignInButton className="mt-4 inline-flex h-11 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90" />
         <p className="text-xs text-muted-foreground">
@@ -30,9 +32,9 @@ export default function LandingPage() {
       {/* Features */}
       <section className="w-full max-w-3xl border-t border-border/50 py-12">
         <h2 className="mb-8 text-center text-2xl font-semibold">
-          Play your MP3s from Google Drive, instantly
+          Your Drive music, your way
         </h2>
-        <div className="grid gap-6 sm:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2">
           <div className="text-center">
             <div className="mb-2">
               <svg
@@ -52,8 +54,35 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Browse your folders</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Navigate your Google Drive folder structure and find your MP3
-              files.
+              Navigate your full Google Drive folder tree and find your MP3s in
+              seconds.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="mb-2">
+              <svg
+                className="mx-auto"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M21 15V6" />
+                <path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+                <path d="M12 12H3" />
+                <path d="M16 6H3" />
+                <path d="M12 18H3" />
+              </svg>
+            </div>
+            <h3 className="text-sm font-semibold">Cross-folder playlists</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Mix songs from any folder into custom playlists. Drag to add, drag
+              to reorder, and everything saves to your browser automatically.
             </p>
           </div>
           <div className="text-center">
@@ -69,10 +98,10 @@ export default function LandingPage() {
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
             </div>
-            <h3 className="text-sm font-semibold">Spotify-style player</h3>
+            <h3 className="text-sm font-semibold">Full playback controls</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Shuffle, repeat, volume control, seekable progress bar, and
-              keyboard shortcuts.
+              Shuffle, repeat, volume, seekable progress bar, and keyboard
+              shortcuts — everything you&apos;d expect from a music player.
             </p>
           </div>
           <div className="text-center">
@@ -95,8 +124,8 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Private and secure</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Read-only access only. We do not store your music or proxy MP3
-              streams through our servers.
+              Read-only access only. Audio streams directly from Google to your
+              browser — nothing passes through our servers.
             </p>
           </div>
         </div>
@@ -133,8 +162,8 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Play</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Stream your MP3s with full playback controls — shuffle, repeat,
-              and more.
+              Stream your MP3s, build playlists across folders, and control
+              playback with shuffle, repeat, and keyboard shortcuts.
             </p>
           </div>
         </div>

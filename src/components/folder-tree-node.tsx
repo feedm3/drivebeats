@@ -1,13 +1,7 @@
 "use client";
 
 import { ChevronRight, Folder, Loader2 } from "lucide-react";
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { NowPlayingBars } from "@/components/now-playing-bars";
 import { useFolderContents } from "@/hooks/use-folder-contents";
 import { sortFoldersNatural } from "@/lib/sort";
@@ -19,55 +13,6 @@ import { usePlayerStore } from "@/stores/player-store";
 import type { DriveFile, FolderEntry } from "@/types";
 import { FOLDER_MIME } from "@/types";
 
-interface RenderableFolderEntry {
-  folder: DriveFile;
-  ancestors: FolderEntry[];
-  contextLabel?: string;
-}
-
-async function collectPromotedFolders({
-  folders,
-  ancestors,
-  hiddenFolderIds,
-  loadFolderChildren,
-  hiddenPathNames = [],
-}: {
-  folders: DriveFile[];
-  ancestors: FolderEntry[];
-  hiddenFolderIds: Set<string>;
-  loadFolderChildren: (folderId: string) => Promise<DriveFile[]>;
-  hiddenPathNames?: string[];
-}): Promise<RenderableFolderEntry[]> {
-  const entries: RenderableFolderEntry[] = [];
-
-  for (const folder of folders) {
-    if (!hiddenFolderIds.has(folder.id)) {
-      entries.push({
-        folder,
-        ancestors,
-        contextLabel:
-          hiddenPathNames.length > 0 ? hiddenPathNames.join(" / ") : undefined,
-      });
-      continue;
-    }
-
-    const childFolders = await loadFolderChildren(folder.id);
-    if (childFolders.length === 0) continue;
-
-    entries.push(
-      ...(await collectPromotedFolders({
-        folders: childFolders,
-        ancestors: [...ancestors, { id: folder.id, name: folder.name }],
-        hiddenFolderIds,
-        loadFolderChildren,
-        hiddenPathNames: [...hiddenPathNames, folder.name],
-      })),
-    );
-  }
-
-  return entries;
-}
-
 interface FolderTreeNodeProps {
   id: string;
   name: string;
@@ -75,16 +20,6 @@ interface FolderTreeNodeProps {
   ancestors: FolderEntry[];
   selectedFolderId: string;
   onSelect: (path: FolderEntry[]) => void;
-  contextLabel?: string;
-}
-
-interface FolderTreeChildrenProps {
-  folders: DriveFile[];
-  depth: number;
-  ancestors: FolderEntry[];
-  selectedFolderId: string;
-  onSelect: (path: FolderEntry[]) => void;
-  emptyState?: ReactNode;
 }
 
 export function FolderTreeNode({
@@ -94,7 +29,6 @@ export function FolderTreeNode({
   ancestors,
   selectedFolderId,
   onSelect,
-  contextLabel,
 }: FolderTreeNodeProps) {
   const isExpanded = useFolderTreeStore((s) => s.expandedFolders.has(id));
   const toggle = useFolderTreeStore((s) => s.toggle);
@@ -218,152 +152,34 @@ export function FolderTreeNode({
           ) : null}
         </span>
         {isPlayingAncestor ? (
-          <NowPlayingBars className="size-4 shrink-0 text-primary" paused={!isPlaying} />
+          <NowPlayingBars
+            className="size-4 shrink-0 text-primary"
+            paused={!isPlaying}
+          />
         ) : (
           <Folder className="size-4 shrink-0 text-muted-foreground" />
         )}
-        <div className="min-w-0 flex-1">
-          <div className={cn("truncate", isPlayingAncestor && "text-primary")}>
-            {name}
-          </div>
-          {contextLabel && (
-            <div className="truncate text-[11px] leading-4 text-muted-foreground">
-              In {contextLabel}
-            </div>
-          )}
-        </div>
+        <span className={cn("truncate", isPlayingAncestor && "text-primary")}>
+          {name}
+        </span>
       </div>
       {isExpanded && children && children.length > 0 && (
         <div>
-          <FolderTreeChildren
-            folders={children}
-            depth={depth + 1}
-            ancestors={path}
-            selectedFolderId={selectedFolderId}
-            onSelect={onSelect}
-          />
+          {children
+            .filter((child) => !isHidden(child.id))
+            .map((child) => (
+              <FolderTreeNode
+                key={child.id}
+                id={child.id}
+                name={child.name}
+                depth={depth + 1}
+                ancestors={path}
+                selectedFolderId={selectedFolderId}
+                onSelect={onSelect}
+              />
+            ))}
         </div>
       )}
     </div>
-  );
-}
-
-export function FolderTreeChildren({
-  folders,
-  depth,
-  ancestors,
-  selectedFolderId,
-  onSelect,
-  emptyState,
-}: FolderTreeChildrenProps) {
-  const hiddenFolderIds = useFolderFilterStore((s) => s.hiddenFolderIds);
-  const { fetchFromApi } = useFolderContents();
-  const [promotedByHiddenId, setPromotedByHiddenId] = useState<
-    Record<string, RenderableFolderEntry[]>
-  >({});
-  const [loadingPromoted, setLoadingPromoted] = useState(false);
-
-  const sortedFolders = useMemo(() => sortFoldersNatural([...folders]), [folders]);
-
-  const hiddenFolders = useMemo(
-    () => sortedFolders.filter((folder) => hiddenFolderIds.has(folder.id)),
-    [sortedFolders, hiddenFolderIds],
-  );
-
-  const loadFolderChildren = useCallback(
-    async (folderId: string) => {
-      const cached = useFolderCacheStore.getState().getFiles(folderId);
-      if (cached) {
-        return sortFoldersNatural(
-          cached.files.filter((file) => file.mimeType === FOLDER_MIME),
-        );
-      }
-
-      const files = await fetchFromApi(folderId);
-      return sortFoldersNatural(
-        (files ?? []).filter((file) => file.mimeType === FOLDER_MIME),
-      );
-    },
-    [fetchFromApi],
-  );
-
-  useEffect(() => {
-    if (hiddenFolders.length === 0) {
-      setPromotedByHiddenId({});
-      setLoadingPromoted(false);
-      return;
-    }
-
-    let cancelled = false;
-    setLoadingPromoted(true);
-
-    const loadPromotedFolders = async () => {
-      const next: Record<string, RenderableFolderEntry[]> = {};
-
-      for (const folder of hiddenFolders) {
-        next[folder.id] = await collectPromotedFolders({
-          folders: [folder],
-          ancestors,
-          hiddenFolderIds,
-          loadFolderChildren,
-        });
-      }
-
-      if (!cancelled) {
-        setPromotedByHiddenId(next);
-        setLoadingPromoted(false);
-      }
-    };
-
-    void loadPromotedFolders();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ancestors, hiddenFolderIds, hiddenFolders, loadFolderChildren]);
-
-  const renderableFolders = useMemo(() => {
-    const entries: RenderableFolderEntry[] = [];
-
-    for (const folder of sortedFolders) {
-      if (!hiddenFolderIds.has(folder.id)) {
-        entries.push({ folder, ancestors });
-        continue;
-      }
-
-      entries.push(...(promotedByHiddenId[folder.id] ?? []));
-    }
-
-    return entries;
-  }, [ancestors, hiddenFolderIds, promotedByHiddenId, sortedFolders]);
-
-  if (renderableFolders.length === 0) {
-    if (loadingPromoted) {
-      return (
-        <div className="flex items-center gap-2 px-2 py-3 text-sm text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" />
-          Loading visible folders...
-        </div>
-      );
-    }
-
-    return emptyState ? <>{emptyState}</> : null;
-  }
-
-  return (
-    <>
-      {renderableFolders.map(({ folder, ancestors: nodeAncestors, contextLabel }) => (
-        <FolderTreeNode
-          key={`${folder.id}-${nodeAncestors[nodeAncestors.length - 1]?.id ?? "root"}`}
-          id={folder.id}
-          name={folder.name}
-          depth={depth}
-          ancestors={nodeAncestors}
-          selectedFolderId={selectedFolderId}
-          onSelect={onSelect}
-          contextLabel={contextLabel}
-        />
-      ))}
-    </>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Filter, Plus } from "lucide-react";
+import { ChevronRight, Filter, Folder, Plus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FolderFilterDialog } from "@/components/folder-filter-dialog";
 import { FolderTreeNode } from "@/components/folder-tree-node";
@@ -10,6 +10,7 @@ import {
 } from "@/components/playlist-section";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useFolderContents } from "@/hooks/use-folder-contents";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { sortFoldersNatural } from "@/lib/sort";
@@ -21,10 +22,34 @@ import { FOLDER_MIME, INITIAL_STACK } from "@/types";
 
 const STORAGE_KEY_FOLDERS = "sidebar-folders-collapsed";
 const STORAGE_KEY_PLAYLISTS = "sidebar-playlists-collapsed";
+const TREE_SKELETON_ROWS = ["66%", "54%", "61%", "49%", "58%"];
 
 function readCollapsed(key: string): boolean {
   if (typeof window === "undefined") return false;
   return localStorage.getItem(key) === "true";
+}
+
+function FolderTreeSkeleton() {
+  return (
+    <div aria-hidden="true">
+      {TREE_SKELETON_ROWS.map((width) => (
+        <div
+          key={width}
+          className="flex items-center gap-1 rounded-md py-1 pr-2"
+          style={{ paddingLeft: 4 }}
+        >
+          <span className="flex size-5 shrink-0 items-center justify-center">
+            <ChevronRight className="size-3 text-muted-foreground" />
+          </span>
+          <Folder className="size-4 shrink-0 text-muted-foreground" />
+          <Skeleton
+            className="h-3.5 max-w-[10rem] rounded-full"
+            style={{ width }}
+          />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 interface FolderTreeProps {
@@ -134,9 +159,7 @@ export function FolderTree({
       {!foldersCollapsed && (
         <div className="px-2 pb-4">
           {loading ? (
-            <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-              Loading...
-            </div>
+            <FolderTreeSkeleton />
           ) : rootFolders.length === 0 ? (
             <div className="px-2 py-4 text-sm text-muted-foreground">
               No folders found

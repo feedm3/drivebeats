@@ -53,7 +53,7 @@ function FolderTreeSkeleton() {
 }
 
 interface FolderTreeProps {
-  selectedFolderId: string;
+  selectedFolderId: string | null;
   onSelectFolder: (path: FolderEntry[]) => void;
   activePlaylistId: string | null;
   onSelectPlaylist: (id: string) => void;
@@ -251,6 +251,7 @@ export function FolderTree({
         open={filterOpen}
         onOpenChange={setFilterOpen}
         folders={rootFolders}
+        loading={loading}
       />
     </div>
   );

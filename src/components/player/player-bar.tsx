@@ -111,6 +111,26 @@ export function PlayerBar() {
     }
   }, [currentTrack]);
 
+  // Restore the last selected track into the static player after reload.
+  useEffect(() => {
+    if (!currentTrack) return;
+
+    const restore = async () => {
+      const token = await useAuthStore.getState().getValidAccessToken();
+      if (!token) return;
+
+      try {
+        await usePlayerStore.getState().restoreTrack(token);
+      } catch {
+        import("sonner").then(({ toast }) =>
+          toast.error(`Failed to restore "${currentTrack.name}"`),
+        );
+      }
+    };
+
+    void restore();
+  }, [currentTrack]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const onKeyDown = async (e: KeyboardEvent) => {

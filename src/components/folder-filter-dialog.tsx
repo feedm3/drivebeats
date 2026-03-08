@@ -42,12 +42,14 @@ interface FolderFilterDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   folders: DriveFile[];
+  loading?: boolean;
 }
 
 export function FolderFilterDialog({
   open,
   onOpenChange,
   folders,
+  loading = false,
 }: FolderFilterDialogProps) {
   const { hiddenFolderIds, hideTree, showTree, showAll } =
     useFolderFilterStore();
@@ -80,19 +82,30 @@ export function FolderFilterDialog({
         </div>
 
         <div className="mt-4 min-h-0 flex-1 overflow-auto">
-          <div className="space-y-0.5">
-            {folders.map((folder) => (
-              <FilterFolderNode
-                key={folder.id}
-                id={folder.id}
-                name={folder.name}
-                depth={0}
-                hiddenFolderIds={hiddenFolderIds}
-                hideTree={hideTree}
-                showTree={showTree}
-              />
-            ))}
-          </div>
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              Loading folders...
+            </div>
+          ) : folders.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              No folders found.
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {folders.map((folder) => (
+                <FilterFolderNode
+                  key={folder.id}
+                  id={folder.id}
+                  name={folder.name}
+                  depth={0}
+                  hiddenFolderIds={hiddenFolderIds}
+                  hideTree={hideTree}
+                  showTree={showTree}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {hasHidden && (

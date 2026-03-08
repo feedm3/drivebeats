@@ -18,7 +18,7 @@ interface FolderTreeNodeProps {
   name: string;
   depth: number;
   ancestors: FolderEntry[];
-  selectedFolderId: string;
+  selectedFolderId: string | null;
   onSelect: (path: FolderEntry[]) => void;
 }
 

@@ -98,7 +98,7 @@ function AppContent() {
 
   const sidebar = (
     <FolderTree
-      selectedFolderId={currentFolderId}
+      selectedFolderId={activePlaylistId ? null : currentFolderId}
       onSelectFolder={handleTreeSelect}
       activePlaylistId={activePlaylistId}
       onSelectPlaylist={handleSelectPlaylist}

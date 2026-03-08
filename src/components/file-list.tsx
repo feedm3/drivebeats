@@ -3,10 +3,13 @@
 import { Folder, Music4, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AddToPlaylistPopover } from "@/components/add-to-playlist-popover";
+import {
+  FILE_TABLE_SHELL_CLASS,
+  FileListSkeleton,
+} from "@/components/file-list-skeleton";
 import { NowPlayingBars } from "@/components/now-playing-bars";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -21,6 +24,7 @@ import {
   getHighlightedTextParts,
 } from "@/lib/file-search";
 import { cn } from "@/lib/utils";
+import { useFolderFilterStore } from "@/stores/folder-filter-store";
 import { usePlayerStore } from "@/stores/player-store";
 import type { DriveFile, FolderEntry } from "@/types";
 import { FOLDER_MIME } from "@/types";
@@ -35,17 +39,6 @@ interface FileListProps {
   onFolderClick: (id: string, name: string) => void;
 }
 
-const LOADING_ROWS = [
-  { id: "loading-row-1", nameWidth: "w-40", sizeWidth: "w-12" },
-  { id: "loading-row-2", nameWidth: "w-56", sizeWidth: "w-16" },
-  { id: "loading-row-3", nameWidth: "w-48", sizeWidth: "w-14" },
-  { id: "loading-row-4", nameWidth: "w-64", sizeWidth: "w-12" },
-  { id: "loading-row-5", nameWidth: "w-44", sizeWidth: "w-16" },
-  { id: "loading-row-6", nameWidth: "w-52", sizeWidth: "w-14" },
-  { id: "loading-row-7", nameWidth: "w-36", sizeWidth: "w-12" },
-];
-const TABLE_SHELL_CLASS =
-  "rounded-2xl border border-border/60 bg-background/80 shadow-xs";
 type NameSortDirection = "asc" | "desc";
 
 function isFolder(file: DriveFile) {
@@ -94,7 +87,7 @@ function HighlightedName({
 
   return (
     <span className="block truncate font-medium">
-      {parts.map((part, index) =>
+      {parts.map((part) =>
         part.isMatch ? (
           <mark
             key={`${part.start}-${part.value}`}
@@ -122,6 +115,7 @@ export function FileList({
   const playTrack = usePlayerStore((state) => state.playTrack);
   const currentTrack = usePlayerStore((state) => state.currentTrack);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
+  const isHidden = useFolderFilterStore((state) => state.isHidden);
   const playerBarPadding = usePlayerBarPadding();
   const [nameSortDirection, setNameSortDirection] =
     useState<NameSortDirection>("asc");
@@ -130,9 +124,13 @@ export function FileList({
     (state) => state.playingFolderStack,
   );
   const playingFolderIds = new Set(playingFolderStack.map((f) => f.id));
+  const visibleFiles = useMemo(
+    () => files.filter((file) => !isFolder(file) || !isHidden(file.id)),
+    [files, isHidden],
+  );
   const sortedFiles = useMemo(
-    () => sortFilesByName(files, nameSortDirection),
-    [files, nameSortDirection],
+    () => sortFilesByName(visibleFiles, nameSortDirection),
+    [visibleFiles, nameSortDirection],
   );
   const filteredFiles = useMemo(
     () => filterFilesBySearch(sortedFiles, searchQuery),
@@ -140,63 +138,28 @@ export function FileList({
   );
   const mp3s = filteredFiles.filter((file) => !isFolder(file));
   const hasActiveSearch = searchQuery.trim().length > 0;
+  const hasHiddenFolders = visibleFiles.length < files.length;
 
   if (loading) {
     return (
       <ScrollArea className="min-h-0 flex-1">
         <div className={cn(playerBarPadding)}>
-          <div className={TABLE_SHELL_CLASS}>
-            <Table aria-label="Loading files">
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="h-11 px-4">
-                    <span className="text-xs font-semibold tracking-[0.16em] uppercase">
-                      Name
-                    </span>
-                  </TableHead>
-                  <TableHead className="h-11 w-10 px-1" />
-                  <TableHead className="h-11 w-[96px] px-4 text-right">
-                    <span className="text-xs font-semibold tracking-[0.16em] uppercase">
-                      Size
-                    </span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {LOADING_ROWS.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="max-w-0">
-                      <div className="flex items-center gap-3 px-2 py-1.5">
-                        <Skeleton className="size-4 rounded-sm" />
-                        <Skeleton
-                          className={cn("h-4 rounded-full", row.nameWidth)}
-                        />
-                      </div>
-                    </TableCell>
-                    <TableCell className="w-10 px-1" />
-                    <TableCell className="text-right">
-                      <div className="flex justify-end">
-                        <Skeleton
-                          className={cn("h-4 rounded-full", row.sizeWidth)}
-                        />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <FileListSkeleton />
         </div>
       </ScrollArea>
     );
   }
 
-  if (files.length === 0) {
+  if (visibleFiles.length === 0) {
     return (
       <div className="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground">
-        <span>Nothing here yet</span>
+        <span>
+          {hasHiddenFolders ? "No visible items here" : "Nothing here yet"}
+        </span>
         <span className="text-sm">
-          Add MP3 files to this folder in Google Drive to see them here.
+          {hasHiddenFolders
+            ? "This view only contains folders hidden by your folder filter."
+            : "Add MP3 files to this folder in Google Drive to see them here."}
         </span>
       </div>
     );
@@ -234,7 +197,7 @@ export function FileList({
   return (
     <ScrollArea className="min-h-0 flex-1">
       <div className={cn(playerBarPadding)}>
-        <div className={TABLE_SHELL_CLASS}>
+        <div className={FILE_TABLE_SHELL_CLASS}>
           <Table aria-label="Files and folders">
             <TableHeader>
               <TableRow className="hover:bg-transparent">

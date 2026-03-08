@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AppLoadingShell } from "@/components/app-loading-shell";
 import { useAuthStore } from "@/stores/auth-store";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -19,13 +20,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, refreshAccessToken]);
 
   if (!ready) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground animate-pulse">
-          Getting things ready...
-        </div>
-      </div>
-    );
+    return <AppLoadingShell />;
   }
 
   if (!isAuthenticated()) {

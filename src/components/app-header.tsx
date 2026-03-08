@@ -13,6 +13,7 @@ export function AppHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   async function handleLogout() {
+    usePlayerStore.getState().resetPlayback();
     usePlayerStore.getState().clearCache();
     useFolderCacheStore.getState().clear();
     await useAuthStore.getState().logout();

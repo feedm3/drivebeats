@@ -1,6 +1,6 @@
 "use client";
 
-import { RotateCw } from "lucide-react";
+import { Filter, Loader2, RotateCw } from "lucide-react";
 import {
   useCallback,
   useDeferredValue,
@@ -10,14 +10,18 @@ import {
 } from "react";
 import { BreadcrumbNav } from "@/components/breadcrumb-nav";
 import { FileList } from "@/components/file-list";
+import { FolderFilterDialog } from "@/components/folder-filter-dialog";
 import { FolderSearch } from "@/components/folder-search";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { Separator } from "@/components/ui/separator";
 import { useFolderContents } from "@/hooks/use-folder-contents";
+import { sortFoldersNatural } from "@/lib/sort";
 import { getHistoryStateWithFolderStack } from "@/lib/utils";
+import { useFolderCacheStore } from "@/stores/folder-cache-store";
+import { useFolderFilterStore } from "@/stores/folder-filter-store";
 import type { DriveFile, FolderEntry } from "@/types";
-import { INITIAL_STACK } from "@/types";
+import { FOLDER_MIME, INITIAL_STACK } from "@/types";
 
 interface FileBrowserProps {
   externalFolderStack?: FolderEntry[];
@@ -30,11 +34,18 @@ export function FileBrowser({
 }: FileBrowserProps) {
   const { fetchFromApi, fetchFolderContents, getAccessToken } =
     useFolderContents();
+  const getCachedFiles = useFolderCacheStore((state) => state.getFiles);
+  const hiddenFolderIds = useFolderFilterStore(
+    (state) => state.hiddenFolderIds,
+  );
 
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [accessToken, setAccessToken] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [rootFolders, setRootFolders] = useState<DriveFile[]>([]);
+  const [loadingRootFolders, setLoadingRootFolders] = useState(false);
   const [internalFolderStack, setInternalFolderStack] =
     useState<FolderEntry[]>(INITIAL_STACK);
 
@@ -160,43 +171,98 @@ export function FileBrowser({
     [pushFolderStack],
   );
 
+  const ensureRootFolders = useCallback(async () => {
+    const cached = getCachedFiles("root");
+    if (cached) {
+      setRootFolders(
+        sortFoldersNatural(
+          cached.files.filter((file) => file.mimeType === FOLDER_MIME),
+        ),
+      );
+      return;
+    }
+
+    setLoadingRootFolders(true);
+    const rootFiles = await fetchFromApi("root");
+    if (rootFiles) {
+      setRootFolders(
+        sortFoldersNatural(
+          rootFiles.filter((file) => file.mimeType === FOLDER_MIME),
+        ),
+      );
+    }
+    setLoadingRootFolders(false);
+  }, [fetchFromApi, getCachedFiles]);
+
+  const openFolderFilter = useCallback(() => {
+    setFilterOpen(true);
+    void ensureRootFolders();
+  }, [ensureRootFolders]);
+
   return (
-    <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <BreadcrumbNav
-          folderStack={folderStack}
-          onNavigate={onBreadcrumbNavigate}
-        />
-        <div className="flex items-center gap-2">
-          <FolderSearch value={searchQuery} onChange={setSearchQuery} />
-          <IconTooltip
-            label={refreshing ? "Refreshing folder" : "Refresh folder"}
-          >
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground size-8"
-              onClick={onRefresh}
-              disabled={refreshing}
-              aria-label={refreshing ? "Refreshing folder" : "Refresh folder"}
+    <>
+      <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-8">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <BreadcrumbNav
+            folderStack={folderStack}
+            onNavigate={onBreadcrumbNavigate}
+          />
+          <div className="flex items-center gap-2">
+            <FolderSearch value={searchQuery} onChange={setSearchQuery} />
+            <IconTooltip label="Filter folders">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="relative size-8 text-muted-foreground md:hidden"
+                onClick={openFolderFilter}
+                aria-label="Filter folders"
+              >
+                {loadingRootFolders ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Filter className="size-4" />
+                )}
+                {hiddenFolderIds.size > 0 && (
+                  <span className="absolute top-1 right-1 size-1.5 rounded-full bg-primary" />
+                )}
+              </Button>
+            </IconTooltip>
+            <IconTooltip
+              label={refreshing ? "Refreshing folder" : "Refresh folder"}
             >
-              <RotateCw
-                className={`size-4 ${refreshing ? "animate-spin" : ""}`}
-              />
-            </Button>
-          </IconTooltip>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground size-8"
+                onClick={onRefresh}
+                disabled={refreshing}
+                aria-label={refreshing ? "Refreshing folder" : "Refresh folder"}
+              >
+                <RotateCw
+                  className={`size-4 ${refreshing ? "animate-spin" : ""}`}
+                />
+              </Button>
+            </IconTooltip>
+          </div>
         </div>
+        <Separator className="my-3" />
+        <FileList
+          files={files}
+          loading={loading}
+          accessToken={accessToken}
+          folderStack={folderStack}
+          searchQuery={deferredSearchQuery}
+          onClearSearch={() => setSearchQuery("")}
+          onFolderClick={onFolderClick}
+        />
       </div>
-      <Separator className="my-3" />
-      <FileList
-        files={files}
-        loading={loading}
-        accessToken={accessToken}
-        folderStack={folderStack}
-        searchQuery={deferredSearchQuery}
-        onClearSearch={() => setSearchQuery("")}
-        onFolderClick={onFolderClick}
+      <FolderFilterDialog
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        folders={rootFolders}
+        loading={loadingRootFolders}
       />
-    </div>
+    </>
   );
 }

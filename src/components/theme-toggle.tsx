@@ -1,16 +1,22 @@
 "use client";
 
 import { Monitor, Moon, Sun } from "lucide-react";
-import { type Theme, useTheme } from "@/hooks/use-theme";
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 
-const options: { value: Theme; icon: typeof Sun; label: string }[] = [
+const themes = ["system", "light", "dark"] as const;
+
+const options: { value: (typeof themes)[number]; icon: typeof Sun; label: string }[] = [
   { value: "system", icon: Monitor, label: "System" },
   { value: "light", icon: Sun, label: "Light" },
   { value: "dark", icon: Moon, label: "Dark" },
 ];
 
 export function ThemeToggle() {
-  const { theme, setTheme, mounted } = useTheme();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   if (!mounted) return <div className="h-7 w-[84px]" />;
 
@@ -28,7 +34,7 @@ export function ThemeToggle() {
           }`}
           title={label}
         >
-          <Icon className="h-3.5 w-3.5" />
+          <Icon className="size-3.5" />
         </button>
       ))}
     </div>

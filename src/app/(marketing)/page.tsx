@@ -109,7 +109,7 @@ export default function LandingPage() {
         </h2>
         <div className="grid gap-8 sm:grid-cols-3">
           <div className="text-center">
-            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
+            <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
               1
             </div>
             <h3 className="text-sm font-semibold">Sign in</h3>
@@ -119,7 +119,7 @@ export default function LandingPage() {
             </p>
           </div>
           <div className="text-center">
-            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
+            <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
               2
             </div>
             <h3 className="text-sm font-semibold">Browse</h3>
@@ -128,7 +128,7 @@ export default function LandingPage() {
             </p>
           </div>
           <div className="text-center">
-            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
+            <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
               3
             </div>
             <h3 className="text-sm font-semibold">Play</h3>

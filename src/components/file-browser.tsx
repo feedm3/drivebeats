@@ -240,14 +240,14 @@ export function FileBrowser() {
           <Button
             variant="ghost"
             size="icon"
-            className="text-muted-foreground h-8 w-8"
+            className="text-muted-foreground size-8"
             onClick={onRefresh}
             disabled={refreshing}
             title={refreshing ? "Refreshing folder" : "Refresh folder"}
             aria-label={refreshing ? "Refreshing folder" : "Refresh folder"}
           >
             <RotateCw
-              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+              className={`size-4 ${refreshing ? "animate-spin" : ""}`}
             />
           </Button>
         </div>

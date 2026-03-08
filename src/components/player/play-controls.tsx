@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/tooltip";
 
 const toggleControlClass =
-  "h-8 w-8 aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:hover:bg-primary/20 aria-pressed:hover:text-primary dark:aria-pressed:hover:bg-primary/25";
+  "size-8 aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:hover:bg-primary/20 aria-pressed:hover:text-primary dark:aria-pressed:hover:bg-primary/25";
 
 export function PlayControls() {
   const {
@@ -60,7 +60,7 @@ export function PlayControls() {
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="size-8"
         aria-label="Previous track"
         onClick={handlePrev}
       >
@@ -70,7 +70,7 @@ export function PlayControls() {
       <Button
         variant="default"
         size="icon"
-        className="h-10 w-10 rounded-full"
+        className="size-10 rounded-full"
         aria-label={isLoading ? "Loading" : isPlaying ? "Pause" : "Play"}
         onClick={togglePlay}
         disabled={!currentTrack || isLoading}
@@ -81,7 +81,7 @@ export function PlayControls() {
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="size-8"
         aria-label="Next track"
         onClick={handleNext}
       >

@@ -10,6 +10,7 @@ let fetchAbortController: AbortController | null = null;
 interface PlayerState {
   currentTrack: DriveFile | null;
   playingFolderStack: FolderEntry[];
+  playingPlaylistId: string | null;
   playlist: DriveFile[];
   currentIndex: number;
   isPlaying: boolean;
@@ -23,7 +24,13 @@ interface PlayerState {
   audio: HTMLAudioElement | null;
   blobCache: Map<string, string>;
   initAudio: () => HTMLAudioElement;
-  playTrack: (track: DriveFile, playlist: DriveFile[], accessToken: string, folderStack: FolderEntry[]) => void;
+  playTrack: (
+    track: DriveFile,
+    playlist: DriveFile[],
+    accessToken: string,
+    folderStack: FolderEntry[],
+    playlistId?: string,
+  ) => void;
   fetchAndPlay: (fileId: string, accessToken: string) => Promise<void>;
   togglePlay: () => void;
   next: (accessToken: string) => void;
@@ -42,6 +49,7 @@ interface PlayerState {
 export const usePlayerStore = create<PlayerState>((set, get) => ({
   currentTrack: null,
   playingFolderStack: [],
+  playingPlaylistId: null,
   playlist: [],
   currentIndex: -1,
   isPlaying: false,
@@ -122,21 +130,24 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
   },
 
-  playTrack: (track, playlist, accessToken, folderStack) => {
-    const audio = get().initAudio();
+  playTrack: (track, playlist, accessToken, folderStack, playlistId) => {
+    get().initAudio();
     const index = playlist.findIndex((f) => f.id === track.id);
 
     set({
       currentTrack: track,
-      playingFolderStack: folderStack,
+      playingFolderStack: playlistId ? [] : folderStack,
+      playingPlaylistId: playlistId ?? null,
       playlist,
       currentIndex: index,
       isPlaying: true,
     });
 
-    get().fetchAndPlay(track.id, accessToken).catch(() => {
-      set({ isPlaying: false });
-    });
+    get()
+      .fetchAndPlay(track.id, accessToken)
+      .catch(() => {
+        set({ isPlaying: false });
+      });
   },
 
   togglePlay: () => {
@@ -168,7 +179,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       }
     }
 
-    get().playTrack(playlist[nextIndex], playlist, accessToken, get().playingFolderStack);
+    get().playTrack(
+      playlist[nextIndex],
+      playlist,
+      accessToken,
+      get().playingFolderStack,
+      get().playingPlaylistId ?? undefined,
+    );
   },
 
   previous: (accessToken) => {
@@ -182,7 +199,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     const prevIndex =
       currentIndex - 1 < 0 ? playlist.length - 1 : currentIndex - 1;
-    get().playTrack(playlist[prevIndex], playlist, accessToken, get().playingFolderStack);
+    get().playTrack(
+      playlist[prevIndex],
+      playlist,
+      accessToken,
+      get().playingFolderStack,
+      get().playingPlaylistId ?? undefined,
+    );
   },
 
   seek: (time) => {

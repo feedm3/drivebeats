@@ -2,6 +2,7 @@
 
 import { Folder, Music4, Search } from "lucide-react";
 import { useMemo, useState } from "react";
+import { AddToPlaylistPopover } from "@/components/add-to-playlist-popover";
 import { NowPlayingBars } from "@/components/now-playing-bars";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -14,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import {
   filterFilesBySearch,
   getHighlightedTextParts,
@@ -120,6 +122,7 @@ export function FileList({
   const playTrack = usePlayerStore((state) => state.playTrack);
   const currentTrack = usePlayerStore((state) => state.currentTrack);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
+  const playerBarPadding = usePlayerBarPadding();
   const [nameSortDirection, setNameSortDirection] =
     useState<NameSortDirection>("asc");
   const currentTrackId = currentTrack?.id;
@@ -141,7 +144,7 @@ export function FileList({
   if (loading) {
     return (
       <ScrollArea className="min-h-0 flex-1">
-        <div className={cn(currentTrack ? "pb-32 md:pb-36" : "pb-6")}>
+        <div className={cn(playerBarPadding)}>
           <div className={TABLE_SHELL_CLASS}>
             <Table aria-label="Loading files">
               <TableHeader>
@@ -151,6 +154,7 @@ export function FileList({
                       Name
                     </span>
                   </TableHead>
+                  <TableHead className="h-11 w-10 px-1" />
                   <TableHead className="h-11 w-[96px] px-4 text-right">
                     <span className="text-xs font-semibold tracking-[0.16em] uppercase">
                       Size
@@ -169,6 +173,7 @@ export function FileList({
                         />
                       </div>
                     </TableCell>
+                    <TableCell className="w-10 px-1" />
                     <TableCell className="text-right">
                       <div className="flex justify-end">
                         <Skeleton
@@ -200,7 +205,7 @@ export function FileList({
   if (filteredFiles.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 items-start">
-        <div className={cn("w-full", currentTrack ? "pb-32 md:pb-36" : "pb-6")}>
+        <div className={cn("w-full", playerBarPadding)}>
           <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-[1.75rem] border border-dashed border-border/70 bg-muted/20 px-6 py-10 text-center">
             <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <Search className="size-6" />
@@ -228,7 +233,7 @@ export function FileList({
 
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className={cn(currentTrack ? "pb-32 md:pb-36" : "pb-6")}>
+      <div className={cn(playerBarPadding)}>
         <div className={TABLE_SHELL_CLASS}>
           <Table aria-label="Files and folders">
             <TableHeader>
@@ -256,6 +261,7 @@ export function FileList({
                     </span>
                   </button>
                 </TableHead>
+                <TableHead className="h-11 w-10 px-1" />
                 <TableHead className="h-11 w-[96px] px-4 text-right">
                   <span className="text-xs font-semibold tracking-[0.16em] uppercase">
                     Size
@@ -274,6 +280,17 @@ export function FileList({
                     ? onFolderClick(file.id, file.name)
                     : playTrack(file, mp3s, accessToken, folderStack);
 
+                const dragData = folder
+                  ? JSON.stringify({
+                      type: "folder",
+                      folderId: file.id,
+                      folderName: file.name,
+                    })
+                  : JSON.stringify({
+                      type: "tracks",
+                      tracks: [{ fileId: file.id, fileName: file.name }],
+                    });
+
                 return (
                   <TableRow
                     key={file.id}
@@ -283,9 +300,17 @@ export function FileList({
                     aria-label={
                       folder ? `Open folder ${file.name}` : `Play ${file.name}`
                     }
-                    className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                    className="group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                     onClick={onActivate}
                     onKeyDown={(event) => onRowKeyDown(event, onActivate)}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "copy";
+                      e.dataTransfer.setData(
+                        "application/drivebeats",
+                        dragData,
+                      );
+                    }}
                   >
                     <TableCell className="max-w-0">
                       <div
@@ -303,7 +328,10 @@ export function FileList({
                           )}
                         >
                           {isPlayingAncestor || isActive ? (
-                            <NowPlayingBars className="size-4" paused={!isPlaying} />
+                            <NowPlayingBars
+                              className="size-4"
+                              paused={!isPlaying}
+                            />
                           ) : folder ? (
                             <Folder className="size-4" />
                           ) : (
@@ -317,6 +345,9 @@ export function FileList({
                           />
                         </span>
                       </div>
+                    </TableCell>
+                    <TableCell className="w-10 px-1">
+                      <AddToPlaylistPopover file={file} />
                     </TableCell>
                     <TableCell className="text-muted-foreground text-right tabular-nums">
                       {folder ? "—" : formatSize(file.size)}

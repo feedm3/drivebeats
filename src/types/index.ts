@@ -19,3 +19,14 @@ export interface FolderEntry {
 export const FOLDER_MIME = "application/vnd.google-apps.folder";
 
 export const INITIAL_STACK: FolderEntry[] = [{ id: "root", name: "My Drive" }];
+
+export interface PlaylistTrack {
+  fileId: string;
+  fileName: string;
+}
+
+export interface Playlist {
+  id: string;
+  name: string;
+  tracks: PlaylistTrack[];
+}

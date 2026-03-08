@@ -119,6 +119,7 @@ export function FileList({
 }: FileListProps) {
   const playTrack = usePlayerStore((state) => state.playTrack);
   const currentTrack = usePlayerStore((state) => state.currentTrack);
+  const isPlaying = usePlayerStore((state) => state.isPlaying);
   const [nameSortDirection, setNameSortDirection] =
     useState<NameSortDirection>("asc");
   const currentTrackId = currentTrack?.id;
@@ -302,7 +303,7 @@ export function FileList({
                           )}
                         >
                           {isPlayingAncestor || isActive ? (
-                            <NowPlayingBars className="size-4" />
+                            <NowPlayingBars className="size-4" paused={!isPlaying} />
                           ) : folder ? (
                             <Folder className="size-4" />
                           ) : (

@@ -35,6 +35,7 @@ export function FolderTreeNode({
   const cachedEntry = useFolderCacheStore((s) => s.cache.get(id));
   const { fetchFromApi } = useFolderContents();
   const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
   const playingFolderStack = usePlayerStore((s) => s.playingFolderStack);
 
   const [children, setChildren] = useState<DriveFile[] | null>(null);
@@ -149,7 +150,7 @@ export function FolderTreeNode({
           ) : null}
         </span>
         {isPlayingAncestor ? (
-          <NowPlayingBars className="size-4 shrink-0 text-primary" />
+          <NowPlayingBars className="size-4 shrink-0 text-primary" paused={!isPlaying} />
         ) : (
           <Folder className="size-4 shrink-0 text-muted-foreground" />
         )}

@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePlayerStore } from "@/stores/player-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { TrackInfo } from "./track-info";
+import { usePlayerStore } from "@/stores/player-store";
 import { PlayControls } from "./play-controls";
 import { ProgressBar } from "./progress-bar";
+import { TrackInfo } from "./track-info";
 import { VolumeControl } from "./volume-control";
 
 function updateMediaSession(title: string) {
@@ -166,7 +166,7 @@ export function PlayerBar() {
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border/50 bg-background/95 shadow-[0_-2px_10px_rgba(0,0,0,0.18)] backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="mx-auto max-w-4xl px-4">
+      <div className="mx-auto max-w-[1440px] px-4">
         <div className="pt-3">
           <ProgressBar />
         </div>

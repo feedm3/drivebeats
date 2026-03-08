@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { Folder, Music4, Search } from "lucide-react";
+import { useMemo, useState } from "react";
+import { NowPlayingBars } from "@/components/now-playing-bars";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { usePlayerStore } from "@/stores/player-store";
 import type { DriveFile, FolderEntry } from "@/types";
+import { FOLDER_MIME } from "@/types";
 
 interface FileListProps {
   files: DriveFile[];
@@ -31,7 +33,6 @@ interface FileListProps {
   onFolderClick: (id: string, name: string) => void;
 }
 
-const FOLDER_MIME = "application/vnd.google-apps.folder";
 const LOADING_ROWS = [
   { id: "loading-row-1", nameWidth: "w-40", sizeWidth: "w-12" },
   { id: "loading-row-2", nameWidth: "w-56", sizeWidth: "w-16" },
@@ -54,60 +55,6 @@ function formatSize(bytes: string | undefined) {
   const n = Number(bytes);
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function NowPlayingBars({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      className={className}
-      aria-hidden="true"
-    >
-      <rect x="1" y="6" width="3" height="10" rx="1">
-        <animate
-          attributeName="height"
-          values="10;4;8;10"
-          dur="0.9s"
-          repeatCount="indefinite"
-        />
-        <animate
-          attributeName="y"
-          values="6;12;8;6"
-          dur="0.9s"
-          repeatCount="indefinite"
-        />
-      </rect>
-      <rect x="6.5" y="2" width="3" height="14" rx="1">
-        <animate
-          attributeName="height"
-          values="14;6;10;14"
-          dur="0.7s"
-          repeatCount="indefinite"
-        />
-        <animate
-          attributeName="y"
-          values="2;10;6;2"
-          dur="0.7s"
-          repeatCount="indefinite"
-        />
-      </rect>
-      <rect x="12" y="4" width="3" height="12" rx="1">
-        <animate
-          attributeName="height"
-          values="12;8;4;12"
-          dur="1.1s"
-          repeatCount="indefinite"
-        />
-        <animate
-          attributeName="y"
-          values="4;8;12;4"
-          dur="1.1s"
-          repeatCount="indefinite"
-        />
-      </rect>
-    </svg>
-  );
 }
 
 function onRowKeyDown(

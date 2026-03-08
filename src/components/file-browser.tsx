@@ -8,52 +8,51 @@ import {
   useRef,
   useState,
 } from "react";
-import { toast } from "sonner";
 import { BreadcrumbNav } from "@/components/breadcrumb-nav";
 import { FileList } from "@/components/file-list";
 import { FolderSearch } from "@/components/folder-search";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { useAuthStore } from "@/stores/auth-store";
-import { useFolderCacheStore } from "@/stores/folder-cache-store";
+import { useFolderContents } from "@/hooks/use-folder-contents";
+import { getHistoryStateWithFolderStack } from "@/lib/utils";
 import type { DriveFile, FolderEntry } from "@/types";
+import { INITIAL_STACK } from "@/types";
 
-const INITIAL_STACK: FolderEntry[] = [{ id: "root", name: "My Drive" }];
-
-function getHistoryStateWithFolderStack(folderStack: FolderEntry[]) {
-  return {
-    ...(window.history.state ?? {}),
-    folderStack,
-  };
+interface FileBrowserProps {
+  externalFolderStack?: FolderEntry[];
+  onFolderNavigate?: (folderStack: FolderEntry[]) => void;
 }
 
-export function FileBrowser() {
-  const getValidAccessToken = useAuthStore(
-    (state) => state.getValidAccessToken,
-  );
-  const logout = useAuthStore((state) => state.logout);
-  const getCachedFiles = useFolderCacheStore((state) => state.getFiles);
-  const setCachedFiles = useFolderCacheStore((state) => state.setFiles);
-  const isStale = useFolderCacheStore((state) => state.isStale);
+export function FileBrowser({
+  externalFolderStack,
+  onFolderNavigate,
+}: FileBrowserProps) {
+  const { fetchFromApi, fetchFolderContents, getAccessToken } =
+    useFolderContents();
 
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [accessToken, setAccessToken] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [folderStack, setFolderStack] = useState<FolderEntry[]>(INITIAL_STACK);
+  const [internalFolderStack, setInternalFolderStack] =
+    useState<FolderEntry[]>(INITIAL_STACK);
+
+  const isControlled = externalFolderStack !== undefined;
+  const folderStack = isControlled ? externalFolderStack : internalFolderStack;
   const currentFolderId = folderStack[folderStack.length - 1].id;
   const folderStackRef = useRef(folderStack);
   const currentFolderIdRef = useRef(currentFolderId);
   const isMountedRef = useRef(true);
   const navigationRequestRef = useRef(0);
-  const latestAccessTokenRef = useRef("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
   // Seed initial history state & listen for back/forward
   useEffect(() => {
+    if (isControlled) return;
+
     const historyFolderStack = window.history.state?.folderStack;
     if (Array.isArray(historyFolderStack) && historyFolderStack.length > 0) {
-      setFolderStack(historyFolderStack);
+      setInternalFolderStack(historyFolderStack);
     } else {
       window.history.replaceState(
         getHistoryStateWithFolderStack(INITIAL_STACK),
@@ -67,14 +66,14 @@ export function FileBrowser() {
         Array.isArray(e.state?.folderStack) &&
         e.state.folderStack.length > 0
       ) {
-        setFolderStack(e.state.folderStack);
+        setInternalFolderStack(e.state.folderStack);
       } else {
-        setFolderStack(INITIAL_STACK);
+        setInternalFolderStack(INITIAL_STACK);
       }
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  }, [isControlled]);
 
   useEffect(() => {
     folderStackRef.current = folderStack;
@@ -88,62 +87,6 @@ export function FileBrowser() {
     };
   }, []);
 
-  const syncAccessToken = useCallback((token: string) => {
-    if (latestAccessTokenRef.current === token) {
-      return;
-    }
-
-    latestAccessTokenRef.current = token;
-    setAccessToken(token);
-  }, []);
-
-  const fetchFromApi = useCallback(
-    async (folderId: string): Promise<DriveFile[] | null> => {
-      const token = await getValidAccessToken();
-      if (!token) {
-        logout();
-        return null;
-      }
-      syncAccessToken(token);
-
-      try {
-        const query = `'${folderId}' in parents and trashed = false and (mimeType = 'application/vnd.google-apps.folder' or mimeType = 'audio/mpeg' or mimeType = 'audio/mp3')`;
-        const params = new URLSearchParams({
-          q: query,
-          fields: "files(id,name,mimeType,size)",
-          orderBy: "folder,name",
-          pageSize: "1000",
-        });
-        const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
-        if (res.ok) {
-          const data: { files?: DriveFile[] } = await res.json();
-          const files = data.files ?? [];
-          setCachedFiles(folderId, files);
-          return files;
-        }
-        if (res.status === 401) {
-          toast.error("Session expired. Please sign in again.");
-          logout();
-        } else if (res.status === 403) {
-          toast.error("Access denied. Check your Google Drive permissions.");
-        } else if (res.status === 429) {
-          toast.error("Too many requests. Please wait a moment.");
-        } else {
-          toast.error("Failed to load files. Please try again.");
-        }
-      } catch {
-        toast.error("Network error. Check your connection.");
-      }
-      return null;
-    },
-    [getValidAccessToken, logout, setCachedFiles, syncAccessToken],
-  );
-
   const navigateToFolder = useCallback(
     async (folderId: string) => {
       const requestId = navigationRequestRef.current + 1;
@@ -153,37 +96,17 @@ export function FileBrowser() {
         navigationRequestRef.current === requestId &&
         currentFolderIdRef.current === folderId;
 
-      const cached = getCachedFiles(folderId);
-
-      if (cached) {
-        // Cache hit — show cached data immediately
-        if (canCommit()) {
-          setFiles(cached.files);
-          setLoading(false);
-        }
-
-        if (isStale(folderId)) {
-          // Background revalidate
-          const fresh = await fetchFromApi(folderId);
-          if (fresh && canCommit()) {
-            setFiles(fresh);
-          }
-        }
-      } else {
-        // Cache miss — loading state + fetch
-        if (canCommit()) {
-          setLoading(true);
-        }
-        const data = await fetchFromApi(folderId);
-        if (data && canCommit()) {
-          setFiles(data);
-        }
-        if (canCommit()) {
-          setLoading(false);
-        }
-      }
+      await fetchFolderContents(folderId, {
+        onFiles: (fetchedFiles) => {
+          setFiles(fetchedFiles);
+          const token = getAccessToken();
+          if (token) setAccessToken(token);
+        },
+        onLoadingChange: setLoading,
+        canCommit,
+      });
     },
-    [getCachedFiles, isStale, fetchFromApi],
+    [fetchFolderContents, getAccessToken],
   );
 
   useEffect(() => {
@@ -207,12 +130,20 @@ export function FileBrowser() {
     }
   }, [fetchFromApi]);
 
-  const pushFolderStack = useCallback((newStack: FolderEntry[]) => {
-    folderStackRef.current = newStack;
-    setSearchQuery("");
-    setFolderStack(newStack);
-    window.history.pushState(getHistoryStateWithFolderStack(newStack), "");
-  }, []);
+  const pushFolderStack = useCallback(
+    (newStack: FolderEntry[]) => {
+      folderStackRef.current = newStack;
+      setSearchQuery("");
+
+      if (isControlled && onFolderNavigate) {
+        onFolderNavigate(newStack);
+      } else {
+        setInternalFolderStack(newStack);
+        window.history.pushState(getHistoryStateWithFolderStack(newStack), "");
+      }
+    },
+    [isControlled, onFolderNavigate],
+  );
 
   const onFolderClick = useCallback(
     (id: string, name: string) => {
@@ -229,7 +160,7 @@ export function FileBrowser() {
   );
 
   return (
-    <div className="mx-auto flex h-full max-w-4xl flex-col overflow-hidden px-4 pt-8">
+    <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <BreadcrumbNav
           folderStack={folderStack}

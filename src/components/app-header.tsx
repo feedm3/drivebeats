@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { usePlayerStore } from "@/stores/player-store";
@@ -37,32 +38,38 @@ export function AppHeader() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <div className="relative">
-            <button
-              type="button"
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-              aria-label="Menu"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+            <IconTooltip label="Menu">
+              <button
+                type="button"
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                aria-label="Menu"
               >
-                <line x1="4" y1="6" x2="20" y2="6" />
-                <line x1="4" y1="12" x2="20" y2="12" />
-                <line x1="4" y1="18" x2="20" y2="18" />
-              </svg>
-            </button>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                  focusable="false"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="4" y1="6" x2="20" y2="6" />
+                  <line x1="4" y1="12" x2="20" y2="12" />
+                  <line x1="4" y1="18" x2="20" y2="18" />
+                </svg>
+              </button>
+            </IconTooltip>
             {menuOpen && (
               <>
-                <div
+                <button
+                  type="button"
                   className="fixed inset-0 z-10"
                   onClick={() => setMenuOpen(false)}
+                  aria-label="Close menu"
                 />
                 <div className="absolute right-0 z-20 mt-1 w-48 rounded-md border bg-background py-1 shadow-lg">
                   <button

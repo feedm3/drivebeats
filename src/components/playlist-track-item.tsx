@@ -3,6 +3,7 @@
 import { GripVertical, Music4, X } from "lucide-react";
 import { NowPlayingBars } from "@/components/now-playing-bars";
 import { Button } from "@/components/ui/button";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { cn } from "@/lib/utils";
 import type { PlaylistTrack } from "@/types";
 
@@ -79,18 +80,20 @@ export function PlaylistTrackItem({
         </span>
       </div>
       <div className="flex shrink-0 items-center pr-2">
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove();
-          }}
-          aria-label={`Remove ${track.fileName}`}
-        >
-          <X className="size-3.5" />
-        </Button>
+        <IconTooltip label="Remove from playlist" side="left">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            aria-label={`Remove ${track.fileName}`}
+          >
+            <X className="size-3.5" />
+          </Button>
+        </IconTooltip>
       </div>
     </div>
   );

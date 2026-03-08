@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, ListMusic, Pencil, Play, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { PlaylistTrackItem } from "@/components/playlist-track-item";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +11,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
@@ -229,15 +230,17 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
     <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-8">
       <div className="flex items-center gap-3">
         {onBack && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onBack}
-            aria-label="Back to playlists"
-            className="text-muted-foreground"
-          >
-            <ArrowLeft className="size-4" />
-          </Button>
+          <IconTooltip label="Back to playlists">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onBack}
+              aria-label="Back to playlists"
+              className="text-muted-foreground"
+            >
+              <ArrowLeft className="size-4" />
+            </Button>
+          </IconTooltip>
         )}
         <div className="flex min-w-0 flex-1 items-center gap-3">
           {editing ? (
@@ -259,19 +262,21 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
             </h1>
           )}
           {!editing && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="shrink-0 text-muted-foreground"
-              onClick={() => {
-                setEditName(playlist.name);
-                setEditing(true);
-                setTimeout(() => editRef.current?.focus(), 0);
-              }}
-              aria-label="Rename playlist"
-            >
-              <Pencil className="size-3" />
-            </Button>
+            <IconTooltip label="Rename playlist">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="shrink-0 text-muted-foreground"
+                onClick={() => {
+                  setEditName(playlist.name);
+                  setEditing(true);
+                  setTimeout(() => editRef.current?.focus(), 0);
+                }}
+                aria-label="Rename playlist"
+              >
+                <Pencil className="size-3" />
+              </Button>
+            </IconTooltip>
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -283,15 +288,17 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
             <Play className="size-3.5" />
             Play All
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground hover:text-destructive"
-            onClick={() => setDeleteOpen(true)}
-            aria-label="Delete playlist"
-          >
-            <Trash2 className="size-4" />
-          </Button>
+          <IconTooltip label="Delete playlist">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+              aria-label="Delete playlist"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </IconTooltip>
         </div>
       </div>
 
@@ -313,7 +320,6 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
             <div
               ref={listRef}
               className="rounded-2xl border border-border/60 bg-background/80 shadow-xs overflow-hidden touch-none"
-              aria-label="Playlist tracks"
               onPointerDown={onPointerDown}
             >
               <div className="flex h-11 items-center border-b px-4">

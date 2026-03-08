@@ -3,6 +3,7 @@
 import { Search, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { cn } from "@/lib/utils";
 
 interface FolderSearchProps {
@@ -127,33 +128,37 @@ export function FolderSearch({ value, onChange }: FolderSearchProps) {
           className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/80 focus:outline-none"
         />
         {hasQuery ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="rounded-full text-muted-foreground hover:text-foreground"
-            onClick={clearSearch}
-            aria-label="Clear search"
-          >
-            <X className="size-3.5" />
-          </Button>
+          <IconTooltip label="Clear search">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="rounded-full text-muted-foreground hover:text-foreground"
+              onClick={clearSearch}
+              aria-label="Clear search"
+            >
+              <X className="size-3.5" />
+            </Button>
+          </IconTooltip>
         ) : null}
       </div>
 
       <div className="flex items-center sm:hidden">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className={cn(
-            "rounded-full text-muted-foreground transition-all hover:text-foreground",
-            isMobileOpen && "opacity-0 pointer-events-none w-0 px-0",
-          )}
-          onClick={() => setIsMobileOpen(true)}
-          aria-label="Open search"
-        >
-          <Search className="size-3.5" />
-        </Button>
+        <IconTooltip label="Open search">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className={cn(
+              "rounded-full text-muted-foreground transition-all hover:text-foreground",
+              isMobileOpen && "opacity-0 pointer-events-none w-0 px-0",
+            )}
+            onClick={() => setIsMobileOpen(true)}
+            aria-label="Open search"
+          >
+            <Search className="size-3.5" />
+          </Button>
+        </IconTooltip>
       </div>
 
       <div
@@ -197,23 +202,25 @@ export function FolderSearch({ value, onChange }: FolderSearchProps) {
             placeholder="Search"
             className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/80 focus:outline-none"
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="rounded-full text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              if (value) {
-                clearSearch();
-                return;
-              }
+          <IconTooltip label={hasQuery ? "Clear search" : "Close search"}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="rounded-full text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                if (value) {
+                  clearSearch();
+                  return;
+                }
 
-              setIsMobileOpen(false);
-            }}
-            aria-label={hasQuery ? "Clear search" : "Close search"}
-          >
-            <X className="size-3.5" />
-          </Button>
+                setIsMobileOpen(false);
+              }}
+              aria-label={hasQuery ? "Clear search" : "Close search"}
+            >
+              <X className="size-3.5" />
+            </Button>
+          </IconTooltip>
         </div>
       </div>
     </>

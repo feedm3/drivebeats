@@ -1,15 +1,21 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { ChevronRight, Filter, Plus } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FolderFilterDialog } from "@/components/folder-filter-dialog";
 import { FolderTreeNode } from "@/components/folder-tree-node";
-import { PlaylistSection } from "@/components/playlist-section";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  PlaylistSection,
+  type PlaylistSectionHandle,
+} from "@/components/playlist-section";
+import { Button } from "@/components/ui/button";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { useFolderContents } from "@/hooks/use-folder-contents";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { sortFoldersNatural } from "@/lib/sort";
 import { cn } from "@/lib/utils";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
+import { useFolderFilterStore } from "@/stores/folder-filter-store";
 import type { DriveFile, FolderEntry } from "@/types";
 import { FOLDER_MIME, INITIAL_STACK } from "@/types";
 
@@ -39,6 +45,9 @@ export function FolderTree({
   const [rootFolders, setRootFolders] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const playerBarPadding = usePlayerBarPadding();
+  const [filterOpen, setFilterOpen] = useState(false);
+  const { hiddenFolderIds, isHidden } = useFolderFilterStore();
+  const playlistRef = useRef<PlaylistSectionHandle>(null);
 
   const [foldersCollapsed, setFoldersCollapsed] = useState(() =>
     readCollapsed(STORAGE_KEY_FOLDERS),
@@ -88,59 +97,138 @@ export function FolderTree({
   }, [loadRoot]);
 
   return (
-    <div className="flex h-full flex-col">
-      <ScrollArea className="flex-1">
-        <div className="shrink-0 px-4 pt-8 pb-2">
+    <div className="flex min-h-full flex-col">
+      {/* Folders header */}
+      <div className="flex shrink-0 items-center justify-between px-4 pt-8 pb-2">
+        <button
+          type="button"
+          className="group/hdr flex items-center gap-1 text-xs font-semibold tracking-[0.16em] uppercase text-muted-foreground transition-colors hover:text-foreground"
+          onClick={toggleFolders}
+          aria-expanded={!foldersCollapsed}
+        >
+          Folders
+          <ChevronRight
+            className={cn(
+              "size-3 opacity-0 transition-all group-hover/hdr:opacity-100",
+              !foldersCollapsed && "rotate-90",
+            )}
+          />
+        </button>
+        <IconTooltip label="Filter folders">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="relative text-muted-foreground"
+            onClick={() => setFilterOpen(true)}
+            aria-label="Filter folders"
+          >
+            <Filter className="size-3.5" />
+            {hiddenFolderIds.size > 0 && (
+              <span className="absolute top-0 right-0 size-1.5 rounded-full bg-primary" />
+            )}
+          </Button>
+        </IconTooltip>
+      </div>
+
+      {/* Folders content */}
+      {!foldersCollapsed && (
+        <div className="px-2 pb-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+              Loading...
+            </div>
+          ) : rootFolders.length === 0 ? (
+            <div className="px-2 py-4 text-sm text-muted-foreground">
+              No folders found
+            </div>
+          ) : (
+            (() => {
+              const visible = rootFolders.filter((f) => !isHidden(f.id));
+              if (visible.length === 0) {
+                return (
+                  <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+                    All folders hidden.{" "}
+                    <button
+                      type="button"
+                      className="underline hover:text-foreground"
+                      onClick={() => setFilterOpen(true)}
+                    >
+                      Edit filter
+                    </button>
+                  </div>
+                );
+              }
+              return (
+                <div role="tree" aria-label="Folder tree">
+                  {visible.map((folder) => (
+                    <FolderTreeNode
+                      key={folder.id}
+                      id={folder.id}
+                      name={folder.name}
+                      depth={0}
+                      ancestors={INITIAL_STACK}
+                      selectedFolderId={selectedFolderId}
+                      onSelect={onSelectFolder}
+                    />
+                  ))}
+                </div>
+              );
+            })()
+          )}
+        </div>
+      )}
+
+      {/* Playlists header */}
+      <div className="shrink-0 px-2 pt-6 pb-2">
+        <div className="flex items-center gap-2 px-2">
           <button
             type="button"
-            className="group/hdr flex items-center gap-1 text-xs font-semibold tracking-[0.16em] uppercase text-muted-foreground transition-colors hover:text-foreground"
-            onClick={toggleFolders}
-            aria-expanded={!foldersCollapsed}
+            className="group/hdr flex min-w-0 flex-1 items-center gap-1 text-xs font-semibold tracking-[0.16em] uppercase text-muted-foreground transition-colors hover:text-foreground"
+            onClick={togglePlaylists}
+            aria-expanded={!playlistsCollapsed}
           >
-            Folders
+            Playlists
             <ChevronRight
               className={cn(
                 "size-3 opacity-0 transition-all group-hover/hdr:opacity-100",
-                !foldersCollapsed && "rotate-90",
+                !playlistsCollapsed && "rotate-90",
               )}
             />
           </button>
-        </div>
-        {!foldersCollapsed && (
-          <div className="px-2 pb-4">
-            {loading ? (
-              <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-                Loading...
-              </div>
-            ) : rootFolders.length === 0 ? (
-              <div className="px-2 py-4 text-sm text-muted-foreground">
-                No folders found
-              </div>
-            ) : (
-              <div role="tree" aria-label="Folder tree">
-                {rootFolders.map((folder) => (
-                  <FolderTreeNode
-                    key={folder.id}
-                    id={folder.id}
-                    name={folder.name}
-                    depth={0}
-                    ancestors={INITIAL_STACK}
-                    selectedFolderId={selectedFolderId}
-                    onSelect={onSelectFolder}
-                  />
-                ))}
-              </div>
-            )}
+          <div className="flex min-w-6 shrink-0 justify-center">
+            <IconTooltip label="Create playlist">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground"
+                onClick={() => playlistRef.current?.startCreating()}
+                aria-label="Create playlist"
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            </IconTooltip>
           </div>
-        )}
-        <PlaylistSection
-          activePlaylistId={activePlaylistId}
-          onSelectPlaylist={onSelectPlaylist}
-          collapsed={playlistsCollapsed}
-          onToggleCollapsed={togglePlaylists}
-        />
-        <div className={playerBarPadding} />
-      </ScrollArea>
+        </div>
+      </div>
+
+      {/* Playlists content */}
+      {!playlistsCollapsed && (
+        <div className="px-2">
+          <PlaylistSection
+            ref={playlistRef}
+            activePlaylistId={activePlaylistId}
+            onSelectPlaylist={onSelectPlaylist}
+            collapsed={playlistsCollapsed}
+          />
+          <div className={playerBarPadding} />
+        </div>
+      )}
+
+      <FolderFilterDialog
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        folders={rootFolders}
+      />
     </div>
   );
 }

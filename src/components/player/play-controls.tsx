@@ -1,11 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { useAuthStore } from "@/stores/auth-store";
 import { usePlayerStore } from "@/stores/player-store";
 
@@ -44,85 +40,89 @@ export function PlayControls() {
 
   return (
     <div className="flex items-center justify-center gap-2">
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon"
-              className={toggleControlClass}
-              aria-pressed={shuffle}
-              aria-label={`Shuffle ${shuffle ? "on" : "off"}`}
-              onClick={toggleShuffle}
-            >
-              <ShuffleIcon />
-            </Button>
-          }
-        />
-        <TooltipContent>Shuffle is {shuffle ? "on" : "off"}</TooltipContent>
-      </Tooltip>
+      <IconTooltip label={`Shuffle is ${shuffle ? "on" : "off"}`}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={toggleControlClass}
+          aria-pressed={shuffle}
+          aria-label={`Shuffle ${shuffle ? "on" : "off"}`}
+          onClick={toggleShuffle}
+        >
+          <ShuffleIcon />
+        </Button>
+      </IconTooltip>
 
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-8"
-        aria-label="Previous track"
-        onClick={handlePrev}
-      >
-        <PrevIcon />
-      </Button>
+      <IconTooltip label="Previous track">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          aria-label="Previous track"
+          onClick={handlePrev}
+        >
+          <PrevIcon />
+        </Button>
+      </IconTooltip>
 
-      <Button
-        variant="default"
-        size="icon"
-        className="size-10 rounded-full"
-        aria-label={isLoading ? "Loading" : isPlaying ? "Pause" : "Play"}
-        onClick={togglePlay}
-        disabled={!currentTrack || isLoading}
-      >
-        {isLoading ? <LoadingIcon /> : isPlaying ? <PauseIcon /> : <PlayIcon />}
-      </Button>
+      <IconTooltip label={isLoading ? "Loading" : isPlaying ? "Pause" : "Play"}>
+        <Button
+          variant="default"
+          size="icon"
+          className="size-10 rounded-full"
+          aria-label={isLoading ? "Loading" : isPlaying ? "Pause" : "Play"}
+          onClick={togglePlay}
+          disabled={!currentTrack || isLoading}
+        >
+          {isLoading ? (
+            <LoadingIcon />
+          ) : isPlaying ? (
+            <PauseIcon />
+          ) : (
+            <PlayIcon />
+          )}
+        </Button>
+      </IconTooltip>
 
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-8"
-        aria-label="Next track"
-        onClick={handleNext}
-        disabled={!hasNextTrack}
-      >
-        <NextIcon />
-      </Button>
+      <IconTooltip label="Next track">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          aria-label="Next track"
+          onClick={handleNext}
+          disabled={!hasNextTrack}
+        >
+          <NextIcon />
+        </Button>
+      </IconTooltip>
 
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon"
-              className={toggleControlClass}
-              aria-pressed={repeat !== "off"}
-              aria-label={
-                repeat === "off"
-                  ? "Repeat off"
-                  : repeat === "one"
-                    ? "Repeat one track"
-                    : "Repeat all tracks"
-              }
-              onClick={cycleRepeat}
-            >
-              {repeat === "one" ? <RepeatOneIcon /> : <RepeatIcon />}
-            </Button>
-          }
-        />
-        <TooltipContent>
-          {repeat === "off"
+      <IconTooltip
+        label={
+          repeat === "off"
             ? "Repeat is off"
             : repeat === "one"
               ? "Repeat one track"
-              : "Repeat all"}
-        </TooltipContent>
-      </Tooltip>
+              : "Repeat all"
+        }
+      >
+        <Button
+          variant="ghost"
+          size="icon"
+          className={toggleControlClass}
+          aria-pressed={repeat !== "off"}
+          aria-label={
+            repeat === "off"
+              ? "Repeat off"
+              : repeat === "one"
+                ? "Repeat one track"
+                : "Repeat all tracks"
+          }
+          onClick={cycleRepeat}
+        >
+          {repeat === "one" ? <RepeatOneIcon /> : <RepeatIcon />}
+        </Button>
+      </IconTooltip>
     </div>
   );
 }
@@ -134,6 +134,8 @@ function ShuffleIcon() {
       height="16"
       viewBox="0 0 24 24"
       fill="none"
+      aria-hidden="true"
+      focusable="false"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
@@ -155,6 +157,8 @@ function PrevIcon() {
       height="16"
       viewBox="0 0 24 24"
       fill="none"
+      aria-hidden="true"
+      focusable="false"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
@@ -173,6 +177,8 @@ function LoadingIcon() {
       height="20"
       viewBox="0 0 24 24"
       fill="none"
+      aria-hidden="true"
+      focusable="false"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
@@ -185,7 +191,14 @@ function LoadingIcon() {
 
 function PlayIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+    >
       <polygon points="5 3 19 12 5 21 5 3" />
     </svg>
   );
@@ -193,7 +206,14 @@ function PlayIcon() {
 
 function PauseIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+    >
       <rect x="6" y="4" width="4" height="16" />
       <rect x="14" y="4" width="4" height="16" />
     </svg>
@@ -207,6 +227,8 @@ function NextIcon() {
       height="16"
       viewBox="0 0 24 24"
       fill="none"
+      aria-hidden="true"
+      focusable="false"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
@@ -225,6 +247,8 @@ function RepeatIcon() {
       height="16"
       viewBox="0 0 24 24"
       fill="none"
+      aria-hidden="true"
+      focusable="false"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
@@ -245,6 +269,8 @@ function RepeatOneIcon() {
       height="16"
       viewBox="0 0 24 24"
       fill="none"
+      aria-hidden="true"
+      focusable="false"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"

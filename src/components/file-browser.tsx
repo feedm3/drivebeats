@@ -12,6 +12,7 @@ import { BreadcrumbNav } from "@/components/breadcrumb-nav";
 import { FileList } from "@/components/file-list";
 import { FolderSearch } from "@/components/folder-search";
 import { Button } from "@/components/ui/button";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { Separator } from "@/components/ui/separator";
 import { useFolderContents } from "@/hooks/use-folder-contents";
 import { getHistoryStateWithFolderStack } from "@/lib/utils";
@@ -168,19 +169,22 @@ export function FileBrowser({
         />
         <div className="flex items-center gap-2">
           <FolderSearch value={searchQuery} onChange={setSearchQuery} />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground size-8"
-            onClick={onRefresh}
-            disabled={refreshing}
-            title={refreshing ? "Refreshing folder" : "Refresh folder"}
-            aria-label={refreshing ? "Refreshing folder" : "Refresh folder"}
+          <IconTooltip
+            label={refreshing ? "Refreshing folder" : "Refresh folder"}
           >
-            <RotateCw
-              className={`size-4 ${refreshing ? "animate-spin" : ""}`}
-            />
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground size-8"
+              onClick={onRefresh}
+              disabled={refreshing}
+              aria-label={refreshing ? "Refreshing folder" : "Refresh folder"}
+            >
+              <RotateCw
+                className={`size-4 ${refreshing ? "animate-spin" : ""}`}
+              />
+            </Button>
+          </IconTooltip>
         </div>
       </div>
       <Separator className="my-3" />

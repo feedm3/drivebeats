@@ -296,12 +296,12 @@ export function FileList({
                         <span
                           className={cn(
                             "shrink-0",
-                            isPlayingAncestor
+                            isPlayingAncestor || isActive
                               ? "text-primary"
                               : "text-muted-foreground",
                           )}
                         >
-                          {isPlayingAncestor ? (
+                          {isPlayingAncestor || isActive ? (
                             <NowPlayingBars className="size-4" />
                           ) : folder ? (
                             <Folder className="size-4" />

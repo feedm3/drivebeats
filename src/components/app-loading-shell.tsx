@@ -156,7 +156,7 @@ function BrowserSkeleton({ mobile = false }: { mobile?: boolean }) {
   return (
     <div
       className={cn(
-        "mx-auto flex h-full flex-col overflow-hidden px-4 pt-8",
+        "mx-auto flex h-full flex-col overflow-hidden px-4 pt-7",
         mobile && "pt-6",
       )}
     >

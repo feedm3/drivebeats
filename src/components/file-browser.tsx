@@ -201,7 +201,7 @@ export function FileBrowser({
 
   return (
     <>
-      <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-8">
+      <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-7">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <BreadcrumbNav
             folderStack={folderStack}

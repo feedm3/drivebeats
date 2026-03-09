@@ -281,7 +281,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const isPlayingThisPlaylist = playingPlaylistId === collection.id;
 
   return (
-    <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-8">
+    <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-7">
       <div className="flex items-center gap-3">
         {onBack && (
           <IconTooltip label="Back to playlists">

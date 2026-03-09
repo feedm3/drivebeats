@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useAuthStore } from "@/stores/auth-store";
+import { useLibraryStore } from "@/stores/library-store";
 import { usePlayerStore } from "@/stores/player-store";
 import { PlayControls } from "./play-controls";
 import { ProgressBar } from "./progress-bar";
@@ -43,15 +44,36 @@ function setupMediaSessionHandlers() {
 
 export function PlayerBar() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const recentTrackRef = useRef<string | null>(null);
+  const currentTrackTitle = currentTrack?.name.replace(/\.mp3$/i, "") ?? "";
 
   // Audio element event listeners
   useEffect(() => {
     const el = usePlayerStore.getState().initAudio();
 
-    const onTimeUpdate = () =>
+    const onTimeUpdate = () => {
+      const { currentTrack } = usePlayerStore.getState();
       usePlayerStore.getState().setCurrentTime(el.currentTime);
+
+      if (!currentTrack || recentTrackRef.current === currentTrack.id) return;
+
+      const duration =
+        Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0;
+      const threshold = duration > 0 ? Math.min(10, duration * 0.2) : 10;
+
+      if (el.currentTime >= threshold) {
+        useLibraryStore.getState().markPlayed({
+          fileId: currentTrack.id,
+          fileName: currentTrack.name,
+        });
+        recentTrackRef.current = currentTrack.id;
+      }
+    };
     const onDurationChange = () =>
       usePlayerStore.getState().setDuration(el.duration || 0);
+    const onLoadStart = () => {
+      recentTrackRef.current = null;
+    };
     const onPlay = () => usePlayerStore.getState().setIsPlaying(true);
     const onPause = () => usePlayerStore.getState().setIsPlaying(false);
     const onEnded = async () => {
@@ -86,6 +108,7 @@ export function PlayerBar() {
 
     el.addEventListener("timeupdate", onTimeUpdate);
     el.addEventListener("durationchange", onDurationChange);
+    el.addEventListener("loadstart", onLoadStart);
     el.addEventListener("play", onPlay);
     el.addEventListener("pause", onPause);
     el.addEventListener("ended", onEnded);
@@ -96,6 +119,7 @@ export function PlayerBar() {
     return () => {
       el.removeEventListener("timeupdate", onTimeUpdate);
       el.removeEventListener("durationchange", onDurationChange);
+      el.removeEventListener("loadstart", onLoadStart);
       el.removeEventListener("play", onPlay);
       el.removeEventListener("pause", onPause);
       el.removeEventListener("ended", onEnded);
@@ -106,10 +130,8 @@ export function PlayerBar() {
 
   // Update Media Session metadata when track changes
   useEffect(() => {
-    if (currentTrack) {
-      updateMediaSession(currentTrack.name.replace(/\.mp3$/i, ""));
-    }
-  }, [currentTrack]);
+    updateMediaSession(currentTrackTitle);
+  }, [currentTrackTitle]);
 
   // Restore the last selected track into the static player after reload.
   useEffect(() => {

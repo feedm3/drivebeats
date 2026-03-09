@@ -30,3 +30,19 @@ export interface Playlist {
   name: string;
   tracks: PlaylistTrack[];
 }
+
+export const FAVORITES_COLLECTION_ID = "system:favorites";
+export const RECENTLY_PLAYED_COLLECTION_ID = "system:recently-played";
+
+export type SmartCollectionId =
+  | typeof FAVORITES_COLLECTION_ID
+  | typeof RECENTLY_PLAYED_COLLECTION_ID;
+
+export interface SmartCollection {
+  id: SmartCollectionId;
+  kind: "favorites" | "recently-played";
+  name: string;
+  tracks: PlaylistTrack[];
+}
+
+export type TrackCollection = Playlist | SmartCollection;

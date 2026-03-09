@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Filter, Folder, Plus } from "lucide-react";
+import { ChevronRight, Filter, Folder } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FolderFilterDialog } from "@/components/folder-filter-dialog";
 import { FolderTreeNode } from "@/components/folder-tree-node";
@@ -218,19 +218,6 @@ export function FolderTree({
               )}
             />
           </button>
-          <div className="flex min-w-6 shrink-0 justify-center">
-            <IconTooltip label="Create playlist">
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="text-muted-foreground"
-                onClick={() => playlistRef.current?.startCreating()}
-                aria-label="Create playlist"
-              >
-                <Plus className="size-3.5" />
-              </Button>
-            </IconTooltip>
-          </div>
         </div>
       </div>
 

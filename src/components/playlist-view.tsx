@@ -17,21 +17,50 @@ import { Separator } from "@/components/ui/separator";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { useLibraryStore } from "@/stores/library-store";
 import { usePlayerStore } from "@/stores/player-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
-import type { DriveFile, Playlist } from "@/types";
+import type { DriveFile, TrackCollection } from "@/types";
+import {
+  FAVORITES_COLLECTION_ID,
+  RECENTLY_PLAYED_COLLECTION_ID,
+} from "@/types";
 
 interface PlaylistViewProps {
-  playlist: Playlist;
+  collection: TrackCollection;
   onBack?: () => void;
 }
 
-function tracksToFiles(playlist: Playlist): DriveFile[] {
-  return playlist.tracks.map((t) => ({
+function tracksToFiles(collection: TrackCollection): DriveFile[] {
+  return collection.tracks.map((t) => ({
     id: t.fileId,
     name: t.fileName,
     mimeType: "audio/mpeg",
   }));
+}
+
+function getCollectionRemoveLabel(collectionId: string) {
+  if (collectionId === FAVORITES_COLLECTION_ID) {
+    return "Remove from favorites";
+  }
+
+  if (collectionId === RECENTLY_PLAYED_COLLECTION_ID) {
+    return "Remove from recently played";
+  }
+
+  return "Remove from playlist";
+}
+
+function getEmptyStateDescription(collectionId: string) {
+  if (collectionId === FAVORITES_COLLECTION_ID) {
+    return "Use the heart button on any track to save it here";
+  }
+
+  if (collectionId === RECENTLY_PLAYED_COLLECTION_ID) {
+    return "Tracks appear here after you spend a bit of time listening";
+  }
+
+  return "Use the + button on file rows to add songs";
 }
 
 // --- Drag-reorder logic isolated in a hook, driven by refs to avoid per-mousemove renders ---
@@ -165,7 +194,7 @@ function useTrackDrag(
 
 // --- Component ---
 
-export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
+export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -178,6 +207,9 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
   const renamePlaylist = usePlaylistStore((s) => s.renamePlaylist);
   const deletePlaylist = usePlaylistStore((s) => s.deletePlaylist);
   const setActivePlaylist = usePlaylistStore((s) => s.setActivePlaylist);
+  const setFavorite = useLibraryStore((s) => s.setFavorite);
+  const removeFromRecent = useLibraryStore((s) => s.removeFromRecent);
+  const clearRecent = useLibraryStore((s) => s.clearRecent);
 
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -185,12 +217,16 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
+  const isEditablePlaylist =
+    collection.id !== FAVORITES_COLLECTION_ID &&
+    collection.id !== RECENTLY_PLAYED_COLLECTION_ID;
 
   const handleReorder = useCallback(
     (from: number, to: number) => {
-      reorderTracks(playlist.id, from, to);
+      if (!isEditablePlaylist) return;
+      reorderTracks(collection.id, from, to);
     },
-    [playlist.id, reorderTracks],
+    [collection.id, isEditablePlaylist, reorderTracks],
   );
 
   const { drag, onPointerDown } = useTrackDrag(listRef, handleReorder);
@@ -199,32 +235,50 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
     async (index: number) => {
       const token = await getValidAccessToken();
       if (!token) return;
-      const files = tracksToFiles(playlist);
-      playTrack(files[index], files, token, [], playlist.id);
+      const files = tracksToFiles(collection);
+      playTrack(files[index], files, token, [], collection.id);
     },
-    [playlist, playTrack, getValidAccessToken],
+    [collection, playTrack, getValidAccessToken],
   );
 
   const handlePlayAll = useCallback(() => {
-    if (playlist.tracks.length === 0) return;
+    if (collection.tracks.length === 0) return;
     playFromPlaylist(0);
-  }, [playlist.tracks.length, playFromPlaylist]);
+  }, [collection.tracks.length, playFromPlaylist]);
 
   const handleRename = useCallback(() => {
     const name = editName.trim();
-    if (name) {
-      renamePlaylist(playlist.id, name);
+    if (name && isEditablePlaylist) {
+      renamePlaylist(collection.id, name);
     }
     setEditing(false);
-  }, [editName, playlist.id, renamePlaylist]);
+  }, [collection.id, editName, isEditablePlaylist, renamePlaylist]);
 
   const handleDelete = useCallback(() => {
-    deletePlaylist(playlist.id);
+    if (!isEditablePlaylist) return;
+    deletePlaylist(collection.id);
     setActivePlaylist(null);
     setDeleteOpen(false);
-  }, [playlist.id, deletePlaylist, setActivePlaylist]);
+  }, [collection.id, deletePlaylist, isEditablePlaylist, setActivePlaylist]);
 
-  const isPlayingThisPlaylist = playingPlaylistId === playlist.id;
+  const handleRemoveTrack = useCallback(
+    (fileId: string, fileName: string) => {
+      if (collection.id === FAVORITES_COLLECTION_ID) {
+        setFavorite({ fileId, fileName }, false);
+        return;
+      }
+
+      if (collection.id === RECENTLY_PLAYED_COLLECTION_ID) {
+        removeFromRecent(fileId);
+        return;
+      }
+
+      removeTrack(collection.id, fileId);
+    },
+    [collection.id, removeFromRecent, removeTrack, setFavorite],
+  );
+
+  const isPlayingThisPlaylist = playingPlaylistId === collection.id;
 
   return (
     <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-8">
@@ -243,7 +297,7 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
           </IconTooltip>
         )}
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          {editing ? (
+          {editing && isEditablePlaylist ? (
             <input
               ref={editRef}
               type="text"
@@ -258,17 +312,17 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
             />
           ) : (
             <h1 className="min-w-0 truncate text-lg font-semibold">
-              {playlist.name}
+              {collection.name}
             </h1>
           )}
-          {!editing && (
+          {isEditablePlaylist && !editing && (
             <IconTooltip label="Rename playlist">
               <Button
                 variant="ghost"
                 size="icon-xs"
                 className="shrink-0 text-muted-foreground"
                 onClick={() => {
-                  setEditName(playlist.name);
+                  setEditName(collection.name);
                   setEditing(true);
                   setTimeout(() => editRef.current?.focus(), 0);
                 }}
@@ -283,35 +337,50 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
           <Button
             size="sm"
             onClick={handlePlayAll}
-            disabled={playlist.tracks.length === 0}
+            disabled={collection.tracks.length === 0}
           >
             <Play className="size-3.5" />
             Play All
           </Button>
-          <IconTooltip label="Delete playlist">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground hover:text-destructive"
-              onClick={() => setDeleteOpen(true)}
-              aria-label="Delete playlist"
-            >
-              <Trash2 className="size-4" />
-            </Button>
-          </IconTooltip>
+          {collection.id === RECENTLY_PLAYED_COLLECTION_ID ? (
+            <IconTooltip label="Clear recently played">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-destructive"
+                onClick={clearRecent}
+                aria-label="Clear recently played"
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </IconTooltip>
+          ) : null}
+          {isEditablePlaylist ? (
+            <IconTooltip label="Delete playlist">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+                aria-label="Delete playlist"
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </IconTooltip>
+          ) : null}
         </div>
       </div>
 
       <Separator className="my-3" />
 
-      {playlist.tracks.length === 0 ? (
+      {collection.tracks.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
           <div className="flex size-14 items-center justify-center rounded-2xl bg-muted/30">
             <ListMusic className="size-6" />
           </div>
           <span className="text-sm">No tracks yet</span>
           <span className="text-xs">
-            Use the + button on file rows to add songs
+            {getEmptyStateDescription(collection.id)}
           </span>
         </div>
       ) : (
@@ -327,7 +396,7 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
                   Name
                 </span>
               </div>
-              {playlist.tracks.map((track, index) => (
+              {collection.tracks.map((track, index) => (
                 <PlaylistTrackItem
                   key={track.fileId}
                   track={track}
@@ -340,8 +409,12 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
                   dropIndicator={
                     drag.overIndex === index ? drag.position : null
                   }
+                  isReorderable={isEditablePlaylist}
                   onPlay={() => playFromPlaylist(index)}
-                  onRemove={() => removeTrack(playlist.id, track.fileId)}
+                  onRemove={() =>
+                    handleRemoveTrack(track.fileId, track.fileName)
+                  }
+                  removeLabel={getCollectionRemoveLabel(collection.id)}
                 />
               ))}
             </div>
@@ -349,12 +422,15 @@ export function PlaylistView({ playlist, onBack }: PlaylistViewProps) {
         </ScrollArea>
       )}
 
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <Dialog
+        open={isEditablePlaylist ? deleteOpen : false}
+        onOpenChange={setDeleteOpen}
+      >
         <DialogContent>
           <DialogTitle>Delete playlist</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete &ldquo;{playlist.name}&rdquo;? This
-            cannot be undone.
+            Are you sure you want to delete &ldquo;{collection.name}&rdquo;?
+            This cannot be undone.
           </DialogDescription>
           <div className="mt-4 flex justify-end gap-2">
             <DialogClose render={<Button variant="outline" size="sm" />}>

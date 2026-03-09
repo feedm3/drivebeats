@@ -4,6 +4,8 @@ import {
   ChevronRight,
   Filter,
   Folder,
+  Heart,
+  History,
   ListMusic,
   Plus,
   RotateCw,
@@ -12,6 +14,7 @@ import {
 import { FileListSkeleton } from "@/components/file-list-skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { cn } from "@/lib/utils";
 
 const SIDEBAR_FOLDER_ROWS = ["66%", "54%", "61%", "49%", "58%"];
@@ -44,19 +47,46 @@ function SidebarPlaylistsSkeleton() {
   return (
     <div className="px-2">
       <div className="pb-4">
-        {PLAYLIST_ROWS.map((width) => (
-          <div
-            key={width}
-            className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm"
-          >
-            <ListMusic className="size-4 shrink-0 text-muted-foreground" />
-            <Skeleton
-              className="h-3.5 flex-1 rounded-full"
-              style={{ maxWidth: width }}
-            />
+        <div className="px-2 pb-2 text-[11px] font-semibold tracking-[0.16em] uppercase text-muted-foreground">
+          Library
+        </div>
+        <div className="space-y-1">
+          <div className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm">
+            <Heart className="size-4 shrink-0 fill-current text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate">Favorites</span>
             <Skeleton className="h-3 w-4 rounded-full" />
           </div>
-        ))}
+          <div className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm">
+            <History className="size-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate">Recently played</span>
+            <Skeleton className="h-3 w-5 rounded-full" />
+          </div>
+        </div>
+
+        <div className="mt-5 flex items-center gap-2 px-2 pb-2">
+          <div className="min-w-0 flex-1 text-[11px] font-semibold tracking-[0.16em] uppercase text-muted-foreground">
+            Your playlists
+          </div>
+          <div className="flex min-w-6 shrink-0 justify-center text-muted-foreground">
+            <Plus className="size-3.5" />
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          {PLAYLIST_ROWS.map((width) => (
+            <div
+              key={width}
+              className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm"
+            >
+              <ListMusic className="size-4 shrink-0 text-muted-foreground" />
+              <Skeleton
+                className="h-3.5 flex-1 rounded-full"
+                style={{ maxWidth: width }}
+              />
+              <Skeleton className="h-3 w-4 rounded-full" />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -85,9 +115,6 @@ function SidebarSkeleton() {
           <div className="group/hdr flex min-w-0 flex-1 items-center gap-1 text-xs font-semibold tracking-[0.16em] uppercase text-muted-foreground">
             Playlists
             <ChevronRight className="size-3 rotate-90 opacity-0" />
-          </div>
-          <div className="flex min-w-6 shrink-0 justify-center text-muted-foreground">
-            <Plus className="size-3.5" />
           </div>
         </div>
       </div>
@@ -124,6 +151,8 @@ function BrowserToolbarSkeleton() {
 }
 
 function BrowserSkeleton({ mobile = false }: { mobile?: boolean }) {
+  const playerBarPadding = usePlayerBarPadding();
+
   return (
     <div
       className={cn(
@@ -134,7 +163,9 @@ function BrowserSkeleton({ mobile = false }: { mobile?: boolean }) {
       <BrowserToolbarSkeleton />
       <Separator className="my-3" />
       <div className="min-h-0 flex-1">
-        <FileListSkeleton />
+        <div className={cn(playerBarPadding)}>
+          <FileListSkeleton />
+        </div>
       </div>
     </div>
   );

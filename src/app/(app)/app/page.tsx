@@ -1,7 +1,7 @@
 "use client";
 
 import { FolderOpen, ListMusic } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthGuard } from "@/components/auth-guard";
 import { FileBrowser } from "@/components/file-browser";
 import { FolderTree } from "@/components/folder-tree";
@@ -13,9 +13,18 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { cn, getHistoryStateWithFolderStack } from "@/lib/utils";
 import { useFolderTreeStore } from "@/stores/folder-tree-store";
+import {
+  getFavoriteTracks,
+  getRecentlyPlayedTracks,
+  useLibraryStore,
+} from "@/stores/library-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
-import type { FolderEntry } from "@/types";
-import { INITIAL_STACK } from "@/types";
+import type { FolderEntry, TrackCollection } from "@/types";
+import {
+  FAVORITES_COLLECTION_ID,
+  INITIAL_STACK,
+  RECENTLY_PLAYED_COLLECTION_ID,
+} from "@/types";
 
 type ActiveView = "files" | "playlist";
 
@@ -39,15 +48,42 @@ function AppContent() {
   const activePlaylistId = usePlaylistStore((s) => s.activePlaylistId);
   const setActivePlaylist = usePlaylistStore((s) => s.setActivePlaylist);
   const playlists = usePlaylistStore((s) => s.playlists);
-  const activePlaylist =
-    playlists.find((p) => p.id === activePlaylistId) ?? null;
+  const libraryTracks = useLibraryStore((s) => s.tracks);
+  const favoriteTracks = useMemo(
+    () => getFavoriteTracks(libraryTracks),
+    [libraryTracks],
+  );
+  const recentlyPlayedTracks = useMemo(
+    () => getRecentlyPlayedTracks(libraryTracks),
+    [libraryTracks],
+  );
 
   const [activeView, setActiveView] = useState<ActiveView>("files");
   const [mobileTab, setMobileTab] = useState<"files" | "playlists">("files");
   const [mobilePlaylistId, setMobilePlaylistId] = useState<string | null>(null);
 
-  const mobilePlaylist =
-    playlists.find((p) => p.id === mobilePlaylistId) ?? null;
+  const collections: TrackCollection[] = [
+    {
+      id: FAVORITES_COLLECTION_ID,
+      kind: "favorites",
+      name: "Favorites",
+      tracks: favoriteTracks,
+    },
+    {
+      id: RECENTLY_PLAYED_COLLECTION_ID,
+      kind: "recently-played",
+      name: "Recently played",
+      tracks: recentlyPlayedTracks,
+    },
+    ...playlists,
+  ];
+
+  const activeCollection =
+    collections.find((collection) => collection.id === activePlaylistId) ??
+    null;
+  const mobileCollection =
+    collections.find((collection) => collection.id === mobilePlaylistId) ??
+    null;
 
   const handleFolderNavigate = useCallback((newStack: FolderEntry[]) => {
     setFolderStack(newStack);
@@ -106,8 +142,8 @@ function AppContent() {
   );
 
   const mainContent =
-    activeView === "playlist" && activePlaylist ? (
-      <PlaylistView playlist={activePlaylist} />
+    activeView === "playlist" && activeCollection ? (
+      <PlaylistView collection={activeCollection} />
     ) : (
       <FileBrowser
         externalFolderStack={folderStack}
@@ -160,9 +196,9 @@ function AppContent() {
           <div className="min-h-0 flex-1">
             {mobileTab === "files" ? (
               <FileBrowser />
-            ) : mobilePlaylist ? (
+            ) : mobileCollection ? (
               <PlaylistView
-                playlist={mobilePlaylist}
+                collection={mobileCollection}
                 onBack={() => setMobilePlaylistId(null)}
               />
             ) : (

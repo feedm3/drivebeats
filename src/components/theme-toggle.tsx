@@ -17,29 +17,49 @@ const options: {
   { value: "dark", icon: Moon, label: "Dark" },
 ];
 
-export function ThemeToggle() {
+interface ThemeToggleProps {
+  size?: "default" | "menu";
+}
+
+export function ThemeToggle({ size = "default" }: ThemeToggleProps) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
-  if (!mounted) return <div className="h-7 w-[84px]" />;
+  if (!mounted) {
+    return (
+      <div className={size === "menu" ? "h-9 w-[108px]" : "h-7 w-[84px]"} />
+    );
+  }
+
+  const shellClass =
+    size === "menu"
+      ? "inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/70 p-1 shadow-xs backdrop-blur-sm"
+      : "inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-background/70 p-0.5 shadow-xs backdrop-blur-sm";
+
+  const buttonClass =
+    size === "menu"
+      ? "rounded-full p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      : "rounded-full p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+
+  const iconClass = size === "menu" ? "size-4" : "size-3.5";
 
   return (
-    <div className="inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-background/70 p-0.5 shadow-xs backdrop-blur-sm">
+    <div className={shellClass}>
       {options.map(({ value, icon: Icon, label }) => (
         <IconTooltip key={value} label={label}>
           <button
             type="button"
             onClick={() => setTheme(value)}
-            className={`rounded-full p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
+            className={`${buttonClass} ${
               theme === value
                 ? "bg-primary/12 text-primary shadow-sm"
                 : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
             }`}
             aria-label={label}
           >
-            <Icon className="size-3.5" />
+            <Icon className={iconClass} />
           </button>
         </IconTooltip>
       ))}

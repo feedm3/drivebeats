@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Music4, Plus } from "lucide-react";
+import { Folder, Heart, Music4, Plus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
@@ -71,7 +71,8 @@ export function FileListSkeleton() {
                 Name
               </span>
             </TableHead>
-            <TableHead className="h-11 w-10 px-1" />
+            <TableHead className="h-11 w-9 px-0.5" />
+            <TableHead className="h-11 w-9 px-0.5" />
             <TableHead className="h-11 w-[96px] px-4 text-right">
               <span className="text-xs font-semibold tracking-[0.16em] uppercase">
                 Size
@@ -95,9 +96,20 @@ export function FileListSkeleton() {
                     />
                   </div>
                 </TableCell>
-                <TableCell className="w-10 px-1">
-                  <div className="flex justify-center text-muted-foreground/35">
-                    <Plus className="size-3.5" />
+                <TableCell className="w-9 px-0.5">
+                  <div className="flex justify-center">
+                    <div className="flex size-8 items-center justify-center rounded-md text-muted-foreground/35">
+                      {row.type === "folder" ? null : (
+                        <Heart className="size-3.5" />
+                      )}
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell className="w-9 px-0.5">
+                  <div className="flex justify-center">
+                    <div className="flex size-8 items-center justify-center rounded-md text-muted-foreground/35">
+                      <Plus className="size-3.5" />
+                    </div>
                   </div>
                 </TableCell>
                 <TableCell className="text-right text-muted-foreground tabular-nums">

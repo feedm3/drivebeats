@@ -3,11 +3,13 @@
 import { ListMusic, Plus } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
 import type { DriveFile } from "@/types";
@@ -15,9 +17,13 @@ import { FOLDER_MIME } from "@/types";
 
 interface AddToPlaylistPopoverProps {
   file: DriveFile;
+  className?: string;
 }
 
-export function AddToPlaylistPopover({ file }: AddToPlaylistPopoverProps) {
+export function AddToPlaylistPopover({
+  file,
+  className,
+}: AddToPlaylistPopoverProps) {
   const playlists = usePlaylistStore((s) => s.playlists);
   const addTracks = usePlaylistStore((s) => s.addTracks);
   const createPlaylist = usePlaylistStore((s) => s.createPlaylist);
@@ -87,18 +93,23 @@ export function AddToPlaylistPopover({ file }: AddToPlaylistPopoverProps) {
         }
       }}
     >
-      <PopoverTrigger
-        render={
-          <button
-            type="button"
-            className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100 focus:opacity-100"
-            onClick={(e) => e.stopPropagation()}
-            aria-label={`Add ${file.name} to playlist`}
-          />
-        }
-      >
-        <Plus className="size-3.5" />
-      </PopoverTrigger>
+      <IconTooltip label="Add to playlist" side="top" align="end">
+        <PopoverTrigger
+          render={
+            <button
+              type="button"
+              className={cn(
+                "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-[opacity,color,background-color] hover:bg-accent hover:text-foreground",
+                className,
+              )}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Add ${file.name} to playlist`}
+            />
+          }
+        >
+          <Plus className="size-3.5" />
+        </PopoverTrigger>
+      </IconTooltip>
       <PopoverContent side="left" align="start" className="w-52">
         <div className="max-h-60 overflow-y-auto">
           {playlists.map((p) => (

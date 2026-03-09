@@ -3,6 +3,7 @@
 import { Folder, Music4, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AddToPlaylistPopover } from "@/components/add-to-playlist-popover";
+import { FavoriteToggleButton } from "@/components/favorite-toggle-button";
 import {
   FILE_TABLE_SHELL_CLASS,
   FileListSkeleton,
@@ -40,6 +41,8 @@ interface FileListProps {
 }
 
 type NameSortDirection = "asc" | "desc";
+const rowActionClassName =
+  "opacity-100 transition-none md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100";
 
 function isFolder(file: DriveFile) {
   return file.mimeType === FOLDER_MIME;
@@ -224,7 +227,8 @@ export function FileList({
                     </span>
                   </button>
                 </TableHead>
-                <TableHead className="h-11 w-10 px-1" />
+                <TableHead className="h-11 w-9 px-0.5" />
+                <TableHead className="h-11 w-9 px-0.5" />
                 <TableHead className="h-11 w-[96px] px-4 text-right">
                   <span className="text-xs font-semibold tracking-[0.16em] uppercase">
                     Size
@@ -309,8 +313,21 @@ export function FileList({
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="w-10 px-1">
-                      <AddToPlaylistPopover file={file} />
+                    <TableCell className="w-9 px-0.5">
+                      {!folder ? (
+                        <FavoriteToggleButton
+                          fileId={file.id}
+                          fileName={file.name}
+                          size="icon-sm"
+                          className={rowActionClassName}
+                        />
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="w-9 px-0.5">
+                      <AddToPlaylistPopover
+                        file={file}
+                        className={rowActionClassName}
+                      />
                     </TableCell>
                     <TableCell className="text-muted-foreground text-right tabular-nums">
                       {folder ? "—" : formatSize(file.size)}

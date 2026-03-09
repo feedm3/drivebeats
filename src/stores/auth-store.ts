@@ -1,8 +1,10 @@
 import { create } from "zustand";
+import type { AuthUser } from "@/lib/auth-session";
 
 interface AuthState {
   accessToken: string | null;
   expiresAt: number | null;
+  user: AuthUser | null;
   setTokens: (accessToken: string, expiresAt: number) => void;
   clearTokens: () => void;
   isAuthenticated: () => boolean;
@@ -15,13 +17,14 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
   accessToken: null,
   expiresAt: null,
+  user: null,
 
   setTokens: (accessToken, expiresAt) => {
     set({ accessToken, expiresAt });
   },
 
   clearTokens: () => {
-    set({ accessToken: null, expiresAt: null });
+    set({ accessToken: null, expiresAt: null, user: null });
   },
 
   isAuthenticated: () => {
@@ -46,7 +49,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       const data = await res.json();
-      set({ accessToken: data.access_token, expiresAt: data.expires_at });
+      set({
+        accessToken: data.access_token,
+        expiresAt: data.expires_at,
+        user: data.user ?? null,
+      });
       return true;
     } catch {
       get().clearTokens();

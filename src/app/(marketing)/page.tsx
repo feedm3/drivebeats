@@ -17,10 +17,10 @@ export default function LandingPage() {
           Google Drive MP3 Player
         </h1>
         <p className="max-w-md text-lg text-muted-foreground">
-          Stream your music collection directly from Google Drive. Build
-          playlists across folders, reorder with drag and drop, and pick up
-          right where you left off. No uploads, no syncing, no server-side
-          proxy.
+          Stream your music collection directly from Google Drive. Save
+          favorites, revisit recently played tracks, build playlists across
+          folders, and pick up right where you left off. No uploads, no syncing,
+          no server-side proxy.
         </p>
         <SignInButton className="mt-4 inline-flex h-11 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90" />
         <p className="text-xs text-muted-foreground">
@@ -30,11 +30,60 @@ export default function LandingPage() {
       </div>
 
       {/* Features */}
-      <section className="w-full max-w-3xl border-t border-border/50 py-12">
+      <section className="w-full max-w-3xl py-12">
         <h2 className="mb-8 text-center text-2xl font-semibold">
           Your Drive music, your way
         </h2>
         <div className="grid gap-6 sm:grid-cols-2">
+          <div className="text-center">
+            <div className="mb-2">
+              <svg
+                className="mx-auto"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m12 21-1.45-1.32C5.4 15.03 2 11.94 2 8.15 2 5.06 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.06 22 8.15c0 3.79-3.4 6.88-8.55 11.54z" />
+              </svg>
+            </div>
+            <h3 className="text-sm font-semibold">Favorites on every track</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Save tracks as favorites wherever you find them, then open your
+              Favorites view to play them back as a quick personal library.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="mb-2">
+              <svg
+                className="mx-auto"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 8v5l3 3" />
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+            </div>
+            <h3 className="text-sm font-semibold">
+              Recently played at a glance
+            </h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Jump back into the tracks you listened to most recently without
+              rebuilding the queue by hand.
+            </p>
+          </div>
           <div className="text-center">
             <div className="mb-2">
               <svg
@@ -192,6 +241,21 @@ export default function LandingPage() {
               No. We request read-only access to list and stream your files. We
               cannot modify, delete, or share anything in your Drive. You can
               revoke access at any time from your Google Account settings.
+            </p>
+          </details>
+          <details className="rounded-lg border border-border px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold">
+              What Google scopes does DriveBeats require, and why?
+            </summary>
+            <p className="mt-2 text-sm text-muted-foreground">
+              DriveBeats requests{" "}
+              <code>https://www.googleapis.com/auth/drive.readonly</code> so it
+              can list folders and stream your MP3 files. It also requests{" "}
+              <code>openid</code>, <code>userinfo.email</code>, and{" "}
+              <code>userinfo.profile</code> so the app can identify which Google
+              account is signed in and show that account in the app. No write
+              scopes are requested, which means DriveBeats cannot edit, move,
+              delete, or share anything in your Drive.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">

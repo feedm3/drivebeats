@@ -10,7 +10,7 @@ export default function PrivacyPolicyPage() {
       <div className="mx-auto max-w-2xl space-y-6 text-sm text-muted-foreground">
         <h1 className="text-2xl font-bold text-foreground">Privacy Policy</h1>
         <p>
-          <strong className="text-foreground">Last updated:</strong> March 5,
+          <strong className="text-foreground">Last updated:</strong> March 9,
           2026
         </p>
 

@@ -5,6 +5,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Popover,
   PopoverContent,
@@ -12,7 +20,16 @@ import {
 } from "@/components/ui/popover";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
+import { useFolderFilterStore } from "@/stores/folder-filter-store";
+import { useLibraryStore } from "@/stores/library-store";
 import { usePlayerStore } from "@/stores/player-store";
+import { usePlaylistStore } from "@/stores/playlist-store";
+
+const APP_STORAGE_KEYS = [
+  "sidebar-width",
+  "sidebar-folders-collapsed",
+  "sidebar-playlists-collapsed",
+];
 
 function getUserLabel(name: string | null, email: string) {
   if (name) {
@@ -37,14 +54,48 @@ function getUserInitials(name: string | null, email: string) {
 
 export function AppHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const user = useAuthStore((state) => state.user);
   const userLabel = user ? getUserLabel(user.name, user.email) : null;
   const userInitials = user ? getUserInitials(user.name, user.email) : null;
 
   async function handleLogout() {
+    setIsLoggingOut(true);
     usePlayerStore.getState().resetPlayback();
     usePlayerStore.getState().clearCache();
+    usePlayerStore.setState({
+      currentTrack: null,
+      playingFolderStack: [],
+      playingPlaylistId: null,
+      playlist: [],
+      currentIndex: -1,
+      isPlaying: false,
+      duration: 0,
+      currentTime: 0,
+      volume: 0.7,
+      isMuted: false,
+      shuffle: false,
+      repeat: "off",
+      isLoading: false,
+    });
+    usePlayerStore.persist.clearStorage();
+
+    useLibraryStore.setState({ tracks: {} });
+    useLibraryStore.persist.clearStorage();
+
+    usePlaylistStore.setState({ playlists: [], activePlaylistId: null });
+    usePlaylistStore.persist.clearStorage();
+
+    useFolderFilterStore.setState({ hiddenFolderIds: new Set() });
+    useFolderFilterStore.persist.clearStorage();
+
     useFolderCacheStore.getState().clear();
+
+    for (const key of APP_STORAGE_KEYS) {
+      window.localStorage.removeItem(key);
+    }
+
     await useAuthStore.getState().logout();
     window.location.href = "/";
   }
@@ -139,7 +190,7 @@ export function AppHeader() {
                 <div className="mx-1 my-1 h-px bg-border/60" />
                 <button
                   type="button"
-                  onClick={handleLogout}
+                  onClick={() => setLogoutOpen(true)}
                   className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-destructive/8 hover:text-destructive"
                 >
                   <LogOut className="size-4" />
@@ -150,6 +201,30 @@ export function AppHeader() {
           ) : null}
         </div>
       </div>
+      <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+        <DialogContent>
+          <DialogTitle>Log out and delete local data</DialogTitle>
+          <DialogDescription>
+            Logging out will delete your local playlists, favorites, recently
+            played tracks, hidden folders, and saved player state from this
+            browser. Continue only if you want to remove all app data from this
+            device.
+          </DialogDescription>
+          <div className="mt-4 flex justify-end gap-2">
+            <DialogClose render={<Button variant="outline" size="sm" />}>
+              Cancel
+            </DialogClose>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+            >
+              {isLoggingOut ? "Logging out..." : "Log out and delete data"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }

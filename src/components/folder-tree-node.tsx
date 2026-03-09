@@ -4,6 +4,7 @@ import { ChevronRight, Folder, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { NowPlayingBars } from "@/components/now-playing-bars";
 import { useFolderContents } from "@/hooks/use-folder-contents";
+import { shouldRenderFolderInTree } from "@/lib/folder-tree-visibility";
 import { sortFoldersNatural } from "@/lib/sort";
 import { cn } from "@/lib/utils";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
@@ -32,8 +33,9 @@ export function FolderTreeNode({
 }: FolderTreeNodeProps) {
   const isExpanded = useFolderTreeStore((s) => s.expandedFolders.has(id));
   const toggle = useFolderTreeStore((s) => s.toggle);
-  const isHidden = useFolderFilterStore((s) => s.isHidden);
+  const hiddenFolderIds = useFolderFilterStore((s) => s.hiddenFolderIds);
 
+  const cache = useFolderCacheStore((s) => s.cache);
   const cachedEntry = useFolderCacheStore((s) => s.cache.get(id));
   const { fetchFromApi } = useFolderContents();
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -166,7 +168,9 @@ export function FolderTreeNode({
       {isExpanded && children && children.length > 0 && (
         <div>
           {children
-            .filter((child) => !isHidden(child.id))
+            .filter((child) =>
+              shouldRenderFolderInTree(child.id, hiddenFolderIds, cache),
+            )
             .map((child) => (
               <FolderTreeNode
                 key={child.id}

@@ -13,6 +13,7 @@ import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFolderContents } from "@/hooks/use-folder-contents";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
+import { shouldRenderFolderInTree } from "@/lib/folder-tree-visibility";
 import { sortFoldersNatural } from "@/lib/sort";
 import { cn } from "@/lib/utils";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
@@ -67,11 +68,12 @@ export function FolderTree({
 }: FolderTreeProps) {
   const { fetchFromApi } = useFolderContents();
   const getCachedFiles = useFolderCacheStore((s) => s.getFiles);
+  const cache = useFolderCacheStore((s) => s.cache);
   const [rootFolders, setRootFolders] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const playerBarPadding = usePlayerBarPadding();
   const [filterOpen, setFilterOpen] = useState(false);
-  const { hiddenFolderIds, isHidden } = useFolderFilterStore();
+  const hiddenFolderIds = useFolderFilterStore((s) => s.hiddenFolderIds);
   const playlistRef = useRef<PlaylistSectionHandle>(null);
 
   const [foldersCollapsed, setFoldersCollapsed] = useState(() =>
@@ -166,7 +168,9 @@ export function FolderTree({
             </div>
           ) : (
             (() => {
-              const visible = rootFolders.filter((f) => !isHidden(f.id));
+              const visible = rootFolders.filter((f) =>
+                shouldRenderFolderInTree(f.id, hiddenFolderIds, cache),
+              );
               if (visible.length === 0) {
                 return (
                   <div className="px-2 py-4 text-center text-sm text-muted-foreground">

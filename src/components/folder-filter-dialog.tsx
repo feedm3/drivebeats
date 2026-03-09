@@ -12,31 +12,16 @@ import {
 } from "@/components/ui/dialog";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { useFolderContents } from "@/hooks/use-folder-contents";
+import {
+  type FolderCheckState,
+  getFolderFilterState,
+} from "@/lib/folder-tree-visibility";
 import { sortFoldersNatural } from "@/lib/sort";
 import { cn } from "@/lib/utils";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { useFolderFilterStore } from "@/stores/folder-filter-store";
 import type { DriveFile } from "@/types";
 import { FOLDER_MIME } from "@/types";
-
-type CheckState = "checked" | "unchecked" | "partial";
-
-/**
- * Recursively compute the check state of a folder by walking
- * the cached subtree. If the folder itself is hidden → unchecked.
- * If all cached descendants are visible → checked.
- * Otherwise → partial.
- */
-function getSubtreeState(id: string, hiddenFolderIds: Set<string>): CheckState {
-  if (hiddenFolderIds.has(id)) return "unchecked";
-  const entry = useFolderCacheStore.getState().cache.get(id);
-  if (!entry) return "checked";
-  const folders = entry.files.filter((f) => f.mimeType === FOLDER_MIME);
-  if (folders.length === 0) return "checked";
-  const states = folders.map((f) => getSubtreeState(f.id, hiddenFolderIds));
-  if (states.every((s) => s === "checked")) return "checked";
-  return "partial";
-}
 
 interface FolderFilterDialogProps {
   open: boolean;
@@ -137,13 +122,18 @@ function FilterFolderNode({
   hideTree,
   showTree,
 }: FilterFolderNodeProps) {
+  const cache = useFolderCacheStore((s) => s.cache);
   const cachedEntry = useFolderCacheStore((s) => s.cache.get(id));
   const { fetchFromApi } = useFolderContents();
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<DriveFile[] | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const state = getSubtreeState(id, hiddenFolderIds);
+  const state: FolderCheckState = getFolderFilterState(
+    id,
+    hiddenFolderIds,
+    cache,
+  );
 
   const handleToggle = useCallback(() => {
     // unchecked → show all; checked/partial → hide all

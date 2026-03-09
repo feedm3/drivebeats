@@ -1,7 +1,7 @@
 "use client";
 
-import { usePlayerStore } from "@/stores/player-store";
 import { Slider } from "@/components/ui/slider";
+import { usePlayerStore } from "@/stores/player-store";
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);

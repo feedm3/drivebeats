@@ -26,14 +26,18 @@ interface PlayerState {
   audio: HTMLAudioElement | null;
   blobCache: Map<string, string>;
   initAudio: () => HTMLAudioElement;
-  loadTrack: (fileId: string, autoplay?: boolean) => Promise<void>;
+  loadTrack: (
+    fileId: string,
+    autoplay?: boolean,
+    beforeApply?: () => void,
+  ) => Promise<boolean>;
   playTrack: (
     track: DriveFile,
     playlist: DriveFile[],
     folderStack: FolderEntry[],
     playlistId?: string,
   ) => Promise<void>;
-  fetchAndPlay: (fileId: string) => Promise<void>;
+  fetchAndPlay: (fileId: string) => Promise<boolean>;
   togglePlay: () => void;
   next: () => Promise<void>;
   previous: () => Promise<void>;
@@ -78,7 +82,7 @@ export const usePlayerStore = create<PlayerState>()(
         return audio;
       },
 
-      loadTrack: async (fileId, autoplay = true) => {
+      loadTrack: async (fileId, autoplay = true, beforeApply) => {
         // Abort any in-flight fetch so a stale download can't overwrite audio.src
         fetchAbortController?.abort();
         const controller = new AbortController();
@@ -90,6 +94,7 @@ export const usePlayerStore = create<PlayerState>()(
 
         const applySource = async (source: string) => {
           audio.pause();
+          beforeApply?.();
           audio.src = source;
           audio.currentTime = 0;
 
@@ -97,15 +102,17 @@ export const usePlayerStore = create<PlayerState>()(
             await audio.play();
           } else {
             audio.load();
-            set({ isPlaying: false, currentTime: 0 });
+            set({ isPlaying: false, currentTime: 0, duration: 0 });
           }
+
+          return true;
         };
 
         if (cached) {
-          if (controller.signal.aborted) return;
+          if (controller.signal.aborted) return false;
           await applySource(cached);
           set({ isLoading: false });
-          return;
+          return true;
         }
 
         set({ isLoading: true });
@@ -117,15 +124,22 @@ export const usePlayerStore = create<PlayerState>()(
           }
 
           const fetchTrack = (token: string) =>
-            fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-              headers: { Authorization: `Bearer ${token}` },
-              signal: controller.signal,
-            });
+            fetch(
+              `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+              {
+                headers: { Authorization: `Bearer ${token}` },
+                signal: controller.signal,
+              },
+            );
 
           let res = await fetchTrack(accessToken);
           if (res.status === 401) {
-            const refreshed = await useAuthStore.getState().refreshAccessToken();
-            accessToken = refreshed ? useAuthStore.getState().accessToken : null;
+            const refreshed = await useAuthStore
+              .getState()
+              .refreshAccessToken();
+            accessToken = refreshed
+              ? useAuthStore.getState().accessToken
+              : null;
 
             if (!accessToken) {
               throw new Error("Unable to refresh access token");
@@ -154,40 +168,41 @@ export const usePlayerStore = create<PlayerState>()(
           blobCache.set(fileId, blobUrl);
 
           // If a newer fetch started while we were downloading, don't touch audio
-          if (controller.signal.aborted) return;
+          if (controller.signal.aborted) return false;
 
           await applySource(blobUrl);
           set({ isLoading: false });
+          return true;
         } catch (e) {
-          if (controller.signal.aborted) return;
+          if (controller.signal.aborted) return false;
           set({ isLoading: false });
           throw e;
         }
       },
 
       fetchAndPlay: async (fileId) => {
-        await get().loadTrack(fileId, true);
+        return get().loadTrack(fileId, true);
       },
 
       playTrack: async (track, playlist, folderStack, playlistId) => {
         get().initAudio();
         const index = playlist.findIndex((f) => f.id === track.id);
 
-        set({
-          currentTrack: track,
-          playingFolderStack: playlistId ? [] : folderStack,
-          playingPlaylistId: playlistId ?? null,
-          playlist,
-          currentIndex: index,
-          isPlaying: true,
-          currentTime: 0,
-          duration: 0,
-        });
-
         try {
-          await get().loadTrack(track.id, true);
+          await get().loadTrack(track.id, true, () => {
+            set({
+              currentTrack: track,
+              playingFolderStack: playlistId ? [] : folderStack,
+              playingPlaylistId: playlistId ?? null,
+              playlist,
+              currentIndex: index,
+              isPlaying: true,
+              currentTime: 0,
+              duration: 0,
+            });
+          });
         } catch {
-          set({ isPlaying: false });
+          // Keep the current playback state if the next track fails to load.
         }
       },
 

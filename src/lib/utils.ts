@@ -27,9 +27,11 @@ export function formatRelativeDate(timestamp: number): string {
 
 export function getHistoryStateWithFolderStack(
   folderStack: { id: string; name: string }[],
+  activePlaylistId: string | null = null,
 ) {
   return {
     ...(window.history.state ?? {}),
     folderStack,
+    activePlaylistId,
   };
 }

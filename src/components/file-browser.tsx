@@ -65,7 +65,7 @@ export function FileBrowser({
       setInternalFolderStack(historyFolderStack);
     } else {
       window.history.replaceState(
-        getHistoryStateWithFolderStack(INITIAL_STACK),
+        getHistoryStateWithFolderStack(INITIAL_STACK, null),
         "",
       );
     }
@@ -147,7 +147,10 @@ export function FileBrowser({
         onFolderNavigate(newStack);
       } else {
         setInternalFolderStack(newStack);
-        window.history.pushState(getHistoryStateWithFolderStack(newStack), "");
+        window.history.pushState(
+          getHistoryStateWithFolderStack(newStack, null),
+          "",
+        );
       }
     },
     [isControlled, onFolderNavigate],

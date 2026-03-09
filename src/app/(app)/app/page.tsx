@@ -59,7 +59,10 @@ function AppContent() {
     [libraryTracks],
   );
 
-  const [activeView, setActiveView] = useState<ActiveView>("files");
+  const [activeView, setActiveView] = useState<ActiveView>(() => {
+    if (typeof window === "undefined") return "files";
+    return window.history.state?.activePlaylistId ? "playlist" : "files";
+  });
   const [mobileTab, setMobileTab] = useState<"files" | "playlists">("files");
   const [mobilePlaylistId, setMobilePlaylistId] = useState<string | null>(null);
 
@@ -88,7 +91,10 @@ function AppContent() {
 
   const handleFolderNavigate = useCallback((newStack: FolderEntry[]) => {
     setFolderStack(newStack);
-    window.history.pushState(getHistoryStateWithFolderStack(newStack), "");
+    window.history.pushState(
+      getHistoryStateWithFolderStack(newStack, null),
+      "",
+    );
     useFolderTreeStore.getState().expandPath(newStack.slice(0, -1));
   }, []);
 
@@ -97,7 +103,10 @@ function AppContent() {
       setFolderStack(path);
       setActivePlaylist(null);
       setActiveView("files");
-      window.history.pushState(getHistoryStateWithFolderStack(path), "");
+      window.history.pushState(
+        getHistoryStateWithFolderStack(path, null),
+        "",
+      );
     },
     [setActivePlaylist],
   );
@@ -109,7 +118,7 @@ function AppContent() {
     setActivePlaylist(null);
     setActiveView("files");
     window.history.pushState(
-      getHistoryStateWithFolderStack(playingFolderStack),
+      getHistoryStateWithFolderStack(playingFolderStack, null),
       "",
     );
     useFolderTreeStore.getState().expandPath(playingFolderStack.slice(0, -1));
@@ -119,15 +128,27 @@ function AppContent() {
     (id: string) => {
       setActivePlaylist(id);
       setActiveView("playlist");
+      window.history.pushState(
+        getHistoryStateWithFolderStack(folderStackRef.current, id),
+        "",
+      );
     },
     [setActivePlaylist],
   );
+
+  // Restore active playlist from history state on mount
+  useEffect(() => {
+    const restoredPlaylistId = window.history.state?.activePlaylistId ?? null;
+    if (restoredPlaylistId) {
+      setActivePlaylist(restoredPlaylistId);
+    }
+  }, [setActivePlaylist]);
 
   // Seed initial history state & listen for back/forward
   useEffect(() => {
     if (!window.history.state?.folderStack) {
       window.history.replaceState(
-        getHistoryStateWithFolderStack(folderStackRef.current),
+        getHistoryStateWithFolderStack(folderStackRef.current, null),
         "",
       );
     }
@@ -141,10 +162,14 @@ function AppContent() {
       } else {
         setFolderStack(INITIAL_STACK);
       }
+
+      const playlistId: string | null = e.state?.activePlaylistId ?? null;
+      setActivePlaylist(playlistId);
+      setActiveView(playlistId ? "playlist" : "files");
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  }, [setActivePlaylist]);
 
   const sidebar = (
     <FolderTree

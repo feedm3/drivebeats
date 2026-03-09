@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
-import { useAuthStore } from "@/stores/auth-store";
 import { usePlayerStore } from "@/stores/player-store";
 
 const toggleControlClass =
@@ -23,20 +22,9 @@ export function PlayControls() {
     playlist,
     currentIndex,
   } = usePlayerStore();
-  const getValidAccessToken = useAuthStore((s) => s.getValidAccessToken);
 
   const isLastTrack = currentIndex >= playlist.length - 1;
   const hasNextTrack = !isLastTrack || shuffle || repeat !== "off";
-
-  const handleNext = async () => {
-    const token = await getValidAccessToken();
-    if (token) next(token);
-  };
-
-  const handlePrev = async () => {
-    const token = await getValidAccessToken();
-    if (token) previous(token);
-  };
 
   return (
     <div className="flex items-center justify-center gap-2">
@@ -59,7 +47,7 @@ export function PlayControls() {
           size="icon"
           className="size-8"
           aria-label="Previous track"
-          onClick={handlePrev}
+          onClick={() => void previous()}
         >
           <PrevIcon />
         </Button>
@@ -90,7 +78,7 @@ export function PlayControls() {
           size="icon"
           className="size-8"
           aria-label="Next track"
-          onClick={handleNext}
+          onClick={() => void next()}
           disabled={!hasNextTrack}
         >
           <NextIcon />

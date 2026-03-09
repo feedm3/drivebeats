@@ -32,8 +32,7 @@ export function FileBrowser({
   externalFolderStack,
   onFolderNavigate,
 }: FileBrowserProps) {
-  const { fetchFromApi, fetchFolderContents, getAccessToken } =
-    useFolderContents();
+  const { fetchFromApi, fetchFolderContents } = useFolderContents();
   const getCachedFiles = useFolderCacheStore((state) => state.getFiles);
   const hiddenFolderIds = useFolderFilterStore(
     (state) => state.hiddenFolderIds,
@@ -41,7 +40,6 @@ export function FileBrowser({
 
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [accessToken, setAccessToken] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [rootFolders, setRootFolders] = useState<DriveFile[]>([]);
@@ -111,14 +109,12 @@ export function FileBrowser({
       await fetchFolderContents(folderId, {
         onFiles: (fetchedFiles) => {
           setFiles(fetchedFiles);
-          const token = getAccessToken();
-          if (token) setAccessToken(token);
         },
         onLoadingChange: setLoading,
         canCommit,
       });
     },
-    [fetchFolderContents, getAccessToken],
+    [fetchFolderContents],
   );
 
   useEffect(() => {
@@ -250,7 +246,6 @@ export function FileBrowser({
         <FileList
           files={files}
           loading={loading}
-          accessToken={accessToken}
           folderStack={folderStack}
           searchQuery={deferredSearchQuery}
           onClearSearch={() => setSearchQuery("")}

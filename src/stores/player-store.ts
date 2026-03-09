@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { useAuthStore } from "@/stores/auth-store";
 import type { DriveFile, FolderEntry } from "@/types";
 
 type RepeatMode = "off" | "one" | "all";
@@ -25,22 +26,17 @@ interface PlayerState {
   audio: HTMLAudioElement | null;
   blobCache: Map<string, string>;
   initAudio: () => HTMLAudioElement;
-  loadTrack: (
-    fileId: string,
-    accessToken: string,
-    autoplay?: boolean,
-  ) => Promise<void>;
+  loadTrack: (fileId: string, autoplay?: boolean) => Promise<void>;
   playTrack: (
     track: DriveFile,
     playlist: DriveFile[],
-    accessToken: string,
     folderStack: FolderEntry[],
     playlistId?: string,
-  ) => void;
-  fetchAndPlay: (fileId: string, accessToken: string) => Promise<void>;
+  ) => Promise<void>;
+  fetchAndPlay: (fileId: string) => Promise<void>;
   togglePlay: () => void;
-  next: (accessToken: string) => void;
-  previous: (accessToken: string) => void;
+  next: () => Promise<void>;
+  previous: () => Promise<void>;
   seek: (time: number) => void;
   setVolume: (vol: number) => void;
   toggleMute: () => void;
@@ -49,7 +45,7 @@ interface PlayerState {
   setCurrentTime: (t: number) => void;
   setDuration: (d: number) => void;
   setIsPlaying: (p: boolean) => void;
-  restoreTrack: (accessToken: string) => Promise<void>;
+  restoreTrack: () => Promise<void>;
   resetPlayback: () => void;
   clearCache: () => void;
 }
@@ -82,7 +78,7 @@ export const usePlayerStore = create<PlayerState>()(
         return audio;
       },
 
-      loadTrack: async (fileId, accessToken, autoplay = true) => {
+      loadTrack: async (fileId, autoplay = true) => {
         // Abort any in-flight fetch so a stale download can't overwrite audio.src
         fetchAbortController?.abort();
         const controller = new AbortController();
@@ -114,13 +110,30 @@ export const usePlayerStore = create<PlayerState>()(
 
         set({ isLoading: true });
         try {
-          const res = await fetch(
-            `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-            {
-              headers: { Authorization: `Bearer ${accessToken}` },
+          const authStore = useAuthStore.getState();
+          let accessToken = await authStore.getValidAccessToken();
+          if (!accessToken) {
+            throw new Error("Missing valid access token");
+          }
+
+          const fetchTrack = (token: string) =>
+            fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+              headers: { Authorization: `Bearer ${token}` },
               signal: controller.signal,
-            },
-          );
+            });
+
+          let res = await fetchTrack(accessToken);
+          if (res.status === 401) {
+            const refreshed = await useAuthStore.getState().refreshAccessToken();
+            accessToken = refreshed ? useAuthStore.getState().accessToken : null;
+
+            if (!accessToken) {
+              throw new Error("Unable to refresh access token");
+            }
+
+            res = await fetchTrack(accessToken);
+          }
+
           if (!res.ok) throw new Error(`Drive API returned ${res.status}`);
 
           const blob = await res.blob();
@@ -152,11 +165,11 @@ export const usePlayerStore = create<PlayerState>()(
         }
       },
 
-      fetchAndPlay: async (fileId, accessToken) => {
-        await get().loadTrack(fileId, accessToken, true);
+      fetchAndPlay: async (fileId) => {
+        await get().loadTrack(fileId, true);
       },
 
-      playTrack: (track, playlist, accessToken, folderStack, playlistId) => {
+      playTrack: async (track, playlist, folderStack, playlistId) => {
         get().initAudio();
         const index = playlist.findIndex((f) => f.id === track.id);
 
@@ -171,11 +184,11 @@ export const usePlayerStore = create<PlayerState>()(
           duration: 0,
         });
 
-        get()
-          .loadTrack(track.id, accessToken, true)
-          .catch(() => {
-            set({ isPlaying: false });
-          });
+        try {
+          await get().loadTrack(track.id, true);
+        } catch {
+          set({ isPlaying: false });
+        }
       },
 
       togglePlay: () => {
@@ -189,7 +202,7 @@ export const usePlayerStore = create<PlayerState>()(
         set({ isPlaying: !isPlaying });
       },
 
-      next: (accessToken) => {
+      next: async () => {
         const { playlist, currentIndex, shuffle, repeat } = get();
         if (playlist.length === 0) return;
 
@@ -207,16 +220,15 @@ export const usePlayerStore = create<PlayerState>()(
           }
         }
 
-        get().playTrack(
+        await get().playTrack(
           playlist[nextIndex],
           playlist,
-          accessToken,
           get().playingFolderStack,
           get().playingPlaylistId ?? undefined,
         );
       },
 
-      previous: (accessToken) => {
+      previous: async () => {
         const { audio, playlist, currentIndex } = get();
         if (playlist.length === 0) return;
 
@@ -227,10 +239,9 @@ export const usePlayerStore = create<PlayerState>()(
 
         const prevIndex =
           currentIndex - 1 < 0 ? playlist.length - 1 : currentIndex - 1;
-        get().playTrack(
+        await get().playTrack(
           playlist[prevIndex],
           playlist,
-          accessToken,
           get().playingFolderStack,
           get().playingPlaylistId ?? undefined,
         );
@@ -277,11 +288,11 @@ export const usePlayerStore = create<PlayerState>()(
       setDuration: (d) => set({ duration: d }),
       setIsPlaying: (p) => set({ isPlaying: p }),
 
-      restoreTrack: async (accessToken) => {
+      restoreTrack: async () => {
         const { currentTrack, audio } = get();
         if (!currentTrack) return;
         if (audio?.src) return;
-        await get().loadTrack(currentTrack.id, accessToken, false);
+        await get().loadTrack(currentTrack.id, false);
       },
 
       resetPlayback: () => {

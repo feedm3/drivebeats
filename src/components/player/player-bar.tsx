@@ -28,13 +28,11 @@ function setupMediaSessionHandlers() {
   ms.setActionHandler("pause", () => {
     usePlayerStore.getState().audio?.pause();
   });
-  ms.setActionHandler("previoustrack", async () => {
-    const token = await useAuthStore.getState().getValidAccessToken();
-    if (token) usePlayerStore.getState().previous(token);
+  ms.setActionHandler("previoustrack", () => {
+    void usePlayerStore.getState().previous();
   });
-  ms.setActionHandler("nexttrack", async () => {
-    const token = await useAuthStore.getState().getValidAccessToken();
-    if (token) usePlayerStore.getState().next(token);
+  ms.setActionHandler("nexttrack", () => {
+    void usePlayerStore.getState().next();
   });
   ms.setActionHandler("seekto", (details) => {
     if (details.seekTime != null) {
@@ -95,22 +93,17 @@ export function PlayerBar() {
         el.play();
         return;
       }
-      const token = await useAuthStore.getState().getValidAccessToken();
-      if (token) next(token);
+      await next();
     };
     const onError = async () => {
       const { currentTrack, fetchAndPlay } = usePlayerStore.getState();
       if (!currentTrack) return;
 
-      // Try refreshing the token and retrying once
-      const freshToken = await useAuthStore.getState().getValidAccessToken();
-      if (freshToken) {
-        try {
-          await fetchAndPlay(currentTrack.id, freshToken);
-          return;
-        } catch {
-          // Retry failed, fall through to toast
-        }
+      try {
+        await fetchAndPlay(currentTrack.id);
+        return;
+      } catch {
+        // Retry failed, fall through to toast
       }
 
       import("sonner").then(({ toast }) =>
@@ -168,11 +161,8 @@ export function PlayerBar() {
     if (!persistedTrack) return;
 
     const restore = async () => {
-      const token = await useAuthStore.getState().getValidAccessToken();
-      if (!token) return;
-
       try {
-        await usePlayerStore.getState().restoreTrack(token);
+        await usePlayerStore.getState().restoreTrack();
       } catch {
         import("sonner").then(({ toast }) =>
           shouldSuppressErrorToast()

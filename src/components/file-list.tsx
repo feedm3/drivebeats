@@ -34,7 +34,6 @@ import { FOLDER_MIME } from "@/types";
 interface FileListProps {
   files: DriveFile[];
   loading: boolean;
-  accessToken: string;
   folderStack: FolderEntry[];
   searchQuery: string;
   onClearSearch: () => void;
@@ -110,7 +109,6 @@ function HighlightedName({
 export function FileList({
   files,
   loading,
-  accessToken,
   folderStack,
   searchQuery,
   onClearSearch,
@@ -249,7 +247,7 @@ export function FileList({
                     ? onFolderClick(file.id, file.name)
                     : isActive
                       ? togglePlay()
-                      : playTrack(file, playableTracks, accessToken, folderStack);
+                      : void playTrack(file, playableTracks, folderStack);
 
                 const dragData = folder
                   ? JSON.stringify({

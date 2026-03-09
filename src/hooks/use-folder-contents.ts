@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import { toast } from "sonner";
 import { getSupportedAudioQuery } from "@/lib/audio";
 import { useAuthStore } from "@/stores/auth-store";
@@ -15,7 +15,6 @@ export function useFolderContents() {
   const getCachedFiles = useFolderCacheStore((state) => state.getFiles);
   const setCachedFiles = useFolderCacheStore((state) => state.setFiles);
   const isStale = useFolderCacheStore((state) => state.isStale);
-  const latestAccessTokenRef = useRef("");
 
   const fetchFromApi = useCallback(
     async (folderId: string): Promise<DriveFile[] | null> => {
@@ -28,7 +27,6 @@ export function useFolderContents() {
         logout();
         return null;
       }
-      latestAccessTokenRef.current = token;
 
       try {
         const query = getSupportedAudioQuery(folderId);
@@ -121,6 +119,5 @@ export function useFolderContents() {
   return {
     fetchFromApi,
     fetchFolderContents,
-    getAccessToken: () => latestAccessTokenRef.current,
   };
 }

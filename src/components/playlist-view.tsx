@@ -17,7 +17,6 @@ import { Separator } from "@/components/ui/separator";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { playlistTrackToDriveFile } from "@/lib/audio";
 import { cn } from "@/lib/utils";
-import { useAuthStore } from "@/stores/auth-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { usePlayerStore } from "@/stores/player-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
@@ -197,7 +196,6 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const playingPlaylistId = usePlayerStore((s) => s.playingPlaylistId);
   const playerBarPadding = usePlayerBarPadding();
-  const getValidAccessToken = useAuthStore((s) => s.getValidAccessToken);
 
   const removeTrack = usePlaylistStore((s) => s.removeTrack);
   const reorderTracks = usePlaylistStore((s) => s.reorderTracks);
@@ -229,13 +227,11 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const { drag, onPointerDown } = useTrackDrag(listRef, handleReorder);
 
   const playFromPlaylist = useCallback(
-    async (index: number) => {
-      const token = await getValidAccessToken();
-      if (!token) return;
+    (index: number) => {
       const files = tracksToFiles(collection);
-      playTrack(files[index], files, token, [], collection.id);
+      void playTrack(files[index], files, [], collection.id);
     },
-    [collection, playTrack, getValidAccessToken],
+    [collection, playTrack],
   );
 
   const handlePlayAll = useCallback(() => {

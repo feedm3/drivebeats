@@ -10,12 +10,11 @@ export interface AuthUser {
 }
 
 function getSessionSecret() {
-  const secret =
-    process.env.AUTH_SESSION_SECRET ?? process.env.GOOGLE_CLIENT_SECRET;
+  const secret = process.env.AUTH_SESSION_SECRET;
 
   if (!secret) {
     throw new Error(
-      "Missing required environment variable: AUTH_SESSION_SECRET or GOOGLE_CLIENT_SECRET",
+      "Missing required environment variable: AUTH_SESSION_SECRET",
     );
   }
 

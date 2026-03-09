@@ -69,11 +69,9 @@ export async function GET(request: NextRequest) {
   try {
     user = await getUserFromIdToken(data.id_token, expectedNonce);
   } catch (error) {
+    console.error("OAuth callback error:", error);
     const response = NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Invalid Google identity",
-      },
+      { error: "Authentication failed" },
       { status: 400 },
     );
     clearOAuthCookies(response);

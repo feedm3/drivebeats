@@ -18,6 +18,10 @@ export function useFolderContents() {
 
   const fetchFromApi = useCallback(
     async (folderId: string): Promise<DriveFile[] | null> => {
+      if (!/^[a-zA-Z0-9_-]+$/.test(folderId)) {
+        return null;
+      }
+
       const token = await getValidAccessToken();
       if (!token) {
         logout();

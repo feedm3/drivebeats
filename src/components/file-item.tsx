@@ -27,7 +27,7 @@ export function FileItem({
   accessToken,
   onFolderClick,
 }: FileItemProps) {
-  const { playTrack, currentTrack } = usePlayerStore();
+  const { playTrack, togglePlay, currentTrack } = usePlayerStore();
   const folder = isFolder(file);
   const isActive = currentTrack?.id === file.id;
 
@@ -38,7 +38,9 @@ export function FileItem({
       onClick={() =>
         folder
           ? onFolderClick(file.id, file.name)
-          : playTrack(file, allMp3s, accessToken, [])
+          : isActive
+            ? togglePlay()
+            : playTrack(file, allMp3s, accessToken, [])
       }
       className={cn(
         "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-accent",

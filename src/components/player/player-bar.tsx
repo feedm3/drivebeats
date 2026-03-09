@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { usePlayerStore } from "@/stores/player-store";
@@ -45,6 +45,10 @@ function setupMediaSessionHandlers() {
 export function PlayerBar() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const recentTrackRef = useRef<string | null>(null);
+  const restoreAttemptedRef = useRef(false);
+  const [playerHydrated, setPlayerHydrated] = useState(() =>
+    usePlayerStore.persist.hasHydrated(),
+  );
   const currentTrackTitle = currentTrack?.name.replace(/\.mp3$/i, "") ?? "";
 
   // Audio element event listeners
@@ -133,9 +137,25 @@ export function PlayerBar() {
     updateMediaSession(currentTrackTitle);
   }, [currentTrackTitle]);
 
+  // Wait for persisted player state before attempting a one-time restore.
+  useEffect(() => {
+    if (playerHydrated) return;
+
+    const unsubscribe = usePlayerStore.persist.onFinishHydration(() => {
+      setPlayerHydrated(true);
+    });
+
+    return unsubscribe;
+  }, [playerHydrated]);
+
   // Restore the last selected track into the static player after reload.
   useEffect(() => {
-    if (!currentTrack) return;
+    if (!playerHydrated || restoreAttemptedRef.current) return;
+
+    restoreAttemptedRef.current = true;
+
+    const persistedTrack = usePlayerStore.getState().currentTrack;
+    if (!persistedTrack) return;
 
     const restore = async () => {
       const token = await useAuthStore.getState().getValidAccessToken();
@@ -145,13 +165,13 @@ export function PlayerBar() {
         await usePlayerStore.getState().restoreTrack(token);
       } catch {
         import("sonner").then(({ toast }) =>
-          toast.error(`Failed to restore "${currentTrack.name}"`),
+          toast.error(`Failed to restore "${persistedTrack.name}"`),
         );
       }
     };
 
     void restore();
-  }, [currentTrack]);
+  }, [playerHydrated]);
 
   // Keyboard shortcuts
   useEffect(() => {

@@ -116,6 +116,7 @@ export function FileList({
   onFolderClick,
 }: FileListProps) {
   const playTrack = usePlayerStore((state) => state.playTrack);
+  const togglePlay = usePlayerStore((state) => state.togglePlay);
   const currentTrack = usePlayerStore((state) => state.currentTrack);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
   const isHidden = useFolderFilterStore((state) => state.isHidden);
@@ -245,7 +246,9 @@ export function FileList({
                 const onActivate = () =>
                   folder
                     ? onFolderClick(file.id, file.name)
-                    : playTrack(file, mp3s, accessToken, folderStack);
+                    : isActive
+                      ? togglePlay()
+                      : playTrack(file, mp3s, accessToken, folderStack);
 
                 const dragData = folder
                   ? JSON.stringify({

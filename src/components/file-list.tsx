@@ -1,7 +1,7 @@
 "use client";
 
 import { Folder, Music4, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { AddToPlaylistPopover } from "@/components/add-to-playlist-popover";
 import { FavoriteToggleButton } from "@/components/favorite-toggle-button";
 import {
@@ -106,6 +106,124 @@ function HighlightedName({
   );
 }
 
+interface FileListRowProps {
+  file: DriveFile;
+  folderStack: FolderEntry[];
+  playableTracks: DriveFile[];
+  searchQuery: string;
+  isActive: boolean;
+  isCurrentlyPlaying: boolean;
+  isPlayingAncestor: boolean;
+  isPlaybackPaused: boolean;
+  onFolderClick: (id: string, name: string) => void;
+  playTrack: (
+    track: DriveFile,
+    playlist: DriveFile[],
+    folderStack: FolderEntry[],
+    playlistId?: string,
+  ) => Promise<void>;
+  togglePlay: () => void;
+}
+
+const FileListRow = memo(function FileListRow({
+  file,
+  folderStack,
+  playableTracks,
+  searchQuery,
+  isActive,
+  isCurrentlyPlaying,
+  isPlayingAncestor,
+  isPlaybackPaused,
+  onFolderClick,
+  playTrack,
+  togglePlay,
+}: FileListRowProps) {
+  const folder = isFolder(file);
+  const onActivate = () =>
+    folder
+      ? onFolderClick(file.id, file.name)
+      : isCurrentlyPlaying
+        ? togglePlay()
+        : void playTrack(file, playableTracks, folderStack);
+
+  const dragData = folder
+    ? JSON.stringify({
+        type: "folder",
+        folderId: file.id,
+        folderName: file.name,
+      })
+    : JSON.stringify({
+        type: "tracks",
+        tracks: [createPlaylistTrack(file)],
+      });
+
+  return (
+    <TableRow
+      data-active={isActive || undefined}
+      tabIndex={0}
+      role="button"
+      aria-label={folder ? `Open folder ${file.name}` : `Play ${file.name}`}
+      className="group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      onClick={onActivate}
+      onKeyDown={(event) => onRowKeyDown(event, onActivate)}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "copy";
+        e.dataTransfer.setData("application/drivebeats", dragData);
+      }}
+    >
+      <TableCell className="max-w-0">
+        <div
+          className={cn(
+            "flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left",
+            isActive && "text-primary",
+          )}
+        >
+          <span
+            className={cn(
+              "shrink-0",
+              isPlayingAncestor || isActive
+                ? "text-primary"
+                : "text-muted-foreground",
+            )}
+          >
+            {isPlayingAncestor || isCurrentlyPlaying ? (
+              <NowPlayingBars
+                className="size-4"
+                paused={isPlaybackPaused}
+              />
+            ) : folder ? (
+              <Folder className="size-4" />
+            ) : (
+              <Music4 className="size-4" />
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <HighlightedName name={file.name} searchQuery={searchQuery} />
+          </span>
+        </div>
+      </TableCell>
+      <TableCell className="w-9 px-0.5">
+        {!folder ? (
+          <FavoriteToggleButton
+            fileId={file.id}
+            fileName={file.name}
+            mimeType={file.mimeType}
+            size="icon-sm"
+            className={rowActionClassName}
+          />
+        ) : null}
+      </TableCell>
+      <TableCell className="w-9 px-0.5">
+        <AddToPlaylistPopover file={file} className={rowActionClassName} />
+      </TableCell>
+      <TableCell className="text-muted-foreground text-right tabular-nums">
+        {folder ? "—" : formatSize(file.size)}
+      </TableCell>
+    </TableRow>
+  );
+});
+
 export function FileList({
   files,
   loading,
@@ -116,19 +234,21 @@ export function FileList({
 }: FileListProps) {
   const playTrack = usePlayerStore((state) => state.playTrack);
   const togglePlay = usePlayerStore((state) => state.togglePlay);
-  const currentTrack = usePlayerStore((state) => state.currentTrack);
+  const currentTrackId = usePlayerStore((state) => state.currentTrack?.id);
   const pendingTrackId = usePlayerStore((state) => state.pendingTrackId);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
   const isHidden = useFolderFilterStore((state) => state.isHidden);
   const playerBarPadding = usePlayerBarPadding();
   const [nameSortDirection, setNameSortDirection] =
     useState<NameSortDirection>("asc");
-  const currentTrackId = currentTrack?.id;
   const activeTrackId = pendingTrackId ?? currentTrackId;
   const playingFolderStack = usePlayerStore(
     (state) => state.playingFolderStack,
   );
-  const playingFolderIds = new Set(playingFolderStack.map((f) => f.id));
+  const playingFolderIds = useMemo(
+    () => new Set(playingFolderStack.map((f) => f.id)),
+    [playingFolderStack],
+  );
   const visibleFiles = useMemo(
     () => files.filter((file) => !isFolder(file) || !isHidden(file.id)),
     [files, isHidden],
@@ -141,7 +261,10 @@ export function FileList({
     () => filterFilesBySearch(sortedFiles, searchQuery),
     [sortedFiles, searchQuery],
   );
-  const playableTracks = filteredFiles.filter((file) => !isFolder(file));
+  const playableTracks = useMemo(
+    () => filteredFiles.filter((file) => !isFolder(file)),
+    [filteredFiles],
+  );
   const hasActiveSearch = searchQuery.trim().length > 0;
   const hasHiddenFolders = visibleFiles.length < files.length;
 
@@ -240,105 +363,29 @@ export function FileList({
             </TableHeader>
             <TableBody>
               {filteredFiles.map((file) => {
-                const folder = isFolder(file);
                 const isActive = activeTrackId === file.id;
                 const isCurrentlyPlaying = currentTrackId === file.id;
-                const isPlayingAncestor =
-                  folder && activeTrackId && playingFolderIds.has(file.id);
-                const onActivate = () =>
-                  folder
-                    ? onFolderClick(file.id, file.name)
-                    : isCurrentlyPlaying
-                      ? togglePlay()
-                      : void playTrack(file, playableTracks, folderStack);
-
-                const dragData = folder
-                  ? JSON.stringify({
-                      type: "folder",
-                      folderId: file.id,
-                      folderName: file.name,
-                    })
-                  : JSON.stringify({
-                      type: "tracks",
-                      tracks: [createPlaylistTrack(file)],
-                    });
+                const isPlayingAncestor = Boolean(
+                  isFolder(file) && activeTrackId && playingFolderIds.has(file.id),
+                );
+                const isPlaybackPaused =
+                  isPlayingAncestor || isCurrentlyPlaying ? !isPlaying : false;
 
                 return (
-                  <TableRow
+                  <FileListRow
                     key={file.id}
-                    data-active={isActive || undefined}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={
-                      folder ? `Open folder ${file.name}` : `Play ${file.name}`
-                    }
-                    className="group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                    onClick={onActivate}
-                    onKeyDown={(event) => onRowKeyDown(event, onActivate)}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.effectAllowed = "copy";
-                      e.dataTransfer.setData(
-                        "application/drivebeats",
-                        dragData,
-                      );
-                    }}
-                  >
-                    <TableCell className="max-w-0">
-                      <div
-                        className={cn(
-                          "flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left",
-                          isActive && "text-primary",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "shrink-0",
-                            isPlayingAncestor || isActive
-                              ? "text-primary"
-                              : "text-muted-foreground",
-                          )}
-                        >
-                          {isPlayingAncestor || isCurrentlyPlaying ? (
-                            <NowPlayingBars
-                              className="size-4"
-                              paused={!isPlaying}
-                            />
-                          ) : folder ? (
-                            <Folder className="size-4" />
-                          ) : (
-                            <Music4 className="size-4" />
-                          )}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <HighlightedName
-                            name={file.name}
-                            searchQuery={searchQuery}
-                          />
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="w-9 px-0.5">
-                      {!folder ? (
-                        <FavoriteToggleButton
-                          fileId={file.id}
-                          fileName={file.name}
-                          mimeType={file.mimeType}
-                          size="icon-sm"
-                          className={rowActionClassName}
-                        />
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="w-9 px-0.5">
-                      <AddToPlaylistPopover
-                        file={file}
-                        className={rowActionClassName}
-                      />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-right tabular-nums">
-                      {folder ? "—" : formatSize(file.size)}
-                    </TableCell>
-                  </TableRow>
+                    file={file}
+                    folderStack={folderStack}
+                    playableTracks={playableTracks}
+                    searchQuery={searchQuery}
+                    isActive={isActive}
+                    isCurrentlyPlaying={isCurrentlyPlaying}
+                    isPlayingAncestor={isPlayingAncestor}
+                    isPlaybackPaused={isPlaybackPaused}
+                    onFolderClick={onFolderClick}
+                    playTrack={playTrack}
+                    togglePlay={togglePlay}
+                  />
                 );
               })}
             </TableBody>

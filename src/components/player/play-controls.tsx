@@ -8,22 +8,20 @@ const toggleControlClass =
   "size-8 aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:hover:bg-primary/20 aria-pressed:hover:text-primary dark:aria-pressed:hover:bg-primary/25";
 
 export function PlayControls() {
-  const {
-    isPlaying,
-    isLoading,
-    shuffle,
-    repeat,
-    togglePlay,
-    next,
-    previous,
-    toggleShuffle,
-    cycleRepeat,
-    currentTrack,
-    playlist,
-    currentIndex,
-  } = usePlayerStore();
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const isLoading = usePlayerStore((s) => s.isLoading);
+  const shuffle = usePlayerStore((s) => s.shuffle);
+  const repeat = usePlayerStore((s) => s.repeat);
+  const togglePlay = usePlayerStore((s) => s.togglePlay);
+  const next = usePlayerStore((s) => s.next);
+  const previous = usePlayerStore((s) => s.previous);
+  const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
+  const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
+  const hasCurrentTrack = usePlayerStore((s) => s.currentTrack !== null);
+  const playlistLength = usePlayerStore((s) => s.playlist.length);
+  const currentIndex = usePlayerStore((s) => s.currentIndex);
 
-  const isLastTrack = currentIndex >= playlist.length - 1;
+  const isLastTrack = currentIndex >= playlistLength - 1;
   const hasNextTrack = !isLastTrack || shuffle || repeat !== "off";
 
   return (
@@ -60,7 +58,7 @@ export function PlayControls() {
           className="size-10 rounded-full"
           aria-label={isLoading ? "Loading" : isPlaying ? "Pause" : "Play"}
           onClick={togglePlay}
-          disabled={!currentTrack || isLoading}
+          disabled={!hasCurrentTrack || isLoading}
         >
           {isLoading ? (
             <LoadingIcon />

@@ -66,21 +66,24 @@ function AppContent() {
   const [mobileTab, setMobileTab] = useState<"files" | "playlists">("files");
   const [mobilePlaylistId, setMobilePlaylistId] = useState<string | null>(null);
 
-  const collections: TrackCollection[] = [
-    {
-      id: FAVORITES_COLLECTION_ID,
-      kind: "favorites",
-      name: "Favorites",
-      tracks: favoriteTracks,
-    },
-    {
-      id: RECENTLY_PLAYED_COLLECTION_ID,
-      kind: "recently-played",
-      name: "Recently played",
-      tracks: recentlyPlayedTracks,
-    },
-    ...playlists,
-  ];
+  const collections: TrackCollection[] = useMemo(
+    () => [
+      {
+        id: FAVORITES_COLLECTION_ID,
+        kind: "favorites" as const,
+        name: "Favorites",
+        tracks: favoriteTracks,
+      },
+      {
+        id: RECENTLY_PLAYED_COLLECTION_ID,
+        kind: "recently-played" as const,
+        name: "Recently played",
+        tracks: recentlyPlayedTracks,
+      },
+      ...playlists,
+    ],
+    [favoriteTracks, recentlyPlayedTracks, playlists],
+  );
 
   const activeCollection =
     collections.find((collection) => collection.id === activePlaylistId) ??

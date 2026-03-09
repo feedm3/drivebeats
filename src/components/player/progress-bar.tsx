@@ -10,7 +10,9 @@ function formatTime(seconds: number) {
 }
 
 export function ProgressBar() {
-  const { currentTime, duration, seek } = usePlayerStore();
+  const currentTime = usePlayerStore((s) => s.currentTime);
+  const duration = usePlayerStore((s) => s.duration);
+  const seek = usePlayerStore((s) => s.seek);
 
   return (
     <div className="flex items-center gap-2">

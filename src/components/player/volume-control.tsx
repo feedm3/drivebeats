@@ -6,7 +6,10 @@ import { Slider } from "@/components/ui/slider";
 import { usePlayerStore } from "@/stores/player-store";
 
 export function VolumeControl() {
-  const { volume, isMuted, setVolume, toggleMute } = usePlayerStore();
+  const volume = usePlayerStore((s) => s.volume);
+  const isMuted = usePlayerStore((s) => s.isMuted);
+  const setVolume = usePlayerStore((s) => s.setVolume);
+  const toggleMute = usePlayerStore((s) => s.toggleMute);
 
   return (
     <div className="flex items-center justify-end gap-2">

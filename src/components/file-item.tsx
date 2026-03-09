@@ -25,7 +25,9 @@ export function FileItem({
   allMp3s,
   onFolderClick,
 }: FileItemProps) {
-  const { playTrack, togglePlay, currentTrack } = usePlayerStore();
+  const playTrack = usePlayerStore((s) => s.playTrack);
+  const togglePlay = usePlayerStore((s) => s.togglePlay);
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
   const folder = isFolder(file);
   const isActive = currentTrack?.id === file.id;
 

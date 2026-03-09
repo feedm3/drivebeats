@@ -42,6 +42,10 @@ function setupMediaSessionHandlers() {
   });
 }
 
+function shouldSuppressErrorToast() {
+  return useAuthStore.getState().isLoggingOut;
+}
+
 export function PlayerBar() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const recentTrackRef = useRef<string | null>(null);
@@ -106,7 +110,9 @@ export function PlayerBar() {
       }
 
       import("sonner").then(({ toast }) =>
-        toast.error(`Failed to play "${currentTrack.name}"`),
+        shouldSuppressErrorToast()
+          ? undefined
+          : toast.error(`Failed to play "${currentTrack.name}"`),
       );
     };
 
@@ -165,7 +171,9 @@ export function PlayerBar() {
         await usePlayerStore.getState().restoreTrack(token);
       } catch {
         import("sonner").then(({ toast }) =>
-          toast.error(`Failed to restore "${persistedTrack.name}"`),
+          shouldSuppressErrorToast()
+            ? undefined
+            : toast.error(`Failed to restore "${persistedTrack.name}"`),
         );
       }
     };

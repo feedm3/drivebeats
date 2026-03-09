@@ -1,9 +1,16 @@
 import Image from "next/image";
+import { Suspense } from "react";
+import { AuthErrorNotice } from "@/components/auth-error-notice";
 import { SignInButton } from "@/components/sign-in-button";
 
 export default function LandingPage() {
   return (
     <div className="flex flex-col items-center px-4">
+      <div className="pt-6">
+        <Suspense fallback={null}>
+          <AuthErrorNotice />
+        </Suspense>
+      </div>
       {/* Hero */}
       <div className="flex flex-col items-center gap-4 py-24 text-center">
         <Image

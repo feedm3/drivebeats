@@ -1,9 +1,10 @@
 "use client";
 
-import { ChevronDown, LogOut } from "lucide-react";
+import { ChevronDown, LogOut, UserRound } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
+import { toast } from "sonner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,16 +53,54 @@ function getUserInitials(name: string | null, email: string) {
   return source.slice(0, 2).toUpperCase();
 }
 
+interface AccountAvatarProps {
+  picture: string | null;
+  initials: string;
+  sizeClassName: string;
+  className?: string;
+}
+
+function AccountAvatar({
+  picture,
+  initials,
+  sizeClassName,
+  className = "",
+}: AccountAvatarProps) {
+  if (picture) {
+    return (
+      <span
+        aria-hidden="true"
+        className={`${sizeClassName} rounded-full bg-cover bg-center ${className}`.trim()}
+        style={{
+          backgroundImage: `url("${picture}")`,
+        }}
+      />
+    );
+  }
+
+  return (
+    <span
+      aria-hidden="true"
+      className={`${sizeClassName} flex items-center justify-center rounded-full bg-primary/10 text-primary ${className}`.trim()}
+    >
+      <UserRound className="size-[55%]" />
+      <span className="sr-only">{initials}</span>
+    </span>
+  );
+}
+
 export function AppHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const user = useAuthStore((state) => state.user);
   const userLabel = user ? getUserLabel(user.name, user.email) : null;
-  const userInitials = user ? getUserInitials(user.name, user.email) : null;
+  const userInitials = user ? getUserInitials(user.name, user.email) : "";
 
   async function handleLogout() {
     setIsLoggingOut(true);
+    useAuthStore.getState().setLoggingOut(true);
+    toast.dismiss();
     usePlayerStore.getState().resetPlayback();
     usePlayerStore.getState().clearCache();
     usePlayerStore.setState({
@@ -129,19 +168,11 @@ export function AppHeader() {
                 }
               >
                 <span className="relative flex shrink-0">
-                  {user.picture ? (
-                    <span
-                      aria-hidden="true"
-                      className="size-7 rounded-full bg-cover bg-center"
-                      style={{
-                        backgroundImage: `url("${user.picture}")`,
-                      }}
-                    />
-                  ) : (
-                    <span className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold tracking-[0.08em] text-primary">
-                      {userInitials}
-                    </span>
-                  )}
+                  <AccountAvatar
+                    picture={user.picture}
+                    initials={userInitials}
+                    sizeClassName="size-7"
+                  />
                   <span className="absolute right-0 bottom-0 size-2 rounded-full border-2 border-background bg-emerald-500" />
                 </span>
                 <span className="hidden max-w-24 truncate text-[11px] font-medium tracking-[0.02em] text-foreground/70 sm:block">
@@ -158,19 +189,12 @@ export function AppHeader() {
                 className="w-64 rounded-[1.35rem] border-border/70 bg-background/96 p-2 shadow-lg backdrop-blur-sm"
               >
                 <div className="flex items-center gap-3 px-2.5 py-2">
-                  {user.picture ? (
-                    <span
-                      aria-hidden="true"
-                      className="size-9 shrink-0 rounded-full border border-border/60 bg-cover bg-center"
-                      style={{
-                        backgroundImage: `url("${user.picture}")`,
-                      }}
-                    />
-                  ) : (
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-primary/10 text-xs font-semibold tracking-[0.08em] text-primary">
-                      {userInitials}
-                    </span>
-                  )}
+                  <AccountAvatar
+                    picture={user.picture}
+                    initials={userInitials}
+                    sizeClassName="size-9 shrink-0"
+                    className="border border-border/60"
+                  />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium leading-tight">
                       {user.name ?? userLabel}

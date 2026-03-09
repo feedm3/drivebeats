@@ -1,11 +1,22 @@
 import { create } from "zustand";
 import type { AuthUser } from "@/lib/auth-session";
 
+const REFRESH_FAILURE_COOLDOWN_MS = 5_000;
+
+let refreshAccessTokenPromise: Promise<boolean> | null = null;
+let lastRefreshFailureAt = 0;
+let logoutPromise: Promise<void> | null = null;
+
+type AuthStatus = "unknown" | "authenticated" | "unauthenticated";
+
 interface AuthState {
   accessToken: string | null;
   expiresAt: number | null;
   user: AuthUser | null;
+  authStatus: AuthStatus;
+  isLoggingOut: boolean;
   setTokens: (accessToken: string, expiresAt: number) => void;
+  setLoggingOut: (isLoggingOut: boolean) => void;
   clearTokens: () => void;
   isAuthenticated: () => boolean;
   isTokenExpired: () => boolean;
@@ -18,17 +29,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   accessToken: null,
   expiresAt: null,
   user: null,
+  authStatus: "unknown",
+  isLoggingOut: false,
 
   setTokens: (accessToken, expiresAt) => {
-    set({ accessToken, expiresAt });
+    lastRefreshFailureAt = 0;
+    set({
+      accessToken,
+      expiresAt,
+      authStatus: "authenticated",
+      isLoggingOut: false,
+    });
+  },
+
+  setLoggingOut: (isLoggingOut) => {
+    set({ isLoggingOut });
   },
 
   clearTokens: () => {
-    set({ accessToken: null, expiresAt: null, user: null });
+    set({
+      accessToken: null,
+      expiresAt: null,
+      user: null,
+      authStatus: "unauthenticated",
+    });
   },
 
   isAuthenticated: () => {
-    return !!get().accessToken && !get().isTokenExpired();
+    return (
+      get().authStatus === "authenticated" &&
+      !!get().accessToken &&
+      !get().isTokenExpired()
+    );
   },
 
   isTokenExpired: () => {
@@ -38,27 +70,64 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   refreshAccessToken: async () => {
-    try {
-      const res = await fetch("/api/auth/refresh", {
-        method: "POST",
-      });
+    if (refreshAccessTokenPromise) {
+      return refreshAccessTokenPromise;
+    }
 
-      if (!res.ok) {
-        get().clearTokens();
-        return false;
-      }
-
-      const data = await res.json();
-      set({
-        accessToken: data.access_token,
-        expiresAt: data.expires_at,
-        user: data.user ?? null,
-      });
-      return true;
-    } catch {
-      get().clearTokens();
+    const state = get();
+    if (
+      state.authStatus === "unauthenticated" &&
+      Date.now() - lastRefreshFailureAt < REFRESH_FAILURE_COOLDOWN_MS
+    ) {
       return false;
     }
+
+    refreshAccessTokenPromise = (async () => {
+      try {
+        const res = await fetch("/api/auth/refresh", {
+          method: "POST",
+        });
+
+        if (!res.ok) {
+          lastRefreshFailureAt = Date.now();
+          get().clearTokens();
+          return false;
+        }
+
+        const data = (await res.json()) as Partial<{
+          access_token: string;
+          expires_at: number;
+          user: AuthUser | null;
+        }>;
+
+        if (
+          typeof data.access_token !== "string" ||
+          typeof data.expires_at !== "number"
+        ) {
+          lastRefreshFailureAt = Date.now();
+          get().clearTokens();
+          return false;
+        }
+
+        lastRefreshFailureAt = 0;
+        set({
+          accessToken: data.access_token,
+          expiresAt: data.expires_at,
+          user: data.user ?? null,
+          authStatus: "authenticated",
+          isLoggingOut: false,
+        });
+        return true;
+      } catch {
+        lastRefreshFailureAt = Date.now();
+        get().clearTokens();
+        return false;
+      } finally {
+        refreshAccessTokenPromise = null;
+      }
+    })();
+
+    return refreshAccessTokenPromise;
   },
 
   getValidAccessToken: async () => {
@@ -66,12 +135,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (state.accessToken && !state.isTokenExpired()) {
       return state.accessToken;
     }
+
+    if (
+      state.authStatus === "unauthenticated" &&
+      Date.now() - lastRefreshFailureAt < REFRESH_FAILURE_COOLDOWN_MS
+    ) {
+      return null;
+    }
+
     const ok = await state.refreshAccessToken();
     return ok ? get().accessToken : null;
   },
 
   logout: async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    if (logoutPromise) {
+      return logoutPromise;
+    }
+
+    lastRefreshFailureAt = Date.now();
+    get().setLoggingOut(true);
     get().clearTokens();
+
+    logoutPromise = fetch("/api/auth/logout", { method: "POST" })
+      .catch(() => undefined)
+      .then(() => undefined)
+      .finally(() => {
+        logoutPromise = null;
+      });
+
+    await logoutPromise;
   },
 }));

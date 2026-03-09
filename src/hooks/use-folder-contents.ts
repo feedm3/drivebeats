@@ -50,17 +50,27 @@ export function useFolderContents() {
           return files;
         }
         if (res.status === 401) {
-          toast.error("Session expired. Please sign in again.");
+          if (!useAuthStore.getState().isLoggingOut) {
+            toast.error("Session expired. Please sign in again.");
+          }
           logout();
         } else if (res.status === 403) {
-          toast.error("Access denied. Check your Google Drive permissions.");
+          if (!useAuthStore.getState().isLoggingOut) {
+            toast.error("Access denied. Check your Google Drive permissions.");
+          }
         } else if (res.status === 429) {
-          toast.error("Too many requests. Please wait a moment.");
+          if (!useAuthStore.getState().isLoggingOut) {
+            toast.error("Too many requests. Please wait a moment.");
+          }
         } else {
-          toast.error("Failed to load files. Please try again.");
+          if (!useAuthStore.getState().isLoggingOut) {
+            toast.error("Failed to load files. Please try again.");
+          }
         }
       } catch {
-        toast.error("Network error. Check your connection.");
+        if (!useAuthStore.getState().isLoggingOut) {
+          toast.error("Network error. Check your connection.");
+        }
       }
       return null;
     },

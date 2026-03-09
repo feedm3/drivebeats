@@ -1,7 +1,14 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { Suspense } from "react";
 import { AuthErrorNotice } from "@/components/auth-error-notice";
 import { SignInButton } from "@/components/sign-in-button";
+
+export const metadata: Metadata = {
+  title: "Google Drive Music Player",
+  description:
+    "Stream MP3 and FLAC files directly from Google Drive with playlists, favorites, recently played, and full playback controls.",
+};
 
 export default function LandingPage() {
   return (
@@ -21,18 +28,18 @@ export default function LandingPage() {
           className="mb-2 rounded-2xl"
         />
         <h1 className="max-w-lg text-4xl font-bold tracking-tight">
-          Google Drive MP3 Player
+          Stream your music collection from Google Drive
         </h1>
         <p className="max-w-md text-lg text-muted-foreground">
-          Stream your music collection directly from Google Drive. Save
-          favorites, revisit recently played tracks, build playlists across
-          folders, and pick up right where you left off. No uploads, no syncing,
-          no server-side proxy.
+          Play MP3 and FLAC files directly from Google Drive. Save favorites,
+          revisit recently played tracks, build playlists across folders, and
+          pick up right where you left off. No uploads, no syncing, no
+          server-side proxy.
         </p>
         <SignInButton className="mt-4 inline-flex h-11 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90" />
         <p className="text-xs text-muted-foreground">
-          Client-side playback with read-only Drive access. Your MP3 files stay
-          between Google and your browser.
+          Client-side playback with read-only Drive access. Your MP3 and FLAC
+          files stay between Google and your browser.
         </p>
       </div>
 
@@ -110,8 +117,8 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Browse your folders</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Navigate your full Google Drive folder tree and find your MP3s in
-              seconds.
+              Navigate your full Google Drive folder tree and find your MP3 and
+              FLAC files in seconds.
             </p>
           </div>
           <div className="text-center">
@@ -218,8 +225,8 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Play</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Stream your MP3s, build playlists across folders, and control
-              playback with shuffle, repeat, and keyboard shortcuts.
+              Stream your MP3 and FLAC files, build playlists across folders,
+              and control playback with shuffle, repeat, and keyboard shortcuts.
             </p>
           </div>
         </div>
@@ -257,7 +264,8 @@ export default function LandingPage() {
             <p className="mt-2 text-sm text-muted-foreground">
               DriveBeats requests{" "}
               <code>https://www.googleapis.com/auth/drive.readonly</code> so it
-              can list folders and stream your MP3 files. It also requests{" "}
+              can list folders and stream your MP3 and FLAC files. It also
+              requests{" "}
               <code>openid</code>, <code>userinfo.email</code>, and{" "}
               <code>userinfo.profile</code> so the app can identify which Google
               account is signed in and show that account in the app. No write
@@ -270,7 +278,7 @@ export default function LandingPage() {
               What file formats are supported?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              Currently MP3 files are supported. Place them anywhere in your
+              MP3 and FLAC files are supported. Place them anywhere in your
               Google Drive and browse to them using the folder navigator.
             </p>
           </details>

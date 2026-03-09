@@ -23,6 +23,7 @@ export const INITIAL_STACK: FolderEntry[] = [{ id: "root", name: "My Drive" }];
 export interface PlaylistTrack {
   fileId: string;
   fileName: string;
+  mimeType?: string;
 }
 
 export interface Playlist {

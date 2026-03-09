@@ -15,6 +15,7 @@ import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
+import { playlistTrackToDriveFile } from "@/lib/audio";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useLibraryStore } from "@/stores/library-store";
@@ -32,11 +33,7 @@ interface PlaylistViewProps {
 }
 
 function tracksToFiles(collection: TrackCollection): DriveFile[] {
-  return collection.tracks.map((t) => ({
-    id: t.fileId,
-    name: t.fileName,
-    mimeType: "audio/mpeg",
-  }));
+  return collection.tracks.map(playlistTrackToDriveFile);
 }
 
 function getCollectionRemoveLabel(collectionId: string) {
@@ -264,7 +261,15 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const handleRemoveTrack = useCallback(
     (fileId: string, fileName: string) => {
       if (collection.id === FAVORITES_COLLECTION_ID) {
-        setFavorite({ fileId, fileName }, false);
+        const track = collection.tracks.find((item) => item.fileId === fileId);
+        setFavorite(
+          {
+            fileId,
+            fileName,
+            mimeType: track?.mimeType,
+          },
+          false,
+        );
         return;
       }
 
@@ -275,7 +280,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
 
       removeTrack(collection.id, fileId);
     },
-    [collection.id, removeFromRecent, removeTrack, setFavorite],
+    [collection.id, collection.tracks, removeFromRecent, removeTrack, setFavorite],
   );
 
   const isPlayingThisPlaylist = playingPlaylistId === collection.id;

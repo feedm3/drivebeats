@@ -9,6 +9,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { createPlaylistTrack } from "@/lib/audio";
 import { cn } from "@/lib/utils";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
@@ -38,21 +39,21 @@ export function AddToPlaylistPopover({
 
   function getTracksForFile() {
     if (!isFolder) {
-      return [{ fileId: file.id, fileName: file.name }];
+      return [createPlaylistTrack(file)];
     }
     const cached = getCachedFiles(file.id);
     if (!cached) {
       toast.info("Folder not loaded yet — open it first, then try again");
       return null;
     }
-    const mp3s = cached.files
+    const tracks = cached.files
       .filter((f) => f.mimeType !== FOLDER_MIME)
-      .map((f) => ({ fileId: f.id, fileName: f.name }));
-    if (mp3s.length === 0) {
+      .map(createPlaylistTrack);
+    if (tracks.length === 0) {
       toast.info("No audio files in this folder");
       return null;
     }
-    return mp3s;
+    return tracks;
   }
 
   function handleAdd(playlistId: string, playlistName: string) {

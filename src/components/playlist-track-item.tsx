@@ -4,6 +4,7 @@ import { GripVertical, Music4, X } from "lucide-react";
 import { NowPlayingBars } from "@/components/now-playing-bars";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { getTrackDisplayName } from "@/lib/audio";
 import { cn } from "@/lib/utils";
 import type { PlaylistTrack } from "@/types";
 
@@ -85,7 +86,7 @@ export function PlaylistTrackItem({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">
-            {track.fileName}
+            {getTrackDisplayName(track.fileName)}
           </span>
         </span>
       </button>

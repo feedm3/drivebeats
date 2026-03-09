@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
+import { createPlaylistTrack } from "@/lib/audio";
 import {
   filterFilesBySearch,
   getHighlightedTextParts,
@@ -140,7 +141,7 @@ export function FileList({
     () => filterFilesBySearch(sortedFiles, searchQuery),
     [sortedFiles, searchQuery],
   );
-  const mp3s = filteredFiles.filter((file) => !isFolder(file));
+  const playableTracks = filteredFiles.filter((file) => !isFolder(file));
   const hasActiveSearch = searchQuery.trim().length > 0;
   const hasHiddenFolders = visibleFiles.length < files.length;
 
@@ -163,7 +164,7 @@ export function FileList({
         <span className="text-sm">
           {hasHiddenFolders
             ? "This view only contains folders hidden by your folder filter."
-            : "Add MP3 files to this folder in Google Drive to see them here."}
+            : "Add MP3 or FLAC files to this folder in Google Drive to see them here."}
         </span>
       </div>
     );
@@ -248,7 +249,7 @@ export function FileList({
                     ? onFolderClick(file.id, file.name)
                     : isActive
                       ? togglePlay()
-                      : playTrack(file, mp3s, accessToken, folderStack);
+                      : playTrack(file, playableTracks, accessToken, folderStack);
 
                 const dragData = folder
                   ? JSON.stringify({
@@ -258,7 +259,7 @@ export function FileList({
                     })
                   : JSON.stringify({
                       type: "tracks",
-                      tracks: [{ fileId: file.id, fileName: file.name }],
+                      tracks: [createPlaylistTrack(file)],
                     });
 
                 return (
@@ -321,6 +322,7 @@ export function FileList({
                         <FavoriteToggleButton
                           fileId={file.id}
                           fileName={file.name}
+                          mimeType={file.mimeType}
                           size="icon-sm"
                           className={rowActionClassName}
                         />

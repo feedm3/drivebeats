@@ -1,11 +1,11 @@
-# Google Drive MP3 Player
+# Google Drive Music Player
 
-A free, open-source web app that lets you stream your MP3 collection directly from Google Drive. No downloads, no uploads, no syncing needed.
+A free, open-source web app that lets you stream your music collection directly from Google Drive. Supports MP3 and FLAC playback with no downloads, no uploads, and no syncing needed.
 
 ## Features
 
 - Browse your Google Drive folder structure
-- Stream MP3 files directly from Google Drive
+- Stream MP3 and FLAC files directly from Google Drive
 - Spotify-style player with shuffle, repeat, and seekable progress bar
 - Volume control and keyboard shortcuts
 - Light and dark mode
@@ -59,6 +59,12 @@ npm start
 ## Deployment
 
 Deploy to [Vercel](https://vercel.com) with the same environment variables configured in your project settings. Update `GOOGLE_REDIRECT_URI` and `NEXT_PUBLIC_VERCEL_URL` to match your production domain.
+
+## FAQ
+
+### What file formats are supported?
+
+DriveBeats currently supports MP3 and FLAC files from Google Drive.
 
 ## License
 

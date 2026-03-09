@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import { toast } from "sonner";
+import { getSupportedAudioQuery } from "@/lib/audio";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import type { DriveFile } from "@/types";
@@ -30,7 +31,7 @@ export function useFolderContents() {
       latestAccessTokenRef.current = token;
 
       try {
-        const query = `'${folderId}' in parents and trashed = false and (mimeType = 'application/vnd.google-apps.folder' or mimeType = 'audio/mpeg' or mimeType = 'audio/mp3')`;
+        const query = getSupportedAudioQuery(folderId);
         const params = new URLSearchParams({
           q: query,
           fields: "files(id,name,mimeType,size)",

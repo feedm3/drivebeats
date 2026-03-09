@@ -14,6 +14,7 @@ import { NowPlayingBars } from "@/components/now-playing-bars";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { cn } from "@/lib/utils";
+import { createPlaylistTrack } from "@/lib/audio";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import {
   getFavoriteTracks,
@@ -105,13 +106,13 @@ export const PlaylistSection = forwardRef<
         } else if (data.type === "folder") {
           const cached = getCachedFiles(data.folderId);
           if (cached) {
-            const mp3s = cached.files
+            const tracks = cached.files
               .filter((f) => f.mimeType !== FOLDER_MIME)
-              .map((f) => ({ fileId: f.id, fileName: f.name }));
-            if (mp3s.length > 0) {
-              addTracks(playlistId, mp3s);
+              .map(createPlaylistTrack);
+            if (tracks.length > 0) {
+              addTracks(playlistId, tracks);
               toast.success(
-                `Added ${mp3s.length} track${mp3s.length > 1 ? "s" : ""}`,
+                `Added ${tracks.length} track${tracks.length > 1 ? "s" : ""}`,
               );
             } else {
               toast.info("No audio files found in folder");

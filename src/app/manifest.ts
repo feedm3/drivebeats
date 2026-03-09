@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "DriveBeats",
     short_name: "DriveBeats",
     description:
-      "Stream your MP3 collection directly from Google Drive. Free, no uploads needed.",
+      "Stream your MP3 and FLAC collection directly from Google Drive. Free, no uploads needed.",
     start_url: "/",
     display: "standalone",
     background_color: "#0a0a0a",

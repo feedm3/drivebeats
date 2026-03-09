@@ -9,6 +9,7 @@ import { useLibraryStore } from "@/stores/library-store";
 interface FavoriteToggleButtonProps {
   fileId: string;
   fileName: string;
+  mimeType?: string;
   className?: string;
   iconClassName?: string;
   size?: "icon-xs" | "icon-sm";
@@ -17,6 +18,7 @@ interface FavoriteToggleButtonProps {
 export function FavoriteToggleButton({
   fileId,
   fileName,
+  mimeType,
   className,
   iconClassName,
   size = "icon-xs",
@@ -49,7 +51,7 @@ export function FavoriteToggleButton({
         aria-pressed={isFavorite}
         onClick={(event) => {
           event.stopPropagation();
-          toggleFavorite({ fileId, fileName });
+          toggleFavorite({ fileId, fileName, mimeType });
         }}
       >
         <Heart

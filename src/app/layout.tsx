@@ -22,14 +22,18 @@ export const metadata: Metadata = {
     template: "%s | DriveBeats",
   },
   description:
-    "Free online MP3 player for Google Drive. Stream your music collection directly from Drive — no downloads, no uploads, no storage limits. Spotify-style playback with shuffle, repeat, and full controls.",
+    "Free online MP3 and FLAC player for Google Drive. Stream your music collection directly from Drive — no downloads, no uploads, no storage limits. Spotify-style playback with shuffle, repeat, and full controls.",
   keywords: [
     "google drive mp3 player",
+    "google drive flac player",
     "free mp3 player google drive",
+    "free flac player google drive",
     "google drive music player",
     "stream music from google drive",
     "play mp3 from google drive",
+    "play flac from google drive",
     "online mp3 player",
+    "online flac player",
     "google drive audio player",
     "free music player online",
     "cloud mp3 player",
@@ -53,13 +57,13 @@ export const metadata: Metadata = {
     siteName: "DriveBeats",
     title: "DriveBeats — Stream Your Music Collection from Google Drive",
     description:
-      "Stream your MP3 collection directly from Google Drive. Free, no uploads, Spotify-style controls.",
+      "Stream your MP3 and FLAC collection directly from Google Drive. Free, no uploads, Spotify-style controls.",
   },
   twitter: {
     card: "summary_large_image",
     title: "DriveBeats — Stream Your Music Collection from Google Drive",
     description:
-      "Stream your MP3 collection directly from Google Drive. Free, no uploads, Spotify-style controls.",
+      "Stream your MP3 and FLAC collection directly from Google Drive. Free, no uploads, Spotify-style controls.",
   },
   robots: {
     index: true,
@@ -90,7 +94,7 @@ export default function RootLayout({
     name: "DriveBeats",
     url: siteUrl,
     description:
-      "Free online MP3 player for Google Drive. Stream your music collection directly from Drive with Spotify-style controls.",
+      "Free online MP3 and FLAC player for Google Drive. Stream your music collection directly from Drive with Spotify-style controls.",
     applicationCategory: "MultimediaApplication",
     operatingSystem: "Any",
     offers: {
@@ -99,7 +103,7 @@ export default function RootLayout({
       priceCurrency: "USD",
     },
     featureList: [
-      "Stream MP3 files from Google Drive",
+      "Stream MP3 and FLAC files from Google Drive",
       "Shuffle and repeat playback",
       "Browse folders",
       "Volume control",

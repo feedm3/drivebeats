@@ -16,9 +16,8 @@ export default function PrivacyPolicyPage() {
 
         <h2 className="text-lg font-semibold text-foreground">What we do</h2>
         <p>
-          Google Drive MP3 Player lets you stream MP3 files stored in your
-          Google Drive. It does not upload or re-host your audio files on our
-          servers.
+          DriveBeats lets you stream MP3 and FLAC files stored in your Google
+          Drive. It does not upload or re-host your audio files on our servers.
         </p>
 
         <h2 className="text-lg font-semibold text-foreground">

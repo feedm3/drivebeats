@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { getTrackDisplayName } from "@/lib/audio";
 import { useAuthStore } from "@/stores/auth-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { usePlayerStore } from "@/stores/player-store";
@@ -53,7 +54,9 @@ export function PlayerBar() {
   const [playerHydrated, setPlayerHydrated] = useState(() =>
     usePlayerStore.persist.hasHydrated(),
   );
-  const currentTrackTitle = currentTrack?.name.replace(/\.mp3$/i, "") ?? "";
+  const currentTrackTitle = currentTrack
+    ? getTrackDisplayName(currentTrack.name)
+    : "";
 
   // Audio element event listeners
   useEffect(() => {
@@ -73,6 +76,7 @@ export function PlayerBar() {
         useLibraryStore.getState().markPlayed({
           fileId: currentTrack.id,
           fileName: currentTrack.name,
+          mimeType: currentTrack.mimeType,
         });
         recentTrackRef.current = currentTrack.id;
       }

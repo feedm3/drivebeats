@@ -1,6 +1,7 @@
 "use client";
 
 import { FavoriteToggleButton } from "@/components/favorite-toggle-button";
+import { getTrackDisplayName } from "@/lib/audio";
 import { usePlayerStore } from "@/stores/player-store";
 
 export function TrackInfo() {
@@ -36,11 +37,12 @@ export function TrackInfo() {
       </span>
       <div className="min-w-0 flex flex-1 items-center gap-1.5">
         <span className="truncate text-sm font-semibold">
-          {currentTrack.name.replace(/\.mp3$/i, "")}
+          {getTrackDisplayName(currentTrack.name)}
         </span>
         <FavoriteToggleButton
           fileId={currentTrack.id}
           fileName={currentTrack.name}
+          mimeType={currentTrack.mimeType}
           className="shrink-0 text-muted-foreground/80"
         />
       </div>

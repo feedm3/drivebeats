@@ -117,12 +117,14 @@ export function FileList({
   const playTrack = usePlayerStore((state) => state.playTrack);
   const togglePlay = usePlayerStore((state) => state.togglePlay);
   const currentTrack = usePlayerStore((state) => state.currentTrack);
+  const pendingTrackId = usePlayerStore((state) => state.pendingTrackId);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
   const isHidden = useFolderFilterStore((state) => state.isHidden);
   const playerBarPadding = usePlayerBarPadding();
   const [nameSortDirection, setNameSortDirection] =
     useState<NameSortDirection>("asc");
   const currentTrackId = currentTrack?.id;
+  const activeTrackId = pendingTrackId ?? currentTrackId;
   const playingFolderStack = usePlayerStore(
     (state) => state.playingFolderStack,
   );
@@ -239,13 +241,14 @@ export function FileList({
             <TableBody>
               {filteredFiles.map((file) => {
                 const folder = isFolder(file);
-                const isActive = currentTrackId === file.id;
+                const isActive = activeTrackId === file.id;
+                const isCurrentlyPlaying = currentTrackId === file.id;
                 const isPlayingAncestor =
-                  folder && currentTrackId && playingFolderIds.has(file.id);
+                  folder && activeTrackId && playingFolderIds.has(file.id);
                 const onActivate = () =>
                   folder
                     ? onFolderClick(file.id, file.name)
-                    : isActive
+                    : isCurrentlyPlaying
                       ? togglePlay()
                       : void playTrack(file, playableTracks, folderStack);
 
@@ -296,7 +299,7 @@ export function FileList({
                               : "text-muted-foreground",
                           )}
                         >
-                          {isPlayingAncestor || isActive ? (
+                          {isPlayingAncestor || isCurrentlyPlaying ? (
                             <NowPlayingBars
                               className="size-4"
                               paused={!isPlaying}

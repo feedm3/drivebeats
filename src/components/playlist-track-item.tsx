@@ -12,10 +12,12 @@ interface PlaylistTrackItemProps {
   track: PlaylistTrack;
   index: number;
   isActive: boolean;
+  isCurrentlyPlaying: boolean;
   isPlaying: boolean;
   isDragging: boolean;
   dropIndicator: "above" | "below" | null;
   isReorderable?: boolean;
+  subtitle?: string;
   onPlay: () => void;
   onRemove: () => void;
   removeLabel?: string;
@@ -25,10 +27,12 @@ export function PlaylistTrackItem({
   track,
   index,
   isActive,
+  isCurrentlyPlaying,
   isPlaying,
   isDragging,
   dropIndicator,
   isReorderable = true,
+  subtitle,
   onPlay,
   onRemove,
   removeLabel = "Remove from playlist",
@@ -78,7 +82,7 @@ export function PlaylistTrackItem({
             isActive ? "text-primary" : "text-muted-foreground",
           )}
         >
-          {isActive ? (
+          {isCurrentlyPlaying ? (
             <NowPlayingBars className="size-4" paused={!isPlaying} />
           ) : (
             <Music4 className="size-4" />
@@ -90,6 +94,11 @@ export function PlaylistTrackItem({
           </span>
         </span>
       </button>
+      {subtitle && (
+        <span className="shrink-0 px-2 text-xs tabular-nums text-muted-foreground">
+          {subtitle}
+        </span>
+      )}
       <div className="flex shrink-0 items-center pr-2">
         <IconTooltip label={removeLabel} side="left">
           <Button

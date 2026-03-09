@@ -4,8 +4,15 @@ import { FavoriteToggleButton } from "@/components/favorite-toggle-button";
 import { getTrackDisplayName } from "@/lib/audio";
 import { usePlayerStore } from "@/stores/player-store";
 
-export function TrackInfo() {
+interface TrackInfoProps {
+  onNavigateToTrack?: () => void;
+}
+
+export function TrackInfo({ onNavigateToTrack }: TrackInfoProps) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const playingFolderStack = usePlayerStore((s) => s.playingFolderStack);
+  const canNavigate =
+    onNavigateToTrack && playingFolderStack.length > 0;
 
   if (!currentTrack) {
     return (
@@ -36,7 +43,26 @@ export function TrackInfo() {
         </svg>
       </span>
       <div className="min-w-0 flex flex-1 items-center gap-1.5">
-        <span className="truncate text-sm font-semibold">
+        <span
+          role={canNavigate ? "button" : undefined}
+          tabIndex={canNavigate ? 0 : undefined}
+          className={
+            canNavigate
+              ? "truncate text-sm font-semibold cursor-pointer hover:underline"
+              : "truncate text-sm font-semibold"
+          }
+          onClick={canNavigate ? onNavigateToTrack : undefined}
+          onKeyDown={
+            canNavigate
+              ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onNavigateToTrack();
+                  }
+                }
+              : undefined
+          }
+        >
           {getTrackDisplayName(currentTrack.name)}
         </span>
         <FavoriteToggleButton

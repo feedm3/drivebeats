@@ -16,7 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { playlistTrackToDriveFile } from "@/lib/audio";
-import { cn } from "@/lib/utils";
+import { cn, formatRelativeDate } from "@/lib/utils";
 import { useLibraryStore } from "@/stores/library-store";
 import { usePlayerStore } from "@/stores/player-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
@@ -193,8 +193,10 @@ function useTrackDrag(
 export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const pendingTrackId = usePlayerStore((s) => s.pendingTrackId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const playingPlaylistId = usePlayerStore((s) => s.playingPlaylistId);
+  const libraryTracks = useLibraryStore((s) => s.tracks);
   const playerBarPadding = usePlayerBarPadding();
 
   const removeTrack = usePlaylistStore((s) => s.removeTrack);
@@ -279,7 +281,10 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
     [collection.id, collection.tracks, removeFromRecent, removeTrack, setFavorite],
   );
 
+  const activeTrackId = pendingTrackId ?? currentTrack?.id;
   const isPlayingThisPlaylist = playingPlaylistId === collection.id;
+  const isRecentlyPlayed =
+    collection.id === RECENTLY_PLAYED_COLLECTION_ID;
 
   return (
     <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-7">
@@ -397,15 +402,28 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                   Name
                 </span>
               </div>
-              {collection.tracks.map((track, index) => (
+              {collection.tracks.map((track, index) => {
+                const lastPlayedAt =
+                  isRecentlyPlayed
+                    ? libraryTracks[track.fileId]?.lastPlayedAt
+                    : undefined;
+                return (
                 <PlaylistTrackItem
                   key={track.fileId}
                   track={track}
                   index={index}
                   isActive={
+                    isPlayingThisPlaylist && activeTrackId === track.fileId
+                  }
+                  isCurrentlyPlaying={
                     isPlayingThisPlaylist && currentTrack?.id === track.fileId
                   }
                   isPlaying={isPlaying}
+                  subtitle={
+                    lastPlayedAt
+                      ? formatRelativeDate(lastPlayedAt)
+                      : undefined
+                  }
                   isDragging={drag.fromIndex === index}
                   dropIndicator={
                     drag.overIndex === index ? drag.position : null
@@ -417,7 +435,8 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                   }
                   removeLabel={getCollectionRemoveLabel(collection.id)}
                 />
-              ))}
+                );
+              })}
             </div>
           </div>
         </ScrollArea>

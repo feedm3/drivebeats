@@ -45,7 +45,11 @@ function shouldSuppressErrorToast() {
   return useAuthStore.getState().isLoggingOut;
 }
 
-export function PlayerBar() {
+interface PlayerBarProps {
+  onNavigateToTrack?: () => void;
+}
+
+export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const recentTrackRef = useRef<string | null>(null);
   const restoreAttemptedRef = useRef(false);
@@ -239,7 +243,7 @@ export function PlayerBar() {
         </div>
         <div className="relative flex items-center justify-center pb-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:py-3">
           <div className="hidden sm:block">
-            <TrackInfo />
+            <TrackInfo onNavigateToTrack={onNavigateToTrack} />
           </div>
           <PlayControls />
           <div className="absolute right-0 sm:static">

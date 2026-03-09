@@ -13,6 +13,7 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { cn, getHistoryStateWithFolderStack } from "@/lib/utils";
 import { useFolderTreeStore } from "@/stores/folder-tree-store";
+import { usePlayerStore } from "@/stores/player-store";
 import {
   getFavoriteTracks,
   getRecentlyPlayedTracks,
@@ -100,6 +101,19 @@ function AppContent() {
     },
     [setActivePlaylist],
   );
+
+  const handleNavigateToTrack = useCallback(() => {
+    const { playingFolderStack } = usePlayerStore.getState();
+    if (playingFolderStack.length === 0) return;
+    setFolderStack(playingFolderStack);
+    setActivePlaylist(null);
+    setActiveView("files");
+    window.history.pushState(
+      getHistoryStateWithFolderStack(playingFolderStack),
+      "",
+    );
+    useFolderTreeStore.getState().expandPath(playingFolderStack.slice(0, -1));
+  }, [setActivePlaylist]);
 
   const handleSelectPlaylist = useCallback(
     (id: string) => {
@@ -213,7 +227,7 @@ function AppContent() {
           </div>
         </div>
       )}
-      <PlayerBar />
+      <PlayerBar onNavigateToTrack={handleNavigateToTrack} />
     </>
   );
 }

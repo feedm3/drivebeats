@@ -11,6 +11,7 @@ let fetchAbortController: AbortController | null = null;
 
 interface PlayerState {
   currentTrack: DriveFile | null;
+  pendingTrackId: string | null;
   playingFolderStack: FolderEntry[];
   playingPlaylistId: string | null;
   playlist: DriveFile[];
@@ -58,6 +59,7 @@ export const usePlayerStore = create<PlayerState>()(
   persist(
     (set, get) => ({
       currentTrack: null,
+      pendingTrackId: null,
       playingFolderStack: [],
       playingPlaylistId: null,
       playlist: [],
@@ -188,21 +190,29 @@ export const usePlayerStore = create<PlayerState>()(
         get().initAudio();
         const index = playlist.findIndex((f) => f.id === track.id);
 
+        // Mark the target row active immediately, but keep currentTrack
+        // pointing at the playing song until audio actually starts.
+        set({
+          pendingTrackId: track.id,
+          playlist,
+          currentIndex: index,
+          playingFolderStack: playlistId ? [] : folderStack,
+          playingPlaylistId: playlistId ?? null,
+        });
+
         try {
           await get().loadTrack(track.id, true, () => {
             set({
               currentTrack: track,
-              playingFolderStack: playlistId ? [] : folderStack,
-              playingPlaylistId: playlistId ?? null,
-              playlist,
-              currentIndex: index,
+              pendingTrackId: null,
               isPlaying: true,
               currentTime: 0,
               duration: 0,
             });
           });
         } catch {
-          // Keep the current playback state if the next track fails to load.
+          // Loading failed — clear pending so the old track stays active.
+          set({ pendingTrackId: null });
         }
       },
 
@@ -323,6 +333,7 @@ export const usePlayerStore = create<PlayerState>()(
 
         set({
           currentTrack: null,
+          pendingTrackId: null,
           playingFolderStack: [],
           playingPlaylistId: null,
           playlist: [],

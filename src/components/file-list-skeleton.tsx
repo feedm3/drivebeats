@@ -26,6 +26,12 @@ const LOADING_ROWS = [
     sizeWidth: null,
   },
   {
+    id: "loading-folder-3",
+    type: "folder" as const,
+    nameWidth: "w-36",
+    sizeWidth: null,
+  },
+  {
     id: "loading-track-1",
     type: "track" as const,
     nameWidth: "w-56",
@@ -36,12 +42,6 @@ const LOADING_ROWS = [
     type: "track" as const,
     nameWidth: "w-44",
     sizeWidth: "w-12",
-  },
-  {
-    id: "loading-folder-3",
-    type: "folder" as const,
-    nameWidth: "w-36",
-    sizeWidth: null,
   },
   {
     id: "loading-track-3",

@@ -31,6 +31,7 @@ export function createPlaylistTrack(file: DriveFile): PlaylistTrack {
     fileId: file.id,
     fileName: file.name,
     mimeType: file.mimeType,
+    parents: file.parents,
   };
 }
 
@@ -39,6 +40,7 @@ export function playlistTrackToDriveFile(track: PlaylistTrack): DriveFile {
     id: track.fileId,
     name: track.fileName,
     mimeType: track.mimeType ?? inferAudioMimeType(track.fileName) ?? "audio/mpeg",
+    parents: track.parents,
   };
 }
 

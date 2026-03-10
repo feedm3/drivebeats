@@ -3,6 +3,7 @@ export interface DriveFile {
   name: string;
   mimeType: string;
   size?: string;
+  parents?: string[];
 }
 
 export interface AuthTokens {
@@ -17,13 +18,17 @@ export interface FolderEntry {
 }
 
 export const FOLDER_MIME = "application/vnd.google-apps.folder";
+export const ROOT_FOLDER_ID = "root";
 
-export const INITIAL_STACK: FolderEntry[] = [{ id: "root", name: "My Drive" }];
+export const INITIAL_STACK: FolderEntry[] = [
+  { id: ROOT_FOLDER_ID, name: "Library" },
+];
 
 export interface PlaylistTrack {
   fileId: string;
   fileName: string;
   mimeType?: string;
+  parents?: string[];
 }
 
 export interface Playlist {

@@ -2,7 +2,6 @@
 
 import {
   ChevronRight,
-  Filter,
   Folder,
   Heart,
   History,
@@ -96,18 +95,15 @@ function SidebarSkeleton() {
   return (
     <div className="flex min-h-full flex-col">
       <div className="flex shrink-0 items-center justify-between px-4 pt-8 pb-2">
-        <div className="group/hdr flex items-center gap-1 text-xs font-semibold tracking-[0.16em] uppercase text-muted-foreground">
-          Folders
-          <ChevronRight className="size-3 rotate-90 opacity-0" />
+        <div className="flex items-center gap-2">
+          <div className="group/hdr flex items-center gap-1 text-xs font-semibold tracking-[0.16em] uppercase text-muted-foreground">
+            Folders
+            <ChevronRight className="size-3 rotate-90 opacity-0" />
+          </div>
+          <div className="inline-flex h-6 items-center rounded-md px-2 text-xs text-muted-foreground">
+            Add from Drive
+          </div>
         </div>
-        <button
-          type="button"
-          className="relative inline-flex size-6 items-center justify-center text-muted-foreground"
-          aria-label="Filter folders"
-          tabIndex={-1}
-        >
-          <Filter className="size-3.5" />
-        </button>
       </div>
       <SidebarFolderSkeleton />
       <div className="shrink-0 px-2 pt-6 pb-2">
@@ -127,7 +123,7 @@ function BrowserToolbarSkeleton() {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-h-8 items-center gap-2 text-sm">
-        <span className="font-semibold text-foreground">My Drive</span>
+        <span className="font-semibold text-foreground">Library</span>
       </div>
       <div className="flex items-center gap-2">
         <div className="hidden min-w-0 flex-1 items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-1.5 shadow-xs backdrop-blur-sm sm:flex sm:max-w-xs">

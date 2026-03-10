@@ -5,26 +5,27 @@ import { toast } from "sonner";
 import { getSupportedAudioQuery } from "@/lib/audio";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
+import {
+  getImportedLibraryRootEntries,
+  useImportedDriveStore,
+} from "@/stores/imported-drive-store";
 import type { DriveFile } from "@/types";
+import { ROOT_FOLDER_ID } from "@/types";
 
 export function useFolderContents() {
-  const getValidAccessToken = useAuthStore(
-    (state) => state.getValidAccessToken,
-  );
-  const logout = useAuthStore((state) => state.logout);
-  const getCachedFiles = useFolderCacheStore((state) => state.getFiles);
-  const setCachedFiles = useFolderCacheStore((state) => state.setFiles);
-  const isStale = useFolderCacheStore((state) => state.isStale);
-
   const fetchFromApi = useCallback(
     async (folderId: string): Promise<DriveFile[] | null> => {
+      if (folderId === ROOT_FOLDER_ID) {
+        return getImportedLibraryRootEntries(useImportedDriveStore.getState());
+      }
+
       if (!/^[a-zA-Z0-9_-]+$/.test(folderId)) {
         return null;
       }
 
-      const token = await getValidAccessToken();
+      const token = await useAuthStore.getState().getValidAccessToken();
       if (!token) {
-        logout();
+        useAuthStore.getState().logout();
         return null;
       }
 
@@ -32,9 +33,11 @@ export function useFolderContents() {
         const query = getSupportedAudioQuery(folderId);
         const params = new URLSearchParams({
           q: query,
-          fields: "files(id,name,mimeType,size)",
+          fields: "files(id,name,mimeType,size,parents)",
           orderBy: "folder,name",
           pageSize: "1000",
+          supportsAllDrives: "true",
+          includeItemsFromAllDrives: "true",
         });
         const res = await fetch(
           `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
@@ -45,14 +48,14 @@ export function useFolderContents() {
         if (res.ok) {
           const data: { files?: DriveFile[] } = await res.json();
           const files = data.files ?? [];
-          setCachedFiles(folderId, files);
+          useFolderCacheStore.getState().setFiles(folderId, files);
           return files;
         }
         if (res.status === 401) {
           if (!useAuthStore.getState().isLoggingOut) {
             toast.error("Session expired. Please sign in again.");
           }
-          logout();
+          useAuthStore.getState().logout();
         } else if (res.status === 403) {
           if (!useAuthStore.getState().isLoggingOut) {
             toast.error("Access denied. Check your Google Drive permissions.");
@@ -73,7 +76,7 @@ export function useFolderContents() {
       }
       return null;
     },
-    [getValidAccessToken, logout, setCachedFiles],
+    [],
   );
 
   const fetchFolderContents = useCallback(
@@ -86,7 +89,16 @@ export function useFolderContents() {
       },
     ) => {
       const { onFiles, onLoadingChange, canCommit } = callbacks;
-      const cached = getCachedFiles(folderId);
+
+      if (folderId === ROOT_FOLDER_ID) {
+        if (canCommit()) {
+          onFiles(getImportedLibraryRootEntries(useImportedDriveStore.getState()));
+          onLoadingChange(false);
+        }
+        return;
+      }
+
+      const cached = useFolderCacheStore.getState().getFiles(folderId);
 
       if (cached) {
         if (canCommit()) {
@@ -94,7 +106,7 @@ export function useFolderContents() {
           onLoadingChange(false);
         }
 
-        if (isStale(folderId)) {
+        if (useFolderCacheStore.getState().isStale(folderId)) {
           const fresh = await fetchFromApi(folderId);
           if (fresh && canCommit()) {
             onFiles(fresh);
@@ -113,7 +125,7 @@ export function useFolderContents() {
         }
       }
     },
-    [getCachedFiles, isStale, fetchFromApi],
+    [fetchFromApi],
   );
 
   return {

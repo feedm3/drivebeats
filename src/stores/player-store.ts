@@ -1,13 +1,72 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "@/stores/auth-store";
+import { useFolderCacheStore } from "@/stores/folder-cache-store";
+import { useImportedDriveStore } from "@/stores/imported-drive-store";
 import type { DriveFile, FolderEntry } from "@/types";
+import { FOLDER_MIME, INITIAL_STACK } from "@/types";
 
 type RepeatMode = "off" | "one" | "all";
 
 const MAX_CACHE_SIZE = 20;
 
 let fetchAbortController: AbortController | null = null;
+
+/**
+ * Try to derive a folder stack for a track by looking up its parent folder
+ * in the imported library and folder cache. Returns a minimal stack
+ * [Library, parentFolder] if found, otherwise [].
+ */
+function deriveFolderStack(track: DriveFile): FolderEntry[] {
+  const { rootFolders } = useImportedDriveStore.getState();
+  const cache = useFolderCacheStore.getState().cache;
+
+  const buildPathFromFolderId = (folderId: string): FolderEntry[] => {
+    const rootFolder = rootFolders.find((folder) => folder.id === folderId);
+    if (rootFolder) {
+      return [...INITIAL_STACK, { id: rootFolder.id, name: rootFolder.name }];
+    }
+
+    for (const [candidateAncestorId, entry] of cache) {
+      const folder = entry.files.find(
+        (file) => file.id === folderId && file.mimeType === FOLDER_MIME,
+      );
+      if (!folder) continue;
+
+      const ancestor = rootFolders.find(
+        (rootFolderItem) => rootFolderItem.id === candidateAncestorId,
+      );
+      if (ancestor) {
+        return [
+          ...INITIAL_STACK,
+          { id: ancestor.id, name: ancestor.name },
+          { id: folder.id, name: folder.name },
+        ];
+      }
+
+      return [...INITIAL_STACK, { id: folder.id, name: folder.name }];
+    }
+
+    return [];
+  };
+
+  const parentId = track.parents?.[0];
+  if (parentId) {
+    const path = buildPathFromFolderId(parentId);
+    if (path.length > 0) {
+      return path;
+    }
+  }
+
+  // Fallback for older persisted smart-collection items that don't have parents.
+  for (const [folderId, entry] of cache) {
+    if (entry.files.some((file) => file.id === track.id)) {
+      return buildPathFromFolderId(folderId);
+    }
+  }
+
+  return [];
+}
 
 interface PlayerState {
   currentTrack: DriveFile | null;
@@ -127,7 +186,7 @@ export const usePlayerStore = create<PlayerState>()(
 
           const fetchTrack = (token: string) =>
             fetch(
-              `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+              `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
               {
                 headers: { Authorization: `Bearer ${token}` },
                 signal: controller.signal,
@@ -196,7 +255,9 @@ export const usePlayerStore = create<PlayerState>()(
           pendingTrackId: track.id,
           playlist,
           currentIndex: index,
-          playingFolderStack: playlistId ? [] : folderStack,
+          playingFolderStack: playlistId
+            ? deriveFolderStack(track)
+            : folderStack,
           playingPlaylistId: playlistId ?? null,
         });
 

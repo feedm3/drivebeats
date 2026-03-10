@@ -11,8 +11,7 @@ interface TrackInfoProps {
 export function TrackInfo({ onNavigateToTrack }: TrackInfoProps) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const playingFolderStack = usePlayerStore((s) => s.playingFolderStack);
-  const canNavigate =
-    onNavigateToTrack && playingFolderStack.length > 0;
+  const canNavigate = onNavigateToTrack && playingFolderStack.length > 0;
 
   if (!currentTrack) {
     return (
@@ -43,32 +42,24 @@ export function TrackInfo({ onNavigateToTrack }: TrackInfoProps) {
         </svg>
       </span>
       <div className="min-w-0 flex flex-1 items-center gap-1.5">
-        <span
-          role={canNavigate ? "button" : undefined}
-          tabIndex={canNavigate ? 0 : undefined}
-          className={
-            canNavigate
-              ? "truncate text-sm font-semibold cursor-pointer hover:underline"
-              : "truncate text-sm font-semibold"
-          }
-          onClick={canNavigate ? onNavigateToTrack : undefined}
-          onKeyDown={
-            canNavigate
-              ? (e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onNavigateToTrack();
-                  }
-                }
-              : undefined
-          }
-        >
-          {getTrackDisplayName(currentTrack.name)}
-        </span>
+        {canNavigate ? (
+          <button
+            type="button"
+            className="truncate text-left text-sm font-semibold hover:underline"
+            onClick={onNavigateToTrack}
+          >
+            {getTrackDisplayName(currentTrack.name)}
+          </button>
+        ) : (
+          <span className="truncate text-sm font-semibold">
+            {getTrackDisplayName(currentTrack.name)}
+          </span>
+        )}
         <FavoriteToggleButton
           fileId={currentTrack.id}
           fileName={currentTrack.name}
           mimeType={currentTrack.mimeType}
+          parents={currentTrack.parents}
           className="shrink-0 text-muted-foreground/80"
         />
       </div>

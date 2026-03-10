@@ -29,6 +29,7 @@ export default async function Image() {
         }}
       >
         <img
+          alt=""
           src={iconBase64}
           width={96}
           height={96}

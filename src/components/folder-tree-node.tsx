@@ -4,11 +4,9 @@ import { ChevronRight, Folder, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { NowPlayingBars } from "@/components/now-playing-bars";
 import { useFolderContents } from "@/hooks/use-folder-contents";
-import { shouldRenderFolderInTree } from "@/lib/folder-tree-visibility";
 import { sortFoldersNatural } from "@/lib/sort";
 import { cn } from "@/lib/utils";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
-import { useFolderFilterStore } from "@/stores/folder-filter-store";
 import { useFolderTreeStore } from "@/stores/folder-tree-store";
 import { usePlayerStore } from "@/stores/player-store";
 import type { DriveFile, FolderEntry } from "@/types";
@@ -33,9 +31,7 @@ export function FolderTreeNode({
 }: FolderTreeNodeProps) {
   const isExpanded = useFolderTreeStore((s) => s.expandedFolders.has(id));
   const toggle = useFolderTreeStore((s) => s.toggle);
-  const hiddenFolderIds = useFolderFilterStore((s) => s.hiddenFolderIds);
 
-  const cache = useFolderCacheStore((s) => s.cache);
   const cachedEntry = useFolderCacheStore((s) => s.cache.get(id));
   const { fetchFromApi } = useFolderContents();
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -167,21 +163,17 @@ export function FolderTreeNode({
       </div>
       {isExpanded && children && children.length > 0 && (
         <div>
-          {children
-            .filter((child) =>
-              shouldRenderFolderInTree(child.id, hiddenFolderIds, cache),
-            )
-            .map((child) => (
-              <FolderTreeNode
-                key={child.id}
-                id={child.id}
-                name={child.name}
-                depth={depth + 1}
-                ancestors={path}
-                selectedFolderId={selectedFolderId}
-                onSelect={onSelect}
-              />
-            ))}
+          {children.map((child) => (
+            <FolderTreeNode
+              key={child.id}
+              id={child.id}
+              name={child.name}
+              depth={depth + 1}
+              ancestors={path}
+              selectedFolderId={selectedFolderId}
+              onSelect={onSelect}
+            />
+          ))}
         </div>
       )}
     </div>

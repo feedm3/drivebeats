@@ -79,6 +79,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
           fileId: currentTrack.id,
           fileName: currentTrack.name,
           mimeType: currentTrack.mimeType,
+          parents: currentTrack.parents,
         });
         recentTrackRef.current = currentTrack.id;
       }
@@ -239,7 +240,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
           <ProgressBar />
         </div>
         <div className="py-3 sm:hidden">
-          <TrackInfo />
+          <TrackInfo onNavigateToTrack={onNavigateToTrack} />
         </div>
         <div className="relative flex items-center justify-center pb-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:py-3">
           <div className="hidden sm:block">

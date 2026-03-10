@@ -26,7 +26,6 @@ import {
   getHighlightedTextParts,
 } from "@/lib/file-search";
 import { cn } from "@/lib/utils";
-import { useFolderFilterStore } from "@/stores/folder-filter-store";
 import { usePlayerStore } from "@/stores/player-store";
 import type { DriveFile, FolderEntry } from "@/types";
 import { FOLDER_MIME } from "@/types";
@@ -209,6 +208,7 @@ const FileListRow = memo(function FileListRow({
             fileId={file.id}
             fileName={file.name}
             mimeType={file.mimeType}
+            parents={file.parents}
             size="icon-sm"
             className={rowActionClassName}
           />
@@ -237,7 +237,6 @@ export function FileList({
   const currentTrackId = usePlayerStore((state) => state.currentTrack?.id);
   const pendingTrackId = usePlayerStore((state) => state.pendingTrackId);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
-  const isHidden = useFolderFilterStore((state) => state.isHidden);
   const playerBarPadding = usePlayerBarPadding();
   const [nameSortDirection, setNameSortDirection] =
     useState<NameSortDirection>("asc");
@@ -249,13 +248,9 @@ export function FileList({
     () => new Set(playingFolderStack.map((f) => f.id)),
     [playingFolderStack],
   );
-  const visibleFiles = useMemo(
-    () => files.filter((file) => !isFolder(file) || !isHidden(file.id)),
-    [files, isHidden],
-  );
   const sortedFiles = useMemo(
-    () => sortFilesByName(visibleFiles, nameSortDirection),
-    [visibleFiles, nameSortDirection],
+    () => sortFilesByName(files, nameSortDirection),
+    [files, nameSortDirection],
   );
   const filteredFiles = useMemo(
     () => filterFilesBySearch(sortedFiles, searchQuery),
@@ -266,7 +261,6 @@ export function FileList({
     [filteredFiles],
   );
   const hasActiveSearch = searchQuery.trim().length > 0;
-  const hasHiddenFolders = visibleFiles.length < files.length;
 
   if (loading) {
     return (
@@ -278,16 +272,13 @@ export function FileList({
     );
   }
 
-  if (visibleFiles.length === 0) {
+  if (files.length === 0) {
     return (
       <div className="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground">
-        <span>
-          {hasHiddenFolders ? "No visible items here" : "Nothing here yet"}
-        </span>
+        <span>Nothing here yet</span>
         <span className="text-sm">
-          {hasHiddenFolders
-            ? "This view only contains folders hidden by your folder filter."
-            : "Add MP3 or FLAC files to this folder in Google Drive to see them here."}
+          Add MP3 or FLAC files to this folder in Google Drive to see them
+          here.
         </span>
       </div>
     );

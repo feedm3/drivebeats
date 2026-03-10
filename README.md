@@ -4,13 +4,14 @@ A free, open-source web app that lets you stream your music collection directly 
 
 ## Features
 
-- Browse your Google Drive folder structure
+- Import folders or audio files from Google Drive with Google Picker
+- Browse imported folders in a focused library view
 - Stream MP3 and FLAC files directly from Google Drive
 - Spotify-style player with shuffle, repeat, and seekable progress bar
 - Volume control and keyboard shortcuts
 - Light and dark mode
 - Mobile-friendly, responsive design
-- Read-only access — your files never leave Google's servers
+- Limited Drive access via `drive.file` — the app only sees items you select
 
 ## Tech Stack
 
@@ -28,6 +29,7 @@ A free, open-source web app that lets you stream your music collection directly 
 - Node.js 18+
 - A Google Cloud project with the Drive API enabled
 - OAuth 2.0 credentials (Client ID and Client Secret)
+- A browser API key for Google Picker
 
 ### Environment Variables
 
@@ -36,8 +38,10 @@ Create a `.env.local` file:
 ```env
 GOOGLE_CLIENT_ID=your-client-id
 GOOGLE_CLIENT_SECRET=your-client-secret
-GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/callback
-NEXT_PUBLIC_VERCEL_URL=localhost:3000
+AUTH_SESSION_SECRET=replace-me
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_GOOGLE_API_KEY=your-browser-api-key
+NEXT_PUBLIC_GOOGLE_APP_ID=your-google-cloud-project-number
 ```
 
 ### Development
@@ -58,13 +62,17 @@ npm start
 
 ## Deployment
 
-Deploy to [Vercel](https://vercel.com) with the same environment variables configured in your project settings. Update `GOOGLE_REDIRECT_URI` and `NEXT_PUBLIC_VERCEL_URL` to match your production domain.
+Deploy to [Vercel](https://vercel.com) with the same environment variables configured in your project settings. Update `NEXT_PUBLIC_APP_URL` to match your production domain.
 
 ## FAQ
 
 ### What file formats are supported?
 
 DriveBeats currently supports MP3 and FLAC files from Google Drive.
+
+### Which Google Drive scope does the app use?
+
+DriveBeats uses `https://www.googleapis.com/auth/drive.file` together with Google Picker. Users explicitly choose the folders and files they want to share with the app.
 
 ## License
 

@@ -10,6 +10,7 @@ interface FavoriteToggleButtonProps {
   fileId: string;
   fileName: string;
   mimeType?: string;
+  parents?: string[];
   className?: string;
   iconClassName?: string;
   size?: "icon-xs" | "icon-sm";
@@ -19,6 +20,7 @@ export function FavoriteToggleButton({
   fileId,
   fileName,
   mimeType,
+  parents,
   className,
   iconClassName,
   size = "icon-xs",
@@ -51,7 +53,7 @@ export function FavoriteToggleButton({
         aria-pressed={isFavorite}
         onClick={(event) => {
           event.stopPropagation();
-          toggleFavorite({ fileId, fileName, mimeType });
+          toggleFavorite({ fileId, fileName, mimeType, parents });
         }}
       >
         <Heart

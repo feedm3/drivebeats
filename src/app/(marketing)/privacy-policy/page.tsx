@@ -10,7 +10,7 @@ export default function PrivacyPolicyPage() {
       <div className="mx-auto max-w-2xl space-y-6 text-sm text-muted-foreground">
         <h1 className="text-2xl font-bold text-foreground">Privacy Policy</h1>
         <p>
-          <strong className="text-foreground">Last updated:</strong> March 9,
+          <strong className="text-foreground">Last updated:</strong> March 10,
           2026
         </p>
 
@@ -24,10 +24,13 @@ export default function PrivacyPolicyPage() {
           Google account access
         </h2>
         <p>
-          We request <strong className="text-foreground">read-only</strong>{" "}
-          access to your Google Drive via OAuth. We can list and stream your
-          files — nothing else. We cannot modify, delete, or share them. You can
-          revoke access at any time from your{" "}
+          We request Google Drive access through{" "}
+          <strong className="text-foreground">Google Picker</strong> and the{" "}
+          <strong className="text-foreground">drive.file</strong> scope. This
+          limits DriveBeats to the folders and files you explicitly choose in
+          the picker. In practice, that means DriveBeats can access your
+          imported library, not your entire Drive. We do not modify, delete, or
+          share your files. You can revoke access at any time from your{" "}
           <a
             href="https://myaccount.google.com/permissions"
             target="_blank"
@@ -41,9 +44,9 @@ export default function PrivacyPolicyPage() {
         <p>
           We also request <strong className="text-foreground">OpenID</strong>,{" "}
           <strong className="text-foreground">email</strong>, and{" "}
-          <strong className="text-foreground">profile</strong> scopes so the app
-          can identify which Google account is signed in and show your account
-          name, email address, and avatar inside the app.
+          <strong className="text-foreground">profile</strong> scopes so
+          DriveBeats can identify which Google account is signed in and show
+          your account name, email address, and avatar inside the app.
         </p>
 
         <h2 className="text-lg font-semibold text-foreground">
@@ -57,10 +60,10 @@ export default function PrivacyPolicyPage() {
         </p>
         <p>
           We also store app data locally in your browser, such as playlists,
-          favorites, recently played tracks, hidden folders, and player state.
-          This data stays on your device and is not sent to our servers. When
-          you choose to log out, the app shows a confirmation dialog and then
-          deletes that local app data from the browser if you confirm.
+          favorites, recently played tracks, your imported library, and player
+          state. This data stays on your device and is not sent to our servers.
+          When you choose to log out, the app shows a confirmation dialog and
+          then deletes that local app data from the browser if you confirm.
         </p>
 
         <h2 className="text-lg font-semibold text-foreground">Analytics</h2>
@@ -86,8 +89,8 @@ export default function PrivacyPolicyPage() {
         </p>
         <p>
           Limited data is shared with service providers that operate the app,
-          such as Google for authentication and Drive access, and Vercel for
-          hosting and privacy-friendly analytics.
+          such as Google for authentication, Google Picker, and Drive access,
+          and Vercel for hosting and privacy-friendly analytics.
         </p>
 
         <h2 className="text-lg font-semibold text-foreground">Contact</h2>

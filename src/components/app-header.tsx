@@ -19,9 +19,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
-import { useFolderFilterStore } from "@/stores/folder-filter-store";
+import { useImportedDriveStore } from "@/stores/imported-drive-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { usePlayerStore } from "@/stores/player-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
@@ -66,14 +67,22 @@ function AccountAvatar({
   sizeClassName,
   className = "",
 }: AccountAvatarProps) {
-  if (picture) {
+  const [failedPicture, setFailedPicture] = useState<string | null>(null);
+  const showPicture = Boolean(picture && picture !== failedPicture);
+
+  if (picture && showPicture) {
     return (
-      <span
+      <img
+        alt=""
         aria-hidden="true"
-        className={`${sizeClassName} rounded-full bg-cover bg-center ${className}`.trim()}
-        style={{
-          backgroundImage: `url("${picture}")`,
-        }}
+        src={picture}
+        className={cn(
+          sizeClassName,
+          "rounded-full object-cover",
+          className,
+        )}
+        onError={() => setFailedPicture(picture)}
+        referrerPolicy="no-referrer"
       />
     );
   }
@@ -81,10 +90,19 @@ function AccountAvatar({
   return (
     <span
       aria-hidden="true"
-      className={`${sizeClassName} flex items-center justify-center rounded-full bg-primary/10 text-primary ${className}`.trim()}
+      className={cn(
+        sizeClassName,
+        "flex items-center justify-center rounded-full bg-primary/10 text-primary",
+        className,
+      )}
     >
-      <UserRound className="size-[55%]" />
-      <span className="sr-only">{initials}</span>
+      {initials ? (
+        <span className="text-[0.65rem] font-semibold tracking-[0.08em]">
+          {initials}
+        </span>
+      ) : (
+        <UserRound className="size-[55%]" />
+      )}
     </span>
   );
 }
@@ -126,10 +144,9 @@ export function AppHeader() {
     usePlaylistStore.setState({ playlists: [], activePlaylistId: null });
     usePlaylistStore.persist.clearStorage();
 
-    useFolderFilterStore.setState({ hiddenFolderIds: new Set() });
-    useFolderFilterStore.persist.clearStorage();
-
     useFolderCacheStore.getState().clear();
+    useImportedDriveStore.getState().clear();
+    useImportedDriveStore.persist.clearStorage();
 
     for (const key of APP_STORAGE_KEYS) {
       window.localStorage.removeItem(key);
@@ -155,74 +172,76 @@ export function AppHeader() {
           />
           DriveBeats
         </Link>
-        <div className="relative">
-          {user ? (
-            <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-              <PopoverTrigger
-                render={
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            {user ? (
+              <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+                <PopoverTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 rounded-full py-1 pr-1.5 pl-1 text-muted-foreground/80 transition-colors hover:bg-muted/35 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                      aria-label="Open account menu"
+                    />
+                  }
+                >
+                  <span className="relative flex shrink-0">
+                    <AccountAvatar
+                      picture={user.picture}
+                      initials={userInitials}
+                      sizeClassName="size-7"
+                    />
+                    <span className="absolute right-0 bottom-0 size-2 rounded-full border-2 border-background bg-emerald-500" />
+                  </span>
+                  <span className="hidden max-w-24 truncate text-[11px] font-medium tracking-[0.02em] text-foreground/70 sm:block">
+                    {userLabel}
+                  </span>
+                  <ChevronDown
+                    className={`size-3.5 transition-transform ${menuOpen ? "rotate-180" : ""}`}
+                  />
+                </PopoverTrigger>
+                <PopoverContent
+                  align="end"
+                  side="bottom"
+                  sideOffset={8}
+                  className="w-64 rounded-[1.35rem] border-border/70 bg-background/96 p-2 shadow-lg backdrop-blur-sm"
+                >
+                  <div className="flex items-center gap-3 px-2.5 py-2">
+                    <AccountAvatar
+                      picture={user.picture}
+                      initials={userInitials}
+                      sizeClassName="size-9 shrink-0"
+                      className="border border-border/60"
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium leading-tight">
+                        {user.name ?? userLabel}
+                      </p>
+                      <p className="truncate pt-0.5 text-xs text-muted-foreground">
+                        {user.email}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mx-1 my-1 h-px bg-border/60" />
+                  <div className="flex items-center justify-between gap-4 px-2.5 py-2.5">
+                    <span className="text-sm font-medium text-foreground/90">
+                      Theme
+                    </span>
+                    <ThemeToggle size="menu" />
+                  </div>
+                  <div className="mx-1 my-1 h-px bg-border/60" />
                   <button
                     type="button"
-                    className="flex items-center gap-2 rounded-full py-1 pr-1.5 pl-1 text-muted-foreground/80 transition-colors hover:bg-muted/35 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                    aria-label="Open account menu"
-                  />
-                }
-              >
-                <span className="relative flex shrink-0">
-                  <AccountAvatar
-                    picture={user.picture}
-                    initials={userInitials}
-                    sizeClassName="size-7"
-                  />
-                  <span className="absolute right-0 bottom-0 size-2 rounded-full border-2 border-background bg-emerald-500" />
-                </span>
-                <span className="hidden max-w-24 truncate text-[11px] font-medium tracking-[0.02em] text-foreground/70 sm:block">
-                  {userLabel}
-                </span>
-                <ChevronDown
-                  className={`size-3.5 transition-transform ${menuOpen ? "rotate-180" : ""}`}
-                />
-              </PopoverTrigger>
-              <PopoverContent
-                align="end"
-                side="bottom"
-                sideOffset={8}
-                className="w-64 rounded-[1.35rem] border-border/70 bg-background/96 p-2 shadow-lg backdrop-blur-sm"
-              >
-                <div className="flex items-center gap-3 px-2.5 py-2">
-                  <AccountAvatar
-                    picture={user.picture}
-                    initials={userInitials}
-                    sizeClassName="size-9 shrink-0"
-                    className="border border-border/60"
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium leading-tight">
-                      {user.name ?? userLabel}
-                    </p>
-                    <p className="truncate pt-0.5 text-xs text-muted-foreground">
-                      {user.email}
-                    </p>
-                  </div>
-                </div>
-                <div className="mx-1 my-1 h-px bg-border/60" />
-                <div className="flex items-center justify-between gap-4 px-2.5 py-2.5">
-                  <span className="text-sm font-medium text-foreground/90">
-                    Theme
-                  </span>
-                  <ThemeToggle size="menu" />
-                </div>
-                <div className="mx-1 my-1 h-px bg-border/60" />
-                <button
-                  type="button"
-                  onClick={() => setLogoutOpen(true)}
-                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-destructive/8 hover:text-destructive"
-                >
-                  <LogOut className="size-4" />
-                  Logout
-                </button>
-              </PopoverContent>
-            </Popover>
-          ) : null}
+                    onClick={() => setLogoutOpen(true)}
+                    className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-destructive/8 hover:text-destructive"
+                  >
+                    <LogOut className="size-4" />
+                    Logout
+                  </button>
+                </PopoverContent>
+              </Popover>
+            ) : null}
+          </div>
         </div>
       </div>
       <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
@@ -230,7 +249,7 @@ export function AppHeader() {
           <DialogTitle>Log out and delete local data</DialogTitle>
           <DialogDescription>
             Logging out will delete your local playlists, favorites, recently
-            played tracks, hidden folders, and saved player state from this
+            played tracks, imported library, and saved player state from this
             browser. Continue only if you want to remove all app data from this
             device.
           </DialogDescription>

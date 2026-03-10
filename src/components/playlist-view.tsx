@@ -265,6 +265,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
             fileId,
             fileName,
             mimeType: track?.mimeType,
+            parents: track?.parents,
           },
           false,
         );

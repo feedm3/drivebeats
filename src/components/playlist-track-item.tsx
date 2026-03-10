@@ -42,9 +42,10 @@ export function PlaylistTrackItem({
       data-track-index={index}
       data-active={isActive ? true : undefined}
       className={cn(
-        "group relative flex items-center border-b py-4 transition-colors hover:bg-muted/50 data-[active]:bg-primary/6 last:border-b-0",
+        "group relative flex cursor-pointer items-center border-b py-4 transition-colors hover:bg-muted/50 data-[active]:bg-primary/6 last:border-b-0",
         isDragging && "opacity-30",
       )}
+      onClick={onPlay}
     >
       {dropIndicator === "above" && (
         <div className="absolute inset-x-0 top-0 z-10 h-0.5 bg-primary" />
@@ -64,17 +65,9 @@ export function PlaylistTrackItem({
       ) : (
         <div className="w-4 shrink-0" aria-hidden="true" />
       )}
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      <div
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-1.5 text-left"
         aria-label={`Play ${track.fileName}`}
-        onClick={onPlay}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onPlay();
-          }
-        }}
       >
         <span
           className={cn(
@@ -93,7 +86,7 @@ export function PlaylistTrackItem({
             {getTrackDisplayName(track.fileName)}
           </span>
         </span>
-      </button>
+      </div>
       {subtitle && (
         <span className="shrink-0 px-2 text-xs tabular-nums text-muted-foreground">
           {subtitle}

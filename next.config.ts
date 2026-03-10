@@ -6,11 +6,12 @@ const contentSecurityPolicy = [
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://va.vercel-scripts.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.googleusercontent.com",
   "font-src 'self' data:",
   "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://va.vercel-scripts.com",
+  "frame-src 'self' https://docs.google.com https://drive.google.com",
   "media-src 'self' blob: https://www.googleapis.com",
   "manifest-src 'self'",
 ].join("; ");

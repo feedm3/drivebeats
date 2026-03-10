@@ -6,7 +6,9 @@ import { AuthErrorNotice } from "@/components/auth-error-notice";
 import { SignInButton } from "@/components/sign-in-button";
 
 export const metadata: Metadata = {
-  title: "Google Drive Music Player",
+  title: {
+    absolute: "DriveBeats - Google Drive Music Player",
+  },
   description:
     "Stream MP3 and FLAC files from Google Drive with playlists, favorites, and access limited to only the files you choose.",
 };
@@ -32,14 +34,13 @@ export default function LandingPage() {
           Stream your music collection from Google Drive
         </h1>
         <p className="max-w-md text-lg text-muted-foreground">
-          Pick the folders you want, then stream them right here — with
-          playlists, favorites, and full playback controls. No uploads, no
-          syncing, no server needed.
+          Pick your folders, then play them right here. Playlists, favorites,
+          full playback controls. No uploads, no syncing, no extra apps.
         </p>
         <SignInButton className="mt-4 inline-flex h-11 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90" />
         <p className="text-xs text-muted-foreground">
-          DriveBeats can only access the files you choose — nothing else in your
-          Drive.
+          DriveBeats can only access the files you choose. Nothing else in
+          your Drive.
         </p>
       </div>
 
@@ -78,7 +79,7 @@ export default function LandingPage() {
             <h3 className="text-sm font-semibold">Import only what you want</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               Pick specific folders or audio files, then browse them in a
-              focused library — the rest of your Drive stays private.
+              focused library. The rest of your Drive stays private.
             </p>
           </div>
           <div className="text-center">
@@ -98,7 +99,7 @@ export default function LandingPage() {
             <h3 className="text-sm font-semibold">Full playback controls</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               Shuffle, repeat, volume, seekable progress bar, and keyboard
-              shortcuts — everything you&apos;d expect from a music player.
+              shortcuts. Everything you&apos;d expect from a music player.
             </p>
           </div>
           <div className="text-center">
@@ -107,8 +108,8 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Private by design</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              DriveBeats can only access the files and folders you explicitly
-              choose — the rest of your Drive is never visible.
+              DriveBeats only sees files and folders you explicitly share.
+              The rest of your Drive is never visible.
             </p>
           </div>
         </div>
@@ -207,8 +208,8 @@ export default function LandingPage() {
               Do my files get downloaded or stored on your servers?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              No. Your files stream directly from Google Drive to your browser —
-              they&apos;re never stored on our servers.
+              No. Your files stream straight from Google Drive to your
+              browser. Nothing is stored on our servers.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">

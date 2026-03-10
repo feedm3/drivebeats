@@ -18,11 +18,11 @@ const siteUrl = `${process.env.NEXT_PUBLIC_APP_URL}`;
 export const metadata: Metadata = {
   title: {
     default:
-      "DriveBeats — Stream Your Music Collection from Google Drive",
+      "DriveBeats | Stream Your Music Collection from Google Drive",
     template: "%s | DriveBeats",
   },
   description:
-    "Free online MP3 and FLAC player for Google Drive. Stream your music collection directly from Drive — no downloads, no uploads, no storage limits. Spotify-style playback with shuffle, repeat, and full controls.",
+    "Free online MP3 and FLAC player for Google Drive. Stream your music collection directly from Drive. No downloads, no uploads, no storage limits. Shuffle, repeat, and full playback controls.",
   keywords: [
     "google drive mp3 player",
     "google drive flac player",
@@ -55,13 +55,13 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: siteUrl,
     siteName: "DriveBeats",
-    title: "DriveBeats — Stream Your Music Collection from Google Drive",
+    title: "DriveBeats | Stream Your Music Collection from Google Drive",
     description:
       "Stream your MP3 and FLAC collection directly from Google Drive. Free, no uploads, Spotify-style controls.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "DriveBeats — Stream Your Music Collection from Google Drive",
+    title: "DriveBeats | Stream Your Music Collection from Google Drive",
     description:
       "Stream your MP3 and FLAC collection directly from Google Drive. Free, no uploads, Spotify-style controls.",
   },

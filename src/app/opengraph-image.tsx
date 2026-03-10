@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export const alt =
-  "DriveBeats — Stream Your Music Collection from Google Drive";
+  "DriveBeats | Stream Your Music Collection from Google Drive";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -62,7 +62,7 @@ export default async function Image() {
             marginTop: 12,
           }}
         >
-          Stream your music — no downloads, no uploads
+          Stream your music. No downloads, no uploads.
         </div>
       </div>
     ),

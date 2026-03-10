@@ -192,6 +192,7 @@ function useTrackDrag(
 
 export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const playTrack = usePlayerStore((s) => s.playTrack);
+  const togglePlay = usePlayerStore((s) => s.togglePlay);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const pendingTrackId = usePlayerStore((s) => s.pendingTrackId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -430,7 +431,11 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                     drag.overIndex === index ? drag.position : null
                   }
                   isReorderable={isEditablePlaylist}
-                  onPlay={() => playFromPlaylist(index)}
+                  onPlay={() =>
+                    isPlayingThisPlaylist && currentTrack?.id === track.fileId
+                      ? togglePlay()
+                      : playFromPlaylist(index)
+                  }
                   onRemove={() =>
                     handleRemoveTrack(track.fileId, track.fileName)
                   }

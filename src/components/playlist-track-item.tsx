@@ -45,7 +45,15 @@ export function PlaylistTrackItem({
         "group relative flex cursor-pointer items-center border-b py-4 transition-colors hover:bg-muted/50 data-[active]:bg-primary/6 last:border-b-0",
         isDragging && "opacity-30",
       )}
+      tabIndex={0}
+      role="button"
       onClick={onPlay}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onPlay();
+        }
+      }}
     >
       {dropIndicator === "above" && (
         <div className="absolute inset-x-0 top-0 z-10 h-0.5 bg-primary" />

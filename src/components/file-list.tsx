@@ -277,8 +277,8 @@ export function FileList({
       <div className="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground">
         <span>Nothing here yet</span>
         <span className="text-sm">
-          Add MP3 or FLAC files to this folder in Google Drive to see them
-          here.
+          Add audio files (MP3, FLAC, WAV, AAC, OGG) to this folder in Google
+          Drive to see them here.
         </span>
       </div>
     );

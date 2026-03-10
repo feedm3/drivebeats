@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     absolute: "DriveBeats - Google Drive Music Player",
   },
   description:
-    "Stream MP3 and FLAC files from Google Drive with playlists, favorites, and access limited to only the files you choose.",
+    "Stream MP3, FLAC, WAV, AAC, and OGG files from Google Drive with playlists, favorites, and access limited to only the files you choose.",
 };
 
 export default function LandingPage() {
@@ -146,7 +146,7 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Play</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Stream your MP3 and FLAC files, build playlists across folders,
+              Stream your MP3, FLAC, WAV, AAC, and OGG files, build playlists across folders,
               and control playback with shuffle, repeat, and keyboard shortcuts.
             </p>
           </div>
@@ -199,8 +199,8 @@ export default function LandingPage() {
               What file formats are supported?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              MP3 and FLAC files are supported. Import them directly, or import
-              a folder that contains them.
+              MP3, FLAC, WAV, AAC/M4A, and OGG files are supported. Import them
+              directly, or import a folder that contains them.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">

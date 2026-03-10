@@ -20,7 +20,7 @@ export default function PrivacyPolicyPage() {
 
         <h2 className="text-lg font-semibold text-foreground">What we do</h2>
         <p>
-          DriveBeats lets you stream MP3 and FLAC files stored in your Google
+          DriveBeats lets you stream audio files (MP3, FLAC, WAV, AAC, OGG) stored in your Google
           Drive. It does not upload or re-host your audio files on our servers.
         </p>
 

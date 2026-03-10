@@ -3,6 +3,10 @@ import type { DriveFile, PlaylistTrack } from "@/types";
 const AUDIO_EXTENSION_TO_MIME: Record<string, string> = {
   flac: "audio/flac",
   mp3: "audio/mpeg",
+  wav: "audio/wav",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  ogg: "audio/ogg",
 };
 
 export const SUPPORTED_AUDIO_MIME_TYPES = [
@@ -10,6 +14,12 @@ export const SUPPORTED_AUDIO_MIME_TYPES = [
   "audio/mpeg",
   "audio/mp3",
   "audio/x-flac",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/mp4",
+  "audio/aac",
+  "audio/x-m4a",
+  "audio/ogg",
 ] as const;
 
 export function inferAudioMimeType(name: string) {
@@ -45,7 +55,7 @@ export function playlistTrackToDriveFile(track: PlaylistTrack): DriveFile {
 }
 
 export function getTrackDisplayName(name: string) {
-  return name.replace(/\.(mp3|flac)$/i, "");
+  return name.replace(/\.(mp3|flac|wav|m4a|aac|ogg)$/i, "");
 }
 
 export function getSupportedAudioQuery(folderId: string) {

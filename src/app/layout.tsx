@@ -22,10 +22,13 @@ export const metadata: Metadata = {
     template: "%s | DriveBeats",
   },
   description:
-    "Free online MP3 and FLAC player for Google Drive. Stream your music collection directly from Drive. No downloads, no uploads, no storage limits. Shuffle, repeat, and full playback controls.",
+    "Free online music player for Google Drive. Stream MP3, FLAC, WAV, AAC, and OGG files directly from Drive. No downloads, no uploads, no storage limits. Shuffle, repeat, and full playback controls.",
   keywords: [
     "google drive mp3 player",
     "google drive flac player",
+    "google drive wav player",
+    "google drive aac player",
+    "google drive ogg player",
     "free mp3 player google drive",
     "free flac player google drive",
     "google drive music player",
@@ -57,13 +60,13 @@ export const metadata: Metadata = {
     siteName: "DriveBeats",
     title: "DriveBeats | Stream Your Music Collection from Google Drive",
     description:
-      "Stream your MP3 and FLAC collection directly from Google Drive. Free, no uploads, Spotify-style controls.",
+      "Stream your music collection directly from Google Drive. MP3, FLAC, WAV, AAC, OGG supported. Free, no uploads.",
   },
   twitter: {
     card: "summary_large_image",
     title: "DriveBeats | Stream Your Music Collection from Google Drive",
     description:
-      "Stream your MP3 and FLAC collection directly from Google Drive. Free, no uploads, Spotify-style controls.",
+      "Stream your music collection directly from Google Drive. MP3, FLAC, WAV, AAC, OGG supported. Free, no uploads.",
   },
   robots: {
     index: true,
@@ -94,7 +97,7 @@ export default function RootLayout({
     name: "DriveBeats",
     url: siteUrl,
     description:
-      "Free online MP3 and FLAC player for Google Drive. Stream your music collection directly from Drive with Spotify-style controls.",
+      "Free online music player for Google Drive. Stream MP3, FLAC, WAV, AAC, and OGG directly from Drive with Spotify-style controls.",
     applicationCategory: "MultimediaApplication",
     operatingSystem: "Any",
     offers: {
@@ -103,7 +106,7 @@ export default function RootLayout({
       priceCurrency: "USD",
     },
     featureList: [
-      "Stream MP3 and FLAC files from Google Drive",
+      "Stream MP3, FLAC, WAV, AAC, and OGG files from Google Drive",
       "Shuffle and repeat playback",
       "Browse folders",
       "Volume control",

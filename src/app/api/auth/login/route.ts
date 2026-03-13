@@ -1,17 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { AUTH_SESSION_COOKIE, parseAuthUser } from "@/lib/auth-session";
-import { getGoogleAuthUrl, refreshAccessToken } from "@/lib/google";
+import { AUTH_SESSION_COOKIE, parseAuthSession } from "@/lib/auth-session";
+import {
+  getGoogleAuthUrl,
+  hasGoogleDriveScope,
+  refreshAccessToken,
+} from "@/lib/google";
 
 const OAUTH_STATE_COOKIE = "oauth_state";
 const OAUTH_NONCE_COOKIE = "oauth_nonce";
 
 export async function GET(request: NextRequest) {
   const refreshToken = request.cookies.get("refresh_token")?.value ?? null;
-  const userSession = parseAuthUser(
+  const authSession = parseAuthSession(
     request.cookies.get(AUTH_SESSION_COOKIE)?.value,
   );
 
-  if (refreshToken && userSession) {
+  if (
+    refreshToken &&
+    authSession &&
+    hasGoogleDriveScope(authSession.grantedScopes)
+  ) {
     const data = await refreshAccessToken(refreshToken);
     if (!data.error) {
       return NextResponse.redirect(new URL("/app", request.url));

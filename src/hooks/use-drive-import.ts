@@ -6,6 +6,7 @@ import { SUPPORTED_AUDIO_MIME_TYPES } from "@/lib/audio";
 import {
   ensureGooglePickerLoaded,
   getGooglePickerConfig,
+  setActiveGooglePickerSession,
 } from "@/lib/google-picker";
 import { useAuthStore } from "@/stores/auth-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
@@ -87,6 +88,20 @@ export function useDriveImport() {
       await ensureGooglePickerLoaded();
 
       await new Promise<void>((resolve, reject) => {
+        let hasSettled = false;
+        let picker: GooglePickerInstance | undefined;
+
+        const finish = (settle: () => void) => {
+          if (hasSettled) {
+            return;
+          }
+
+          hasSettled = true;
+          setActiveGooglePickerSession(null);
+          picker?.setVisible(false);
+          settle();
+        };
+
         const folderView = new window.google.picker.DocsView(
           window.google.picker.ViewId.DOCS,
         )
@@ -113,7 +128,16 @@ export function useDriveImport() {
           .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED)
           .setCallback(async (data) => {
             if (data.action === window.google.picker.Action.CANCEL) {
-              resolve();
+              finish(resolve);
+              return;
+            }
+
+            if (data.action === window.google.picker.Action.ERROR) {
+              finish(() =>
+                reject(
+                  new Error("The Google Drive picker encountered an error."),
+                ),
+              );
               return;
             }
 
@@ -131,7 +155,7 @@ export function useDriveImport() {
               ];
 
               if (selectedFileIds.length === 0) {
-                resolve();
+                finish(resolve);
                 return;
               }
 
@@ -150,9 +174,9 @@ export function useDriveImport() {
                 );
               }
 
-              resolve();
+              finish(resolve);
             } catch (error) {
-              reject(error);
+              finish(() => reject(error));
             }
           });
 
@@ -160,7 +184,12 @@ export function useDriveImport() {
           pickerBuilder.setAppId(appId);
         }
 
-        pickerBuilder.build().setVisible(true);
+        picker = pickerBuilder.build();
+        setActiveGooglePickerSession({
+          picker,
+          close: () => finish(resolve),
+        });
+        picker.setVisible(true);
       });
     } catch (error) {
       console.error("Drive import failed:", error);

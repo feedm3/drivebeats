@@ -44,6 +44,7 @@ declare global {
       picker: {
         Action: {
           CANCEL: string;
+          ERROR: string;
           PICKED: string;
         };
         DocsViewMode: {

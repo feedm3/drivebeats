@@ -3,12 +3,23 @@ import { createPublicKey, verify as verifySignature } from "node:crypto";
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
-const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+export const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const GOOGLE_PROFILE_SCOPES = [
   "openid",
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/userinfo.profile",
 ];
+
+export interface GoogleTokenResponse {
+  access_token?: string;
+  error?: string;
+  error_description?: string;
+  expires_in?: number;
+  id_token?: string;
+  refresh_token?: string;
+  scope?: string;
+  token_type?: string;
+}
 
 interface GoogleJwtHeader {
   alg?: string;
@@ -150,6 +161,24 @@ export function getGoogleAuthUrl({
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
 }
 
+function toGrantedScopeSet(scopes: string | string[] | undefined) {
+  const values = Array.isArray(scopes)
+    ? scopes
+    : typeof scopes === "string"
+      ? scopes.split(/\s+/)
+      : [];
+
+  return new Set(values.filter((scope) => scope.length > 0));
+}
+
+export function parseGrantedGoogleScopes(scopes: string | undefined) {
+  return [...toGrantedScopeSet(scopes)];
+}
+
+export function hasGoogleDriveScope(scopes: string | string[] | undefined) {
+  return toGrantedScopeSet(scopes).has(GOOGLE_DRIVE_SCOPE);
+}
+
 export async function exchangeCodeForTokens(code: string) {
   const clientId = getRequiredEnv("GOOGLE_CLIENT_ID");
   const clientSecret = getRequiredEnv("GOOGLE_CLIENT_SECRET");
@@ -165,7 +194,7 @@ export async function exchangeCodeForTokens(code: string) {
       grant_type: "authorization_code",
     }),
   });
-  return res.json();
+  return (await res.json()) as GoogleTokenResponse;
 }
 
 export async function refreshAccessToken(refreshToken: string) {
@@ -181,7 +210,7 @@ export async function refreshAccessToken(refreshToken: string) {
       grant_type: "refresh_token",
     }),
   });
-  return res.json();
+  return (await res.json()) as GoogleTokenResponse;
 }
 
 export async function getUserFromIdToken(

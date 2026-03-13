@@ -1,6 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { AUTH_SESSION_COOKIE, serializeAuthUser } from "@/lib/auth-session";
-import { exchangeCodeForTokens, getUserFromIdToken } from "@/lib/google";
+import { AUTH_SESSION_COOKIE, serializeAuthSession } from "@/lib/auth-session";
+import {
+  exchangeCodeForTokens,
+  getUserFromIdToken,
+  hasGoogleDriveScope,
+  parseGrantedGoogleScopes,
+} from "@/lib/google";
 
 const OAUTH_STATE_COOKIE = "oauth_state";
 const OAUTH_NONCE_COOKIE = "oauth_nonce";
@@ -48,7 +53,8 @@ function redirectWithAuthError(
     | "oauth_denied"
     | "token_exchange_failed"
     | "authentication_failed"
-    | "missing_refresh_token",
+    | "missing_refresh_token"
+    | "missing_drive_scope",
 ) {
   const url = new URL("/", request.url);
   url.searchParams.set(AUTH_ERROR_PARAM, code);
@@ -89,6 +95,10 @@ export async function GET(request: NextRequest) {
     return redirectWithAuthError(request, "token_exchange_failed");
   }
 
+  if (!hasGoogleDriveScope(data.scope)) {
+    return redirectWithAuthError(request, "missing_drive_scope");
+  }
+
   if (!data.id_token || !data.refresh_token) {
     return redirectWithAuthError(request, "missing_refresh_token");
   }
@@ -113,13 +123,20 @@ export async function GET(request: NextRequest) {
     maxAge: 30 * 24 * 60 * 60, // 30 days
   });
 
-  response.cookies.set(AUTH_SESSION_COOKIE, serializeAuthUser(user), {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  });
+  response.cookies.set(
+    AUTH_SESSION_COOKIE,
+    serializeAuthSession({
+      user,
+      grantedScopes: parseGrantedGoogleScopes(data.scope),
+    }),
+    {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+    },
+  );
 
   return response;
 }

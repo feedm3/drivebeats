@@ -1,25 +1,20 @@
 import { createPublicKey, verify as verifySignature } from "node:crypto";
+import {
+  exchangeGoogleOAuthCode,
+  fetchGoogleSigningKeys,
+  getGoogleAuthUrlBase,
+  refreshGoogleOAuthAccessToken,
+  type GoogleJwk,
+  type GoogleJwksResponse,
+  type GoogleTokenResponse,
+} from "@/lib/google-api";
 
-const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
-const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 export const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const GOOGLE_PROFILE_SCOPES = [
   "openid",
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/userinfo.profile",
 ];
-
-export interface GoogleTokenResponse {
-  access_token?: string;
-  error?: string;
-  error_description?: string;
-  expires_in?: number;
-  id_token?: string;
-  refresh_token?: string;
-  scope?: string;
-  token_type?: string;
-}
 
 interface GoogleJwtHeader {
   alg?: string;
@@ -36,19 +31,6 @@ interface GoogleIdTokenClaims {
   nonce?: string;
   picture?: string;
   sub: string;
-}
-
-interface GoogleJwk {
-  alg?: string;
-  e: string;
-  kid: string;
-  kty: string;
-  n: string;
-  use?: string;
-}
-
-interface GoogleJwksResponse {
-  keys?: GoogleJwk[];
 }
 
 let googleJwksCache: {
@@ -95,7 +77,7 @@ async function getGoogleSigningKeys() {
     return googleJwksCache.keys;
   }
 
-  const res = await fetch(GOOGLE_JWKS_URL);
+  const res = await fetchGoogleSigningKeys();
   if (!res.ok) {
     throw new Error("Failed to load Google signing keys");
   }
@@ -158,7 +140,7 @@ export function getGoogleAuthUrl({
     params.set("prompt", prompt);
   }
 
-  return `${GOOGLE_AUTH_URL}?${params.toString()}`;
+  return `${getGoogleAuthUrlBase()}?${params.toString()}`;
 }
 
 function toGrantedScopeSet(scopes: string | string[] | undefined) {
@@ -183,33 +165,25 @@ export async function exchangeCodeForTokens(code: string) {
   const clientId = getRequiredEnv("GOOGLE_CLIENT_ID");
   const clientSecret = getRequiredEnv("GOOGLE_CLIENT_SECRET");
   const appUrl = getRequiredEnv("NEXT_PUBLIC_APP_URL");
-  const res = await fetch(GOOGLE_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      code,
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: `${appUrl}/api/auth/callback`,
-      grant_type: "authorization_code",
-    }),
-  });
+
+  const res = await exchangeGoogleOAuthCode(
+    { clientId, clientSecret },
+    code,
+    `${appUrl}/api/auth/callback`,
+  );
+
   return (await res.json()) as GoogleTokenResponse;
 }
 
 export async function refreshAccessToken(refreshToken: string) {
   const clientId = getRequiredEnv("GOOGLE_CLIENT_ID");
   const clientSecret = getRequiredEnv("GOOGLE_CLIENT_SECRET");
-  const res = await fetch(GOOGLE_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      refresh_token: refreshToken,
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: "refresh_token",
-    }),
-  });
+
+  const res = await refreshGoogleOAuthAccessToken(
+    { clientId, clientSecret },
+    refreshToken,
+  );
+
   return (await res.json()) as GoogleTokenResponse;
 }
 

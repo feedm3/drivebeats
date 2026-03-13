@@ -3,6 +3,10 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { getSupportedAudioQuery } from "@/lib/audio";
+import {
+  listGoogleDriveFiles,
+  type GoogleDriveFilesListResponse,
+} from "@/lib/google-api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import {
@@ -39,14 +43,9 @@ export function useFolderContents() {
           supportsAllDrives: "true",
           includeItemsFromAllDrives: "true",
         });
-        const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
+        const res = await listGoogleDriveFiles(token, params);
         if (res.ok) {
-          const data: { files?: DriveFile[] } = await res.json();
+          const data = (await res.json()) as GoogleDriveFilesListResponse;
           const files = data.files ?? [];
           useFolderCacheStore.getState().setFiles(folderId, files);
           return files;

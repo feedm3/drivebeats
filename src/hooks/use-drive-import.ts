@@ -4,6 +4,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { SUPPORTED_AUDIO_MIME_TYPES } from "@/lib/audio";
 import {
+  getGoogleDriveFileMetadata,
+  type GoogleDriveFileMetadataResponse,
+} from "@/lib/google-api";
+import {
   ensureGooglePickerLoaded,
   getGooglePickerConfig,
   setActiveGooglePickerSession,
@@ -13,14 +17,6 @@ import { useImportedDriveStore } from "@/stores/imported-drive-store";
 import type { DriveFile } from "@/types";
 
 const DRIVE_METADATA_FIELDS = "id,name,mimeType,size,parents";
-
-interface GoogleDriveFileMetadataResponse {
-  id?: string;
-  name?: string;
-  mimeType?: string;
-  size?: string;
-  parents?: string[];
-}
 
 function toDriveFile(file: GoogleDriveFileMetadataResponse): DriveFile | null {
   if (!file.id || !file.name || !file.mimeType) {
@@ -42,11 +38,10 @@ async function fetchPickedFileMetadata(fileIds: string[], accessToken: string) {
       fields: DRIVE_METADATA_FIELDS,
       supportsAllDrives: "true",
     });
-    const response = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${fileId}?${params.toString()}`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      },
+    const response = await getGoogleDriveFileMetadata(
+      fileId,
+      accessToken,
+      params,
     );
 
     if (!response.ok) {

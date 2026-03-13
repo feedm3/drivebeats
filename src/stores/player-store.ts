@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { downloadGoogleDriveFileMedia } from "@/lib/google-api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
@@ -185,13 +186,7 @@ export const usePlayerStore = create<PlayerState>()(
           }
 
           const fetchTrack = (token: string) =>
-            fetch(
-              `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
-              {
-                headers: { Authorization: `Bearer ${token}` },
-                signal: controller.signal,
-              },
-            );
+            downloadGoogleDriveFileMedia(fileId, token, controller.signal);
 
           let res = await fetchTrack(accessToken);
           if (res.status === 401) {

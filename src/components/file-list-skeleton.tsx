@@ -73,6 +73,7 @@ export function FileListSkeleton() {
             </TableHead>
             <TableHead className="h-11 w-9 px-0.5" />
             <TableHead className="h-11 w-9 px-0.5" />
+            <TableHead className="h-11 w-9 px-0.5" />
             <TableHead className="h-11 w-[96px] px-4 text-right">
               <span className="text-xs font-semibold tracking-[0.16em] uppercase">
                 Size

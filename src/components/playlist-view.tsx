@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ListMusic, Pencil, Play, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, ListMusic, Pencil, Play, Trash2 } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { PlaylistTrackItem } from "@/components/playlist-track-item";
 import { Button } from "@/components/ui/button";
@@ -18,9 +18,10 @@ import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { playlistTrackToDriveFile } from "@/lib/audio";
 import { cn, formatRelativeDate } from "@/lib/utils";
 import { useLibraryStore } from "@/stores/library-store";
+import { useEffectiveOfflineOnlyMode, useOfflineStore } from "@/stores/offline-store";
 import { usePlayerStore } from "@/stores/player-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
-import type { DriveFile, TrackCollection } from "@/types";
+import type { DriveFile, PlaylistTrack, TrackCollection } from "@/types";
 import {
   FAVORITES_COLLECTION_ID,
   RECENTLY_PLAYED_COLLECTION_ID,
@@ -31,8 +32,8 @@ interface PlaylistViewProps {
   onBack?: () => void;
 }
 
-function tracksToFiles(collection: TrackCollection): DriveFile[] {
-  return collection.tracks.map(playlistTrackToDriveFile);
+function tracksToFiles(tracks: PlaylistTrack[]): DriveFile[] {
+  return tracks.map(playlistTrackToDriveFile);
 }
 
 function getCollectionRemoveLabel(collectionId: string) {
@@ -199,6 +200,10 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const playingPlaylistId = usePlayerStore((s) => s.playingPlaylistId);
   const libraryTracks = useLibraryStore((s) => s.tracks);
   const playerBarPadding = usePlayerBarPadding();
+  const effectiveOfflineOnly = useEffectiveOfflineOnlyMode();
+  const offlineItems = useOfflineStore((state) => state.items);
+  const queuePlaylistDownload = useOfflineStore((state) => state.queuePlaylistDownload);
+
 
   const removeTrack = usePlaylistStore((s) => s.removeTrack);
   const reorderTracks = usePlaylistStore((s) => s.reorderTracks);
@@ -218,6 +223,9 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const isEditablePlaylist =
     collection.id !== FAVORITES_COLLECTION_ID &&
     collection.id !== RECENTLY_PLAYED_COLLECTION_ID;
+  const isSystemCollection =
+    collection.id === FAVORITES_COLLECTION_ID ||
+    collection.id === RECENTLY_PLAYED_COLLECTION_ID;
 
   const handleReorder = useCallback(
     (from: number, to: number) => {
@@ -229,18 +237,24 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
 
   const { drag, onPointerDown } = useTrackDrag(listRef, handleReorder);
 
+  const visibleTracks = effectiveOfflineOnly
+    ? collection.tracks.filter(
+        (track) => offlineItems[track.fileId]?.status === "cached",
+      )
+    : collection.tracks;
+
   const playFromPlaylist = useCallback(
     (index: number) => {
-      const files = tracksToFiles(collection);
+      const files = tracksToFiles(visibleTracks);
       void playTrack(files[index], files, [], collection.id);
     },
-    [collection, playTrack],
+    [collection.id, playTrack, visibleTracks],
   );
 
   const handlePlayAll = useCallback(() => {
-    if (collection.tracks.length === 0) return;
+    if (visibleTracks.length === 0) return;
     playFromPlaylist(0);
-  }, [collection.tracks.length, playFromPlaylist]);
+  }, [playFromPlaylist, visibleTracks.length]);
 
   const handleRename = useCallback(() => {
     const name = editName.trim();
@@ -267,6 +281,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
             fileName,
             mimeType: track?.mimeType,
             parents: track?.parents,
+            size: track?.size,
           },
           false,
         );
@@ -345,7 +360,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
           <Button
             size="sm"
             onClick={handlePlayAll}
-            disabled={collection.tracks.length === 0}
+            disabled={visibleTracks.length === 0}
           >
             <Play className="size-3.5" />
             Play All
@@ -360,6 +375,25 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                 aria-label="Clear recently played"
               >
                 <Trash2 className="size-4" />
+              </Button>
+            </IconTooltip>
+          ) : null}
+          {!isSystemCollection ? (
+            <IconTooltip label="Make playlist available offline">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                onClick={() =>
+                  void queuePlaylistDownload(
+                    collection.id,
+                    collection.name,
+                    collection.tracks,
+                  )
+                }
+                aria-label="Make playlist available offline"
+              >
+                <Download className="size-4" />
               </Button>
             </IconTooltip>
           ) : null}
@@ -381,7 +415,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
 
       <Separator className="my-3" />
 
-      {collection.tracks.length === 0 ? (
+      {visibleTracks.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
           <div className="flex size-14 items-center justify-center rounded-2xl bg-muted/30">
             <ListMusic className="size-6" />
@@ -404,7 +438,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                   Name
                 </span>
               </div>
-              {collection.tracks.map((track, index) => {
+              {visibleTracks.map((track, index) => {
                 const lastPlayedAt =
                   isRecentlyPlayed
                     ? libraryTracks[track.fileId]?.lastPlayedAt

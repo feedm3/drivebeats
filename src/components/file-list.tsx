@@ -4,6 +4,7 @@ import { Folder, Music4, Search } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { AddToPlaylistPopover } from "@/components/add-to-playlist-popover";
 import { FavoriteToggleButton } from "@/components/favorite-toggle-button";
+import { OfflineToggleButton } from "@/components/offline-toggle-button";
 import {
   FILE_TABLE_SHELL_CLASS,
   FileListSkeleton,
@@ -26,6 +27,7 @@ import {
   getHighlightedTextParts,
 } from "@/lib/file-search";
 import { cn } from "@/lib/utils";
+import { useOfflineStore, useEffectiveOfflineOnlyMode } from "@/stores/offline-store";
 import { usePlayerStore } from "@/stores/player-store";
 import type { DriveFile, FolderEntry } from "@/types";
 import { FOLDER_MIME } from "@/types";
@@ -215,6 +217,9 @@ const FileListRow = memo(function FileListRow({
         ) : null}
       </TableCell>
       <TableCell className="w-9 px-0.5">
+        <OfflineToggleButton file={file} className={rowActionClassName} />
+      </TableCell>
+      <TableCell className="w-9 px-0.5">
         <AddToPlaylistPopover file={file} className={rowActionClassName} />
       </TableCell>
       <TableCell className="text-muted-foreground text-right tabular-nums">
@@ -238,6 +243,8 @@ export function FileList({
   const pendingTrackId = usePlayerStore((state) => state.pendingTrackId);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
   const playerBarPadding = usePlayerBarPadding();
+  const effectiveOfflineOnly = useEffectiveOfflineOnlyMode();
+  const offlineItems = useOfflineStore((state) => state.items);
   const [nameSortDirection, setNameSortDirection] =
     useState<NameSortDirection>("asc");
   const activeTrackId = pendingTrackId ?? currentTrackId;
@@ -252,10 +259,15 @@ export function FileList({
     () => sortFilesByName(files, nameSortDirection),
     [files, nameSortDirection],
   );
-  const filteredFiles = useMemo(
-    () => filterFilesBySearch(sortedFiles, searchQuery),
-    [sortedFiles, searchQuery],
-  );
+  const filteredFiles = useMemo(() => {
+    const searchFiltered = filterFilesBySearch(sortedFiles, searchQuery);
+    if (!effectiveOfflineOnly) return searchFiltered;
+
+    return searchFiltered.filter((file) => {
+      if (isFolder(file)) return true;
+      return offlineItems[file.id]?.status === "cached";
+    });
+  }, [effectiveOfflineOnly, offlineItems, sortedFiles, searchQuery]);
   const playableTracks = useMemo(
     () => filteredFiles.filter((file) => !isFolder(file)),
     [filteredFiles],
@@ -343,6 +355,7 @@ export function FileList({
                     </span>
                   </button>
                 </TableHead>
+                <TableHead className="h-11 w-9 px-0.5" />
                 <TableHead className="h-11 w-9 px-0.5" />
                 <TableHead className="h-11 w-9 px-0.5" />
                 <TableHead className="h-11 w-[96px] px-4 text-right">

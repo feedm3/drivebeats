@@ -19,6 +19,7 @@ import {
   getRecentlyPlayedTracks,
   useLibraryStore,
 } from "@/stores/library-store";
+import { useOfflineStore } from "@/stores/offline-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
 import type { FolderEntry, TrackCollection } from "@/types";
 import {
@@ -65,6 +66,23 @@ function AppContent() {
   });
   const [mobileTab, setMobileTab] = useState<"files" | "playlists">("files");
   const [mobilePlaylistId, setMobilePlaylistId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const offlineStore = useOfflineStore.getState();
+    void offlineStore.hydrateFromStorage();
+
+    const applyOnlineState = () => {
+      useOfflineStore.getState().setNetworkOffline(!navigator.onLine);
+    };
+
+    applyOnlineState();
+    window.addEventListener("online", applyOnlineState);
+    window.addEventListener("offline", applyOnlineState);
+    return () => {
+      window.removeEventListener("online", applyOnlineState);
+      window.removeEventListener("offline", applyOnlineState);
+    };
+  }, []);
 
   const collections: TrackCollection[] = useMemo(
     () => [

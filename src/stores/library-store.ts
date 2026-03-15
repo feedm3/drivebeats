@@ -28,6 +28,7 @@ function toLibraryMeta(
     fileName: track.fileName,
     mimeType: track.mimeType ?? existing?.mimeType,
     parents: track.parents ?? existing?.parents,
+    size: track.size ?? existing?.size,
     isFavorite: existing?.isFavorite,
     lastPlayedAt: existing?.lastPlayedAt,
     playCount: existing?.playCount ?? 0,
@@ -47,11 +48,12 @@ export function getFavoriteTracks(
   return Object.values(tracks)
     .filter((track) => track.isFavorite)
     .sort(sortTracksByName)
-    .map(({ fileId, fileName, mimeType, parents }) => ({
+    .map(({ fileId, fileName, mimeType, parents, size }) => ({
       fileId,
       fileName,
       mimeType,
       parents,
+      size,
     }));
 }
 
@@ -63,11 +65,12 @@ export function getRecentlyPlayedTracks(
     .filter((track) => track.lastPlayedAt)
     .sort((a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0))
     .slice(0, limit)
-    .map(({ fileId, fileName, mimeType, parents }) => ({
+    .map(({ fileId, fileName, mimeType, parents, size }) => ({
       fileId,
       fileName,
       mimeType,
       parents,
+      size,
     }));
 }
 

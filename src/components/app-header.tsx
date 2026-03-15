@@ -1,10 +1,11 @@
 "use client";
 
-import { ChevronDown, LogOut, UserRound } from "lucide-react";
+import { ChevronDown, HardDriveDownload, LogOut, UserRound } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { OfflineStorageDialog } from "@/components/offline-storage-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +25,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
 import { useLibraryStore } from "@/stores/library-store";
+import { useOfflineStore } from "@/stores/offline-store";
 import { usePlayerStore } from "@/stores/player-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
 
@@ -111,7 +113,11 @@ export function AppHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [offlineStorageOpen, setOfflineStorageOpen] = useState(false);
   const user = useAuthStore((state) => state.user);
+  const offlineOnlyMode = useOfflineStore((state) => state.offlineOnlyMode);
+  const isNetworkOffline = useOfflineStore((state) => state.isNetworkOffline);
+  const setOfflineOnlyMode = useOfflineStore((state) => state.setOfflineOnlyMode);
   const userLabel = user ? getUserLabel(user.name, user.email) : null;
   const userInitials = user ? getUserInitials(user.name, user.email) : "";
 
@@ -147,6 +153,8 @@ export function AppHeader() {
     useFolderCacheStore.getState().clear();
     useImportedDriveStore.getState().clear();
     useImportedDriveStore.persist.clearStorage();
+
+    await useOfflineStore.getState().clearAllOfflineDataOnLogout();
 
     for (const key of APP_STORAGE_KEYS) {
       window.localStorage.removeItem(key);
@@ -232,6 +240,24 @@ export function AppHeader() {
                   <div className="mx-1 my-1 h-px bg-border/60" />
                   <button
                     type="button"
+                    onClick={() => setOfflineOnlyMode(!offlineOnlyMode)}
+                    className="flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <span>Play offline only</span>
+                    <span className="text-xs text-foreground">
+                      {isNetworkOffline ? "Auto (offline)" : offlineOnlyMode ? "On" : "Off"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOfflineStorageOpen(true)}
+                    className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <HardDriveDownload className="size-4" />
+                    Offline storage
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setLogoutOpen(true)}
                     className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-destructive/8 hover:text-destructive"
                   >
@@ -244,6 +270,10 @@ export function AppHeader() {
           </div>
         </div>
       </div>
+      <OfflineStorageDialog
+        open={offlineStorageOpen}
+        onOpenChange={setOfflineStorageOpen}
+      />
       <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
         <DialogContent>
           <DialogTitle>Log out and delete local data</DialogTitle>

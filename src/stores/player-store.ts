@@ -1,9 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { downloadGoogleDriveFileMedia } from "@/lib/google-api";
+import { getOfflineBlobUrl } from "@/lib/offline-cache";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
+import { useOfflineStore } from "@/stores/offline-store";
 import type { DriveFile, FolderEntry } from "@/types";
 import { FOLDER_MIME, INITIAL_STACK } from "@/types";
 
@@ -67,6 +69,31 @@ function deriveFolderStack(track: DriveFile): FolderEntry[] {
   }
 
   return [];
+}
+
+function isEffectiveOfflineOnlyMode() {
+  const state = useOfflineStore.getState();
+  return state.offlineOnlyMode || state.isNetworkOffline;
+}
+
+function isTrackPlayable(track: DriveFile) {
+  if (!isEffectiveOfflineOnlyMode()) return true;
+  return useOfflineStore.getState().items[track.id]?.status === "cached";
+}
+
+function findNextPlayableIndex(playlist: DriveFile[], startIndex: number) {
+  if (playlist.length === 0) return -1;
+
+  if (!isEffectiveOfflineOnlyMode()) return startIndex;
+
+  for (let i = 0; i < playlist.length; i++) {
+    const candidate = playlist[(startIndex + i) % playlist.length];
+    if (candidate && isTrackPlayable(candidate)) {
+      return (startIndex + i) % playlist.length;
+    }
+  }
+
+  return -1;
 }
 
 interface PlayerState {
@@ -153,6 +180,7 @@ export const usePlayerStore = create<PlayerState>()(
         const audio = get().initAudio();
         const { blobCache } = get();
         const cached = blobCache.get(fileId);
+        const offlineBlobUrl = await getOfflineBlobUrl(fileId);
 
         const applySource = async (source: string) => {
           audio.pause();
@@ -175,6 +203,18 @@ export const usePlayerStore = create<PlayerState>()(
           await applySource(cached);
           set({ isLoading: false });
           return true;
+        }
+
+        if (offlineBlobUrl) {
+          if (controller.signal.aborted) return false;
+          await applySource(offlineBlobUrl);
+          set({ isLoading: false });
+          return true;
+        }
+
+        if (isEffectiveOfflineOnlyMode()) {
+          set({ isLoading: false });
+          return false;
         }
 
         set({ isLoading: true });
@@ -242,6 +282,10 @@ export const usePlayerStore = create<PlayerState>()(
 
       playTrack: async (track, playlist, folderStack, playlistId) => {
         get().initAudio();
+
+        if (!isTrackPlayable(track)) {
+          return;
+        }
         const index = playlist.findIndex((f) => f.id === track.id);
 
         // Mark the target row active immediately, but keep currentTrack
@@ -301,8 +345,11 @@ export const usePlayerStore = create<PlayerState>()(
           }
         }
 
+        const playableIndex = findNextPlayableIndex(playlist, nextIndex);
+        if (playableIndex < 0) return;
+
         await get().playTrack(
-          playlist[nextIndex],
+          playlist[playableIndex],
           playlist,
           get().playingFolderStack,
           get().playingPlaylistId ?? undefined,
@@ -320,8 +367,10 @@ export const usePlayerStore = create<PlayerState>()(
 
         const prevIndex =
           currentIndex - 1 < 0 ? playlist.length - 1 : currentIndex - 1;
+        const playableIndex = findNextPlayableIndex(playlist, prevIndex);
+        if (playableIndex < 0) return;
         await get().playTrack(
-          playlist[prevIndex],
+          playlist[playableIndex],
           playlist,
           get().playingFolderStack,
           get().playingPlaylistId ?? undefined,

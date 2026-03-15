@@ -29,6 +29,7 @@ export interface PlaylistTrack {
   fileName: string;
   mimeType?: string;
   parents?: string[];
+  size?: string;
 }
 
 export interface Playlist {

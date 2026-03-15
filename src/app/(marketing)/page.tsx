@@ -184,17 +184,6 @@ export default function LandingPage() {
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
             <summary className="cursor-pointer text-sm font-semibold">
-              Can you see or modify my files?
-            </summary>
-            <p className="mt-2 text-sm text-muted-foreground">
-              DriveBeats is built to read and play the files you choose. It does
-              not upload, edit, rename, move, or delete your Drive files.
-              Access is limited to the items you select with Google Picker,
-              rather than your entire Drive.
-            </p>
-          </details>
-          <details className="rounded-lg border border-border px-4 py-3">
-            <summary className="cursor-pointer text-sm font-semibold">
               What permissions does DriveBeats need?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -209,11 +198,23 @@ export default function LandingPage() {
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
             <summary className="cursor-pointer text-sm font-semibold">
-              Where are my playlists, favorites, and recently played tracks stored?
+              Can you see or modify my files?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              They are stored locally in your browser on this device. DriveBeats
-              does not write them back to your Google Drive.
+              DriveBeats is built to read and play the files you choose. It does
+              not upload, edit, rename, move, or delete your Drive files.
+              Access is limited to the items you select with Google Picker,
+              rather than your entire Drive.
+            </p>
+          </details>
+          <details className="rounded-lg border border-border px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold">
+              Do my files get downloaded or stored on your servers?
+            </summary>
+            <p className="mt-2 text-sm text-muted-foreground">
+              No. DriveBeats plays your audio from Google Drive in your browser.
+              Your files are not uploaded, copied, or stored on DriveBeats
+              servers.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -223,17 +224,6 @@ export default function LandingPage() {
             <p className="mt-2 text-sm text-muted-foreground">
               DriveBeats is built for MP3, FLAC, WAV, AAC/M4A, and OGG files.
               You can import individual tracks or folders that contain them.
-            </p>
-          </details>
-          <details className="rounded-lg border border-border px-4 py-3">
-            <summary className="cursor-pointer text-sm font-semibold">
-              What happens if I log out?
-            </summary>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Logging out removes your local DriveBeats data from this browser,
-              including imported items, playlists, favorites, recently played
-              tracks, and saved player state. Your files in Google Drive stay
-              exactly as they are.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -257,22 +247,33 @@ export default function LandingPage() {
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
             <summary className="cursor-pointer text-sm font-semibold">
+              Where is my DriveBeats data stored?
+            </summary>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Playlists, favorites, recently played tracks, and imported items
+              are stored locally in your browser on this device. DriveBeats
+              does not write them back to your Google Drive.
+            </p>
+          </details>
+          <details className="rounded-lg border border-border px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold">
+              What happens if I log out?
+            </summary>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Logging out removes your local DriveBeats data from this browser,
+              including imported items, playlists, favorites, recently played
+              tracks, and saved player state. Your files in Google Drive stay
+              exactly as they are.
+            </p>
+          </details>
+          <details className="rounded-lg border border-border px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold">
               What happens when I add new songs to an imported folder?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
               When you open or refresh that folder in DriveBeats, it loads the
               current contents from Google Drive. Playlists stay the way you set
               them up until you change them.
-            </p>
-          </details>
-          <details className="rounded-lg border border-border px-4 py-3">
-            <summary className="cursor-pointer text-sm font-semibold">
-              Do my files get downloaded or stored on your servers?
-            </summary>
-            <p className="mt-2 text-sm text-muted-foreground">
-              No. DriveBeats plays your audio from Google Drive in your browser.
-              Your files are not uploaded, copied, or stored on DriveBeats
-              servers.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">

@@ -39,8 +39,8 @@ export default function LandingPage() {
         </p>
         <SignInButton className="mt-4 inline-flex h-11 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90" />
         <p className="text-xs text-muted-foreground">
-          DriveBeats can only access the files you choose. Nothing else in
-          your Drive.
+          DriveBeats can only access the files you choose. Nothing else in your
+          Drive.
         </p>
       </div>
 
@@ -108,8 +108,8 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Private by design</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              DriveBeats only sees files and folders you explicitly share.
-              The rest of your Drive is never visible.
+              DriveBeats only sees files and folders you explicitly share. The
+              rest of your Drive is never visible.
             </p>
           </div>
         </div>
@@ -146,8 +146,9 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Play</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Stream your MP3, FLAC, WAV, AAC, and OGG files, build playlists across folders,
-              and control playback with shuffle, repeat, and keyboard shortcuts.
+              Stream your MP3, FLAC, WAV, AAC, and OGG files, build playlists
+              across folders, and control playback with shuffle, repeat, and
+              keyboard shortcuts.
             </p>
           </div>
         </div>
@@ -164,8 +165,21 @@ export default function LandingPage() {
               Is DriveBeats really free?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              Yes, completely free. There are no premium tiers, no ads, and no
-              usage limits.
+              Yes. DriveBeats is free to use, with no paid tiers and no ads.
+            </p>
+          </details>
+          <details className="rounded-lg border border-border px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold">
+              How does signing up work?
+            </summary>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Click &ldquo;Sign in with Google&rdquo; and you&rsquo;ll be taken
+              to Google&rsquo;s sign-in and consent screen, where you choose
+              which account to use. After that, you&rsquo;re sent back to
+              DriveBeats and can pick the folders or audio files you want to use
+              with Google Picker. DriveBeats never sees your Google password,
+              and you can remove access at any time from your Google Account
+              settings.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -173,9 +187,10 @@ export default function LandingPage() {
               Can you see or modify my files?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              No. DriveBeats can only access the folders and files you select in
-              Google Picker. It cannot browse your whole Drive, and it cannot
-              modify, delete, or share your files.
+              DriveBeats is built to read and play the files you choose. It does
+              not upload, edit, rename, move, or delete your Drive files.
+              Access is limited to the items you select with Google Picker,
+              rather than your entire Drive.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -184,14 +199,21 @@ export default function LandingPage() {
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
               DriveBeats requests{" "}
-              <code>https://www.googleapis.com/auth/drive.file</code> so it can
-              stream the files you choose and open the folders you import
-              through Google Picker. It also requests <code>openid</code>,{" "}
-              <code>userinfo.email</code>, and <code>userinfo.profile</code> so
-              the app can identify which Google account is signed in and show
-              that account in the app. That keeps Drive access limited to the
-              items you explicitly share with DriveBeats, instead of your entire
-              Drive.
+              <code>https://www.googleapis.com/auth/drive.file</code> so you can
+              choose the folders and audio files you want to use without
+              granting access to your entire Drive. It also requests{" "}
+              <code>openid</code>, <code>userinfo.email</code>, and{" "}
+              <code>userinfo.profile</code> so the app can sign you in and show
+              your account inside DriveBeats.
+            </p>
+          </details>
+          <details className="rounded-lg border border-border px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold">
+              Where are my playlists, favorites, and recently played tracks stored?
+            </summary>
+            <p className="mt-2 text-sm text-muted-foreground">
+              They are stored locally in your browser on this device. DriveBeats
+              does not write them back to your Google Drive.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -199,8 +221,48 @@ export default function LandingPage() {
               What file formats are supported?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              MP3, FLAC, WAV, AAC/M4A, and OGG files are supported. Import them
-              directly, or import a folder that contains them.
+              DriveBeats is built for MP3, FLAC, WAV, AAC/M4A, and OGG files.
+              You can import individual tracks or folders that contain them.
+            </p>
+          </details>
+          <details className="rounded-lg border border-border px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold">
+              What happens if I log out?
+            </summary>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Logging out removes your local DriveBeats data from this browser,
+              including imported items, playlists, favorites, recently played
+              tracks, and saved player state. Your files in Google Drive stay
+              exactly as they are.
+            </p>
+          </details>
+          <details className="rounded-lg border border-border px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold">
+              Can I use DriveBeats on my phone or tablet?
+            </summary>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Yes. DriveBeats works in modern mobile and desktop browsers, so
+              you can browse your library and control playback on phones,
+              tablets, and computers.
+            </p>
+          </details>
+          <details className="rounded-lg border border-border px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold">
+              Does DriveBeats work offline?
+            </summary>
+            <p className="mt-2 text-sm text-muted-foreground">
+              No. DriveBeats plays music from Google Drive in your browser, so
+              you need an internet connection to load and play tracks.
+            </p>
+          </details>
+          <details className="rounded-lg border border-border px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold">
+              What happens when I add new songs to an imported folder?
+            </summary>
+            <p className="mt-2 text-sm text-muted-foreground">
+              When you open or refresh that folder in DriveBeats, it loads the
+              current contents from Google Drive. Playlists stay the way you set
+              them up until you change them.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -208,8 +270,9 @@ export default function LandingPage() {
               Do my files get downloaded or stored on your servers?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              No. Your files stream straight from Google Drive to your
-              browser. Nothing is stored on our servers.
+              No. DriveBeats plays your audio from Google Drive in your browser.
+              Your files are not uploaded, copied, or stored on DriveBeats
+              servers.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">

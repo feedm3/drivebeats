@@ -63,9 +63,9 @@ function DialogDescription({
 
 export {
   Dialog,
-  DialogTrigger,
   DialogClose,
   DialogContent,
-  DialogTitle,
   DialogDescription,
+  DialogTitle,
+  DialogTrigger,
 };

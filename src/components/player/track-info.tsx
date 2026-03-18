@@ -54,9 +54,7 @@ export function TrackInfo({ onNavigateToTrack }: TrackInfoProps) {
             {title}
           </button>
         ) : (
-          <span className="block truncate text-sm font-semibold">
-            {title}
-          </span>
+          <span className="block truncate text-sm font-semibold">{title}</span>
         )}
         {subtitle && (
           <span className="block truncate text-xs text-muted-foreground">

@@ -1,17 +1,17 @@
 import {
   downloadGoogleDriveFileMedia,
-  getGoogleDriveFileMetadata,
   type GoogleDriveFileMetadataResponse,
+  getGoogleDriveFileMetadata,
 } from "@/lib/google-api";
 import * as offlineDb from "@/lib/offline-db";
 import { useAuthStore } from "@/stores/auth-store";
+import { getFavoriteTracks, useLibraryStore } from "@/stores/library-store";
 import {
-  useOfflineStore,
   type OfflineTrackStatus,
+  useOfflineStore,
 } from "@/stores/offline-store";
 import { usePlayerStore } from "@/stores/player-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
-import { useLibraryStore, getFavoriteTracks } from "@/stores/library-store";
 import type { PlaylistTrack } from "@/types";
 import {
   FAVORITES_COLLECTION_ID,
@@ -22,7 +22,6 @@ const MAX_CONCURRENT = 3;
 const MAX_RETRIES = 3;
 const BACKOFF_BASE_MS = 1000;
 
-let activeDownloads = 0;
 let abortController: AbortController | null = null;
 let queuePromise: Promise<void> | null = null;
 const cancelledFileIds = new Set<string>();
@@ -195,12 +194,7 @@ async function runQueue(): Promise<void> {
   const runNext = async (): Promise<void> => {
     while (i < pending.length && !signal.aborted) {
       const track = pending[i++];
-      activeDownloads++;
-      try {
-        await downloadSingleTrack(track, signal);
-      } finally {
-        activeDownloads--;
-      }
+      await downloadSingleTrack(track, signal);
       updateAllCollectionProgress();
     }
   };
@@ -522,7 +516,6 @@ export async function syncCollection(collectionId: string): Promise<void> {
 export async function removeAllDownloads(): Promise<void> {
   abortController?.abort();
   abortController = null;
-  activeDownloads = 0;
   cancelledFileIds.clear();
   queuePromise = null;
 

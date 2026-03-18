@@ -84,8 +84,8 @@ export default function PrivacyPolicyPage() {
         </p>
         <p>
           Inside the app, you can delete synced playlists and favorites from the
-          Storage &amp; data screen. Logging out clears local device data, but it
-          does not delete your synced cloud data unless you explicitly choose
+          Storage &amp; data screen. Logging out clears local device data, but
+          it does not delete your synced cloud data unless you explicitly choose
           that delete action.
         </p>
 

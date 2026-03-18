@@ -74,6 +74,7 @@ function AccountAvatar({
 
   if (picture && showPicture) {
     return (
+      // biome-ignore lint/performance/noImgElement: Google profile images use dynamic remote URLs that are not routed through next/image.
       <img
         alt=""
         aria-hidden="true"

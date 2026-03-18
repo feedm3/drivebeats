@@ -186,11 +186,11 @@ export default function LandingPage() {
               What permissions does DriveBeats need?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              DriveBeats requests the Google Drive{" "}
-              <code>drive.file</code> scope, which is limited to the folders and
-              audio files you explicitly choose with Google Picker, not your
-              entire Drive. It also uses basic sign-in info (your name, email,
-              and profile picture) to identify your account within the app.
+              DriveBeats requests the Google Drive <code>drive.file</code>{" "}
+              scope, which is limited to the folders and audio files you
+              explicitly choose with Google Picker, not your entire Drive. It
+              also uses basic sign-in info (your name, email, and profile
+              picture) to identify your account within the app.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">

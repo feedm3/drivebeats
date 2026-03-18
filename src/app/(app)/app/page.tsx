@@ -13,12 +13,12 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { cn, getHistoryStateWithFolderStack } from "@/lib/utils";
 import { useFolderTreeStore } from "@/stores/folder-tree-store";
-import { usePlayerStore } from "@/stores/player-store";
 import {
   getFavoriteTracks,
   getRecentlyPlayedTracks,
   useLibraryStore,
 } from "@/stores/library-store";
+import { usePlayerStore } from "@/stores/player-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
 import type { FolderEntry, TrackCollection } from "@/types";
 import {

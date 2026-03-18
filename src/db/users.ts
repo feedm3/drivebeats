@@ -1,5 +1,5 @@
-import type { AuthUser } from "@/lib/auth-session";
 import { getSql } from "@/db/client";
+import type { AuthUser } from "@/lib/auth-session";
 
 export async function upsertUser(user: AuthUser) {
   const sql = getSql();

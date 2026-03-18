@@ -1,6 +1,6 @@
 "use client";
 
-import type { FolderEntry } from "@/types";
+import { Fragment } from "react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -8,7 +8,7 @@ import {
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Fragment } from "react";
+import type { FolderEntry } from "@/types";
 
 interface BreadcrumbNavProps {
   folderStack: FolderEntry[];

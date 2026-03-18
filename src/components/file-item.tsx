@@ -1,8 +1,8 @@
 "use client";
 
-import type { DriveFile } from "@/types";
-import { usePlayerStore } from "@/stores/player-store";
 import { cn } from "@/lib/utils";
+import { usePlayerStore } from "@/stores/player-store";
+import type { DriveFile } from "@/types";
 
 interface FileItemProps {
   file: DriveFile;
@@ -43,9 +43,14 @@ export function FileItem({ file, allMp3s, onFolderClick }: FileItemProps) {
         isActive && "bg-primary/10 text-primary",
       )}
     >
-      <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
+      <span
+        aria-hidden="true"
+        className="flex size-5 shrink-0 items-center justify-center text-muted-foreground"
+      >
         {folder ? (
           <svg
+            aria-hidden="true"
+            focusable="false"
             width="18"
             height="18"
             viewBox="0 0 24 24"
@@ -59,6 +64,8 @@ export function FileItem({ file, allMp3s, onFolderClick }: FileItemProps) {
           </svg>
         ) : (
           <svg
+            aria-hidden="true"
+            focusable="false"
             width="18"
             height="18"
             viewBox="0 0 24 24"

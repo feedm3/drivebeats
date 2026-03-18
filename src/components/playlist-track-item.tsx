@@ -11,8 +11,8 @@ import {
 import { NowPlayingBars } from "@/components/now-playing-bars";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
-import { cn } from "@/lib/utils";
 import { parseTrackMetadata } from "@/lib/track-metadata";
+import { cn } from "@/lib/utils";
 import type { OfflineTrackStatus } from "@/stores/offline-store";
 import type { PlaylistTrack } from "@/types";
 
@@ -60,15 +60,6 @@ export function PlaylistTrackItem({
         "group relative flex cursor-pointer items-center border-b py-2 transition-colors hover:bg-muted/50 data-[active]:bg-primary/6 last:border-b-0",
         isDragging && "opacity-30",
       )}
-      tabIndex={0}
-      role="button"
-      onClick={onPlay}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onPlay();
-        }
-      }}
     >
       {dropIndicator === "above" && (
         <div className="absolute inset-x-0 top-0 z-10 h-0.5 bg-primary" />
@@ -88,9 +79,11 @@ export function PlaylistTrackItem({
       ) : (
         <div className="w-4 shrink-0" aria-hidden="true" />
       )}
-      <div
+      <button
+        type="button"
         className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-1.5 text-left"
         aria-label={`Play ${track.fileName}`}
+        onClick={onPlay}
       >
         <span
           className={cn(
@@ -145,7 +138,7 @@ export function PlaylistTrackItem({
             )}
           </span>
         )}
-      </div>
+      </button>
       {subtitle && (
         <span className="shrink-0 px-2 text-xs tabular-nums text-muted-foreground">
           {subtitle}

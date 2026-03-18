@@ -5,7 +5,10 @@ interface TrackMetadata {
 
 /** Replace underscores with spaces and collapse runs of whitespace. */
 function humanize(s: string): string {
-  return s.replace(/_/g, " ").replace(/\s{2,}/g, " ").trim();
+  return s
+    .replace(/_/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 export function parseTrackMetadata(
@@ -16,7 +19,7 @@ export function parseTrackMetadata(
   const stripped = fileName.replace(/\.(mp3|flac|wav|m4a|aac|ogg)$/i, "");
 
   // Strip leading track numbers (1-3 digits followed by separator)
-  const cleaned = stripped.replace(/^\d{1,3}[\s.\-]+/, "");
+  const cleaned = stripped.replace(/^\d{1,3}[\s.-]+/, "");
 
   // Guard: if stripping left an empty string, use the extension-stripped name
   const base = cleaned || stripped;

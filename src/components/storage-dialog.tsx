@@ -12,8 +12,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { deleteAllCloudLibraryData } from "@/lib/cloud-library-api";
-import { removeAllDownloads } from "@/lib/offline-download-manager";
 import * as offlineDb from "@/lib/offline-db";
+import { removeAllDownloads } from "@/lib/offline-download-manager";
 import { formatBytes } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
@@ -186,9 +186,7 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
             <h3 className="mt-3 text-sm font-semibold">Device</h3>
             <div className="mt-1 space-y-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  Downloaded tracks
-                </span>
+                <span className="text-muted-foreground">Downloaded tracks</span>
                 <span className="font-medium tabular-nums">{trackCount}</span>
               </div>
               <div className="flex justify-between">
@@ -263,9 +261,8 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
             <DialogTitle>Remove all downloads?</DialogTitle>
             <DialogDescription>
               This removes {trackCount} downloaded{" "}
-              {trackCount === 1 ? "track" : "tracks"} (
-              {formatBytes(totalBytes)}) from this device. You can re-download
-              them later.
+              {trackCount === 1 ? "track" : "tracks"} ({formatBytes(totalBytes)}
+              ) from this device. You can re-download them later.
             </DialogDescription>
             <div className="mt-4 flex justify-between">
               <Button

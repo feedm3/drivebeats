@@ -1,6 +1,6 @@
-import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { ImageResponse } from "next/og";
 
 export const alt =
   "DriveBeats | Stream Your Music Collection from Google Drive";
@@ -27,6 +27,7 @@ export default async function Image() {
         color: "white",
       }}
     >
+      {/* biome-ignore lint/performance/noImgElement: ImageResponse renders static OG markup and does not support next/image. */}
       <img
         alt=""
         src={iconBase64}

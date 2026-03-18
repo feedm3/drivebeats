@@ -21,7 +21,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";

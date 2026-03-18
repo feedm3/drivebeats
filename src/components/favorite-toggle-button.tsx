@@ -57,9 +57,10 @@ export function FavoriteToggleButton({
         }}
       >
         <Heart
+          key={isFavorite ? "fav" : "not"}
           className={cn(
             "size-3.5",
-            isFavorite && "fill-current",
+            isFavorite && "fill-current animate-heart-pop",
             iconClassName,
           )}
         />

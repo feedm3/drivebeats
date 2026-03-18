@@ -35,7 +35,9 @@ export function PlayControls() {
           aria-label={`Shuffle ${shuffle ? "on" : "off"}`}
           onClick={toggleShuffle}
         >
-          <ShuffleIcon />
+          <span key={String(shuffle)} className="inline-flex animate-toggle-bounce">
+            <ShuffleIcon />
+          </span>
         </Button>
       </IconTooltip>
 
@@ -62,10 +64,10 @@ export function PlayControls() {
         >
           {isLoading ? (
             <LoadingIcon />
-          ) : isPlaying ? (
-            <PauseIcon />
           ) : (
-            <PlayIcon />
+            <span key={isPlaying ? "pause" : "play"} className="inline-flex animate-in fade-in zoom-in-75 duration-150">
+              {isPlaying ? <PauseIcon /> : <PlayIcon />}
+            </span>
           )}
         </Button>
       </IconTooltip>
@@ -106,7 +108,9 @@ export function PlayControls() {
           }
           onClick={cycleRepeat}
         >
-          {repeat === "one" ? <RepeatOneIcon /> : <RepeatIcon />}
+          <span key={repeat} className="inline-flex animate-toggle-bounce">
+            {repeat === "one" ? <RepeatOneIcon /> : <RepeatIcon />}
+          </span>
         </Button>
       </IconTooltip>
     </div>

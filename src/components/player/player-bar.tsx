@@ -239,7 +239,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   if (!currentTrack) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border/50 bg-background/95 shadow-[0_-2px_10px_rgba(0,0,0,0.18)] backdrop-blur supports-[backdrop-filter]:bg-background/80 standalone:pb-[env(safe-area-inset-bottom,0px)]">
+    <div className="animate-in slide-in-from-bottom-4 fade-in duration-300 fixed inset-x-0 bottom-0 z-50 border-t border-border/50 bg-background/95 shadow-[0_-2px_10px_rgba(0,0,0,0.18)] backdrop-blur supports-[backdrop-filter]:bg-background/80 standalone:pb-[env(safe-area-inset-bottom,0px)]">
       <div className="mx-auto max-w-[1440px] px-4">
         <div className="pt-3">
           <ProgressBar />

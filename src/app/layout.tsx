@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
@@ -15,6 +15,10 @@ const geistMono = Geist_Mono({
 });
 
 const siteUrl = `${process.env.NEXT_PUBLIC_APP_URL}`;
+
+export const viewport: Viewport = {
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   title: {

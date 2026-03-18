@@ -137,7 +137,7 @@ export const PlaylistSection = forwardRef<
           <div className="px-2 pb-2 text-[11px] font-medium tracking-[0.16em] uppercase text-muted-foreground">
             Library
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1.5 md:space-y-1">
             {[
               {
                 id: FAVORITES_COLLECTION_ID,
@@ -160,7 +160,7 @@ export const PlaylistSection = forwardRef<
                   key={collection.id}
                   type="button"
                   className={cn(
-                    "group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors cursor-pointer",
+                    "group flex w-full items-center gap-2 rounded-md px-3 py-3 md:gap-1.5 md:px-2 md:py-1.5 text-left text-sm transition-colors cursor-pointer",
                     isActive
                       ? "bg-accent text-accent-foreground"
                       : "hover:bg-accent/50",
@@ -239,7 +239,7 @@ export const PlaylistSection = forwardRef<
             </div>
           )}
 
-          <div className="space-y-1">
+          <div className="space-y-1.5 md:space-y-1">
             {playlists.map((playlist) => {
               const isActive = activePlaylistId === playlist.id;
               const isPlayingThis = playingPlaylistId === playlist.id;
@@ -253,7 +253,7 @@ export const PlaylistSection = forwardRef<
                   key={playlist.id}
                   type="button"
                   className={cn(
-                    "group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors cursor-pointer",
+                    "group flex w-full items-center gap-2 rounded-md px-3 py-3 md:gap-1.5 md:px-2 md:py-1.5 text-left text-sm transition-colors cursor-pointer",
                     isActive
                       ? "bg-accent text-accent-foreground"
                       : "hover:bg-accent/50",

@@ -60,3 +60,13 @@ For sync-related changes, also verify:
 Treat Google Drive as strictly read-only in this codebase. Never add code that writes, edits, moves, renames, uploads,
 trashes, deletes, or changes permissions for Drive files or folders. All Drive integrations must be limited to reading
 metadata, listing content, and streaming user-selected audio with the minimum required access.
+
+## Mobile-First Design
+
+Design for mobile first; all UI must be usable on small screens before scaling up.
+
+- Interactive elements (buttons, links, toggles) must have a minimum touch target of 44×44 CSS pixels (Apple HIG / WCAG
+  recommendation).
+- Leave adequate spacing between tap targets so adjacent elements are not accidentally triggered.
+- Avoid hover-only interactions; every action must be reachable via tap.
+- Test layouts at 320px–428px viewport widths before wider breakpoints.

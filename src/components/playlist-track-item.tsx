@@ -70,9 +70,10 @@ export function PlaylistTrackItem({
       {isReorderable ? (
         <button
           type="button"
-          className="flex shrink-0 items-center justify-center w-9 self-stretch cursor-grab active:cursor-grabbing text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+          className="flex h-11 w-11 shrink-0 items-center justify-center self-center touch-none text-muted-foreground opacity-100 transition-opacity cursor-grab active:cursor-grabbing md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
           data-drag-handle
           onClick={(e) => e.stopPropagation()}
+          aria-label={`Reorder ${track.fileName}`}
         >
           <GripVertical className="size-4" />
         </button>
@@ -85,18 +86,25 @@ export function PlaylistTrackItem({
         aria-label={`Play ${track.fileName}`}
         onClick={onPlay}
       >
-        <span
-          className={cn(
-            "shrink-0",
-            isActive ? "text-primary" : "text-muted-foreground",
-          )}
-        >
-          {isCurrentlyPlaying ? (
+        {isCurrentlyPlaying ? (
+          <span
+            className={cn(
+              "shrink-0",
+              isActive ? "text-primary" : "text-muted-foreground",
+            )}
+          >
             <NowPlayingBars className="size-4" paused={!isPlaying} />
-          ) : (
+          </span>
+        ) : (
+          <span
+            className={cn(
+              "hidden shrink-0 md:inline-flex",
+              isActive ? "text-primary" : "text-muted-foreground",
+            )}
+          >
             <Music4 className="size-4" />
-          )}
-        </span>
+          </span>
+        )}
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{title}</span>
           {metadataSubtitle && (

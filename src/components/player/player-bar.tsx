@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AddToPlaylistPopover } from "@/components/add-to-playlist-popover";
+import { FavoriteToggleButton } from "@/components/favorite-toggle-button";
 import { parseTrackMetadata } from "@/lib/track-metadata";
 import { useAuthStore } from "@/stores/auth-store";
 import { useLibraryStore } from "@/stores/library-store";
@@ -242,8 +244,19 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
         <div className="pt-3">
           <ProgressBar />
         </div>
-        <div className="py-3 sm:hidden">
+        <div className="flex items-center gap-1 py-3 sm:hidden">
           <TrackInfo onNavigateToTrack={onNavigateToTrack} />
+          <div className="flex shrink-0 items-center gap-1">
+            <FavoriteToggleButton
+              fileId={currentTrack.id}
+              fileName={currentTrack.name}
+              mimeType={currentTrack.mimeType}
+              parents={currentTrack.parents}
+              size="icon-sm"
+              className="text-muted-foreground/80"
+            />
+            <AddToPlaylistPopover file={currentTrack} />
+          </div>
         </div>
         <div className="relative flex items-center justify-center pb-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:py-3">
           <div className="hidden sm:block">
@@ -251,7 +264,21 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
           </div>
           <PlayControls />
           <div className="absolute right-0 sm:static standalone:hidden">
-            <VolumeControl />
+            <div className="flex items-center justify-end gap-1">
+              <FavoriteToggleButton
+                fileId={currentTrack.id}
+                fileName={currentTrack.name}
+                mimeType={currentTrack.mimeType}
+                parents={currentTrack.parents}
+                size="icon-sm"
+                className="hidden text-muted-foreground/80 sm:inline-flex"
+              />
+              <AddToPlaylistPopover
+                file={currentTrack}
+                className="hidden sm:inline-flex"
+              />
+              <VolumeControl />
+            </div>
           </div>
         </div>
       </div>

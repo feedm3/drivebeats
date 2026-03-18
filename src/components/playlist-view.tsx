@@ -3,6 +3,7 @@
 import {
   ArrowLeft,
   Download,
+  Ellipsis,
   ListMusic,
   Loader2,
   Pencil,
@@ -20,6 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
@@ -246,6 +248,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const [editName, setEditName] = useState("");
   const editRef = useRef<HTMLInputElement>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const isEditablePlaylist =
@@ -365,23 +368,6 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
               {collection.name}
             </h1>
           )}
-          {isEditablePlaylist && !editing && (
-            <IconTooltip label="Rename playlist">
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="shrink-0 text-muted-foreground"
-                onClick={() => {
-                  setEditName(collection.name);
-                  setEditing(true);
-                  setTimeout(() => editRef.current?.focus(), 0);
-                }}
-                aria-label="Rename playlist"
-              >
-                <Pencil className="size-3" />
-              </Button>
-            </IconTooltip>
-          )}
         </div>
         <div className="flex items-center gap-1">
           <Button
@@ -423,34 +409,65 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
               </Button>
             </IconTooltip>
           )}
-          {(collection.id === RECENTLY_PLAYED_COLLECTION_ID ||
-            isEditablePlaylist) && <div className="h-4 w-px bg-border/60" />}
-          {collection.id === RECENTLY_PLAYED_COLLECTION_ID ? (
-            <IconTooltip label="Clear recently played">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-destructive"
-                onClick={clearRecent}
-                aria-label="Clear recently played"
+          {collection.id === RECENTLY_PLAYED_COLLECTION_ID && (
+            <>
+              <div className="h-4 w-px bg-border/60" />
+              <IconTooltip label="Clear recently played">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={clearRecent}
+                  aria-label="Clear recently played"
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </IconTooltip>
+            </>
+          )}
+          {isEditablePlaylist && (
+            <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+              <PopoverTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground"
+                    aria-label="Playlist options"
+                  />
+                }
               >
-                <Trash2 className="size-4" />
-              </Button>
-            </IconTooltip>
-          ) : null}
-          {isEditablePlaylist ? (
-            <IconTooltip label="Delete playlist">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-destructive"
-                onClick={() => setDeleteOpen(true)}
-                aria-label="Delete playlist"
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </IconTooltip>
-          ) : null}
+                <Ellipsis className="size-4" />
+              </PopoverTrigger>
+              <PopoverContent side="bottom" align="end" className="w-44">
+                <button
+                  type="button"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setEditName(collection.name);
+                    setEditing(true);
+                    setTimeout(() => editRef.current?.focus(), 0);
+                  }}
+                >
+                  <Pencil className="size-3.5" />
+                  Rename
+                </button>
+                <div className="my-1 h-px bg-border/60" />
+                <button
+                  type="button"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setDeleteOpen(true);
+                  }}
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete
+                </button>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
       </div>
 

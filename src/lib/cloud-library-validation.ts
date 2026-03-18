@@ -104,14 +104,18 @@ export function parseCreatePlaylistInput(
   body: Partial<CreatePlaylistInput> | null,
 ): CreatePlaylistInput | null {
   const id = body?.id;
-  const name = body?.name?.trim();
+  const rawName = body?.name;
 
   if (
     typeof id !== "string" ||
-    typeof name !== "string" ||
-    !isNonEmptyString(id, MAX_GOOGLE_ID_LENGTH) ||
-    !isNonEmptyString(name, MAX_TEXT_NAME_LENGTH)
+    typeof rawName !== "string" ||
+    !isNonEmptyString(id, MAX_GOOGLE_ID_LENGTH)
   ) {
+    return null;
+  }
+
+  const name = rawName.trim();
+  if (!isNonEmptyString(name, MAX_TEXT_NAME_LENGTH)) {
     return null;
   }
 
@@ -124,11 +128,13 @@ export function parseCreatePlaylistInput(
 export function parsePlaylistNameInput(
   body: Partial<{ name: string }> | null,
 ): { name: string } | null {
-  const name = body?.name?.trim();
-  if (
-    typeof name !== "string" ||
-    !isNonEmptyString(name, MAX_TEXT_NAME_LENGTH)
-  ) {
+  const rawName = body?.name;
+  if (typeof rawName !== "string") {
+    return null;
+  }
+
+  const name = rawName.trim();
+  if (!isNonEmptyString(name, MAX_TEXT_NAME_LENGTH)) {
     return null;
   }
 

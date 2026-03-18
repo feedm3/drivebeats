@@ -186,10 +186,11 @@ export default function LandingPage() {
               What permissions does DriveBeats need?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              DriveBeats requests read-only access to the specific folders and
-              audio files you select — it never sees your entire Drive. It also
-              uses basic sign-in info (your name, email, and profile picture) to
-              identify your account within the app.
+              DriveBeats requests the Google Drive{" "}
+              <code>drive.file</code> scope, which is limited to the folders and
+              audio files you explicitly choose with Google Picker, not your
+              entire Drive. It also uses basic sign-in info (your name, email,
+              and profile picture) to identify your account within the app.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -232,7 +233,7 @@ export default function LandingPage() {
               Can I delete my synced data?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              Yes. Open Offline storage in the app to delete synced playlists
+              Yes. Open Storage &amp; data in the app to delete synced playlists
               and favorites from your account, or clear only the downloads
               stored on this device.
             </p>
@@ -245,8 +246,8 @@ export default function LandingPage() {
               Logging out removes your local DriveBeats data from this browser,
               including imported items, recently played tracks, offline
               downloads, and saved player state. Your synced playlists and
-              favorites stay in your account unless you delete them from Offline
-              storage.
+              favorites stay in your account unless you delete them from Storage
+              &amp; data.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">

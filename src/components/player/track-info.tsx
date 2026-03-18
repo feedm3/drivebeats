@@ -1,6 +1,5 @@
 "use client";
 
-import { FavoriteToggleButton } from "@/components/favorite-toggle-button";
 import { parseTrackMetadata } from "@/lib/track-metadata";
 import { usePlayerStore } from "@/stores/player-store";
 
@@ -26,7 +25,7 @@ export function TrackInfo({ onNavigateToTrack }: TrackInfoProps) {
   }
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-3">
+    <div className="flex min-w-0 flex-1 items-center gap-2">
       <span className="flex size-8 shrink-0 items-center justify-center rounded bg-accent text-muted-foreground">
         <svg
           width="16"
@@ -45,34 +44,25 @@ export function TrackInfo({ onNavigateToTrack }: TrackInfoProps) {
           <circle cx="18" cy="16" r="3" />
         </svg>
       </span>
-      <div className="min-w-0 flex flex-1 items-center gap-1.5">
-        <div className="min-w-0 flex-1">
-          {canNavigate ? (
-            <button
-              type="button"
-              className="block max-w-full truncate text-left text-sm font-semibold hover:underline"
-              onClick={onNavigateToTrack}
-            >
-              {title}
-            </button>
-          ) : (
-            <span className="block truncate text-sm font-semibold">
-              {title}
-            </span>
-          )}
-          {subtitle && (
-            <span className="block truncate text-xs text-muted-foreground">
-              {subtitle}
-            </span>
-          )}
-        </div>
-        <FavoriteToggleButton
-          fileId={currentTrack.id}
-          fileName={currentTrack.name}
-          mimeType={currentTrack.mimeType}
-          parents={currentTrack.parents}
-          className="shrink-0 text-muted-foreground/80"
-        />
+      <div className="min-w-0 flex-1">
+        {canNavigate ? (
+          <button
+            type="button"
+            className="block max-w-full truncate text-left text-sm font-semibold hover:underline"
+            onClick={onNavigateToTrack}
+          >
+            {title}
+          </button>
+        ) : (
+          <span className="block truncate text-sm font-semibold">
+            {title}
+          </span>
+        )}
+        {subtitle && (
+          <span className="block truncate text-xs text-muted-foreground">
+            {subtitle}
+          </span>
+        )}
       </div>
     </div>
   );

@@ -79,10 +79,7 @@ export async function fetchGoogleSigningKeys() {
 }
 
 export async function exchangeGoogleOAuthCode(
-  {
-    clientId,
-    clientSecret,
-  }: GoogleOAuthTokenRequest,
+  { clientId, clientSecret }: GoogleOAuthTokenRequest,
   code: string,
   redirectUri: string,
 ) {

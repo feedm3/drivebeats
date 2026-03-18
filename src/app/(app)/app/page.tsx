@@ -106,10 +106,7 @@ function AppContent() {
       setFolderStack(path);
       setActivePlaylist(null);
       setActiveView("files");
-      window.history.pushState(
-        getHistoryStateWithFolderStack(path, null),
-        "",
-      );
+      window.history.pushState(getHistoryStateWithFolderStack(path, null), "");
     },
     [setActivePlaylist],
   );

@@ -57,8 +57,8 @@ export default function ImprintPage() {
           </h2>
           <p className="text-sm leading-relaxed text-muted-foreground">
             As a service provider, I am responsible for my own content on these
-            pages in accordance with § 7 (1) DDG. However, I am not obligated
-            to monitor transmitted or stored third-party information or to
+            pages in accordance with § 7 (1) DDG. However, I am not obligated to
+            monitor transmitted or stored third-party information or to
             investigate circumstances that indicate illegal activity.
             Obligations to remove or block the use of information under general
             law remain unaffected. Liability in this regard is only possible

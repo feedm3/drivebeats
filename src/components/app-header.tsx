@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
-import { OfflineStorageDialog } from "@/components/offline-storage-dialog";
+import { StorageDialog } from "@/components/storage-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -78,11 +78,7 @@ function AccountAvatar({
         alt=""
         aria-hidden="true"
         src={picture}
-        className={cn(
-          sizeClassName,
-          "rounded-full object-cover",
-          className,
-        )}
+        className={cn(sizeClassName, "rounded-full object-cover", className)}
         onError={() => setFailedPicture(picture)}
         referrerPolicy="no-referrer"
       />
@@ -248,7 +244,7 @@ export function AppHeader() {
                     className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
                   >
                     <HardDrive className="size-4" />
-                    Offline storage
+                    Storage & data
                   </button>
                   <div className="mx-1 my-1 h-px bg-border/60" />
                   <button
@@ -269,10 +265,9 @@ export function AppHeader() {
         <DialogContent>
           <DialogTitle>Log out and clear this device</DialogTitle>
           <DialogDescription>
-            Logging out will remove cached playlists, favorites, recently
-            played tracks, imported library, offline downloads, and saved player
-            state from this browser. Your synced cloud data will stay in your
-            account.
+            Logging out will remove cached playlists, favorites, recently played
+            tracks, imported library, offline downloads, and saved player state
+            from this browser. Your synced cloud data will stay in your account.
           </DialogDescription>
           <div className="mt-4 flex justify-end gap-2">
             <DialogClose render={<Button variant="outline" size="sm" />}>
@@ -289,7 +284,7 @@ export function AppHeader() {
           </div>
         </DialogContent>
       </Dialog>
-      <OfflineStorageDialog
+      <StorageDialog
         open={offlineStorageOpen}
         onOpenChange={setOfflineStorageOpen}
       />

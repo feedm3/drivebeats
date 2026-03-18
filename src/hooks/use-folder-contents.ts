@@ -91,7 +91,9 @@ export function useFolderContents() {
 
       if (folderId === ROOT_FOLDER_ID) {
         if (canCommit()) {
-          onFiles(getImportedLibraryRootEntries(useImportedDriveStore.getState()));
+          onFiles(
+            getImportedLibraryRootEntries(useImportedDriveStore.getState()),
+          );
           onLoadingChange(false);
         }
         return;

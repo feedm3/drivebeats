@@ -78,15 +78,15 @@ export default function PrivacyPolicyPage() {
           database so those collections can sync between your devices. This
           metadata includes the file ids and display metadata needed to rebuild
           those collections inside the app, including parent folder references.
-          We do not upload or copy the audio files themselves into our
-          database. Recently played history is not synced and remains on the
-          device where it was created.
+          We do not upload or copy the audio files themselves into our database.
+          Recently played history is not synced and remains on the device where
+          it was created.
         </p>
         <p>
-          Inside the app, you can delete synced playlists and favorites from
-          the Offline storage screen. Logging out clears local device data, but
-          it does not delete your synced cloud data unless you explicitly
-          choose that delete action.
+          Inside the app, you can delete synced playlists and favorites from the
+          Offline storage screen. Logging out clears local device data, but it
+          does not delete your synced cloud data unless you explicitly choose
+          that delete action.
         </p>
 
         <h2 className="text-lg font-semibold text-foreground">Analytics</h2>

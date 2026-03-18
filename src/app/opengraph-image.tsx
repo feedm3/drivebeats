@@ -14,58 +14,56 @@ export default async function Image() {
   const iconBase64 = `data:image/png;base64,${iconData.toString("base64")}`;
 
   return new ImageResponse(
-    (
+    <div
+      style={{
+        background: "linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%)",
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "sans-serif",
+        color: "white",
+      }}
+    >
+      <img
+        alt=""
+        src={iconBase64}
+        width={96}
+        height={96}
+        style={{ marginBottom: 24, borderRadius: 20 }}
+      />
       <div
         style={{
-          background: "linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%)",
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily: "sans-serif",
-          color: "white",
+          fontSize: 56,
+          fontWeight: 800,
+          letterSpacing: "-0.02em",
+          marginBottom: 16,
         }}
       >
-        <img
-          alt=""
-          src={iconBase64}
-          width={96}
-          height={96}
-          style={{ marginBottom: 24, borderRadius: 20 }}
-        />
-        <div
-          style={{
-            fontSize: 56,
-            fontWeight: 800,
-            letterSpacing: "-0.02em",
-            marginBottom: 16,
-          }}
-        >
-          DriveBeats
-        </div>
-        <div
-          style={{
-            fontSize: 24,
-            color: "#a1a1aa",
-            maxWidth: 600,
-            textAlign: "center",
-          }}
-        >
-          Stream your music collection online for free
-        </div>
-        <div
-          style={{
-            fontSize: 18,
-            color: "#71717a",
-            marginTop: 12,
-          }}
-        >
-          Stream your music. No downloads, no uploads.
-        </div>
+        DriveBeats
       </div>
-    ),
+      <div
+        style={{
+          fontSize: 24,
+          color: "#a1a1aa",
+          maxWidth: 600,
+          textAlign: "center",
+        }}
+      >
+        Stream your music collection online for free
+      </div>
+      <div
+        style={{
+          fontSize: 18,
+          color: "#71717a",
+          marginTop: 12,
+        }}
+      >
+        Stream your music. No downloads, no uploads.
+      </div>
+    </div>,
     { ...size },
   );
 }

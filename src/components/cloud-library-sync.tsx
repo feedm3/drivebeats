@@ -36,7 +36,9 @@ export function CloudLibrarySync() {
       syncInFlightRef.current = (async () => {
         try {
           const localPlaylists = usePlaylistStore.getState().playlists;
-          const localFavorites = getFavoriteTracks(useLibraryStore.getState().tracks);
+          const localFavorites = getFavoriteTracks(
+            useLibraryStore.getState().tracks,
+          );
           let payload = await fetchCloudLibrarySync();
 
           if (
@@ -59,8 +61,12 @@ export function CloudLibrarySync() {
             return;
           }
 
-          usePlaylistStore.getState().replacePlaylistsFromCloud(payload.playlists);
-          useLibraryStore.getState().replaceFavoritesFromCloud(payload.favorites);
+          usePlaylistStore
+            .getState()
+            .replacePlaylistsFromCloud(payload.playlists);
+          useLibraryStore
+            .getState()
+            .replaceFavoritesFromCloud(payload.favorites);
         } catch (error) {
           console.error("Cloud library sync failed:", error);
         } finally {

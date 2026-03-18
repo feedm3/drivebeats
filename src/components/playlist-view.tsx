@@ -328,8 +328,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
 
   const activeTrackId = pendingTrackId ?? currentTrack?.id;
   const isPlayingThisPlaylist = playingPlaylistId === collection.id;
-  const isRecentlyPlayed =
-    collection.id === RECENTLY_PLAYED_COLLECTION_ID;
+  const isRecentlyPlayed = collection.id === RECENTLY_PLAYED_COLLECTION_ID;
 
   return (
     <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-7">
@@ -409,9 +408,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                 size="icon-sm"
                 className="text-muted-foreground"
                 onClick={handleOfflineToggle}
-                disabled={
-                  offlineToggling || collection.tracks.length === 0
-                }
+                disabled={offlineToggling || collection.tracks.length === 0}
                 aria-label={
                   isOfflineEnabled ? "Remove downloads" : "Available offline"
                 }
@@ -420,19 +417,14 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
                   <Download
-                    className={cn(
-                      "size-4",
-                      isOfflineEnabled && "text-primary",
-                    )}
+                    className={cn("size-4", isOfflineEnabled && "text-primary")}
                   />
                 )}
               </Button>
             </IconTooltip>
           )}
           {(collection.id === RECENTLY_PLAYED_COLLECTION_ID ||
-            isEditablePlaylist) && (
-            <div className="h-4 w-px bg-border/60" />
-          )}
+            isEditablePlaylist) && <div className="h-4 w-px bg-border/60" />}
           {collection.id === RECENTLY_PLAYED_COLLECTION_ID ? (
             <IconTooltip label="Clear recently played">
               <Button
@@ -469,8 +461,8 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
           <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="size-3 animate-spin" />
             <span>
-              {offlineCollection.downloadedCount}/
-              {offlineCollection.totalCount} downloaded
+              {offlineCollection.downloadedCount}/{offlineCollection.totalCount}{" "}
+              downloaded
             </span>
           </div>
         )}
@@ -499,47 +491,46 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                 </span>
               </div>
               {collection.tracks.map((track, index) => {
-                const lastPlayedAt =
-                  isRecentlyPlayed
-                    ? libraryTracks[track.fileId]?.lastPlayedAt
-                    : undefined;
+                const lastPlayedAt = isRecentlyPlayed
+                  ? libraryTracks[track.fileId]?.lastPlayedAt
+                  : undefined;
                 return (
-                <PlaylistTrackItem
-                  key={track.fileId}
-                  track={track}
-                  index={index}
-                  isActive={
-                    isPlayingThisPlaylist && activeTrackId === track.fileId
-                  }
-                  isCurrentlyPlaying={
-                    isPlayingThisPlaylist && currentTrack?.id === track.fileId
-                  }
-                  isPlaying={isPlaying}
-                  subtitle={
-                    lastPlayedAt
-                      ? formatRelativeDate(lastPlayedAt)
-                      : undefined
-                  }
-                  isDragging={drag.fromIndex === index}
-                  dropIndicator={
-                    drag.overIndex === index ? drag.position : null
-                  }
-                  isReorderable={isEditablePlaylist}
-                  offlineStatus={
-                    isOfflineEnabled
-                      ? offlineTrackStatus[track.fileId]
-                      : undefined
-                  }
-                  onPlay={() =>
-                    isPlayingThisPlaylist && currentTrack?.id === track.fileId
-                      ? togglePlay()
-                      : playFromPlaylist(index)
-                  }
-                  onRemove={() =>
-                    handleRemoveTrack(track.fileId, track.fileName)
-                  }
-                  removeLabel={getCollectionRemoveLabel(collection.id)}
-                />
+                  <PlaylistTrackItem
+                    key={track.fileId}
+                    track={track}
+                    index={index}
+                    isActive={
+                      isPlayingThisPlaylist && activeTrackId === track.fileId
+                    }
+                    isCurrentlyPlaying={
+                      isPlayingThisPlaylist && currentTrack?.id === track.fileId
+                    }
+                    isPlaying={isPlaying}
+                    subtitle={
+                      lastPlayedAt
+                        ? formatRelativeDate(lastPlayedAt)
+                        : undefined
+                    }
+                    isDragging={drag.fromIndex === index}
+                    dropIndicator={
+                      drag.overIndex === index ? drag.position : null
+                    }
+                    isReorderable={isEditablePlaylist}
+                    offlineStatus={
+                      isOfflineEnabled
+                        ? offlineTrackStatus[track.fileId]
+                        : undefined
+                    }
+                    onPlay={() =>
+                      isPlayingThisPlaylist && currentTrack?.id === track.fileId
+                        ? togglePlay()
+                        : playFromPlaylist(index)
+                    }
+                    onRemove={() =>
+                      handleRemoveTrack(track.fileId, track.fileName)
+                    }
+                    removeLabel={getCollectionRemoveLabel(collection.id)}
+                  />
                 );
               })}
             </div>

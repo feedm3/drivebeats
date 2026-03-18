@@ -34,7 +34,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const [offlineStoreHydrated, setOfflineStoreHydrated] = useState(() =>
     typeof window === "undefined"
       ? false
-      : useOfflineStore.persist?.hasHydrated?.() ?? false,
+      : (useOfflineStore.persist?.hasHydrated?.() ?? false),
   );
   const [ready, setReady] = useState(false);
   const [offlineAccessAllowed, setOfflineAccessAllowed] = useState(false);

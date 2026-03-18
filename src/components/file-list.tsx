@@ -187,10 +187,7 @@ const FileListRow = memo(function FileListRow({
             )}
           >
             {isPlayingAncestor || isCurrentlyPlaying ? (
-              <NowPlayingBars
-                className="size-4"
-                paused={isPlaybackPaused}
-              />
+              <NowPlayingBars className="size-4" paused={isPlaybackPaused} />
             ) : folder ? (
               <Folder className="size-4" />
             ) : (
@@ -357,7 +354,9 @@ export function FileList({
                 const isActive = activeTrackId === file.id;
                 const isCurrentlyPlaying = currentTrackId === file.id;
                 const isPlayingAncestor = Boolean(
-                  isFolder(file) && activeTrackId && playingFolderIds.has(file.id),
+                  isFolder(file) &&
+                    activeTrackId &&
+                    playingFolderIds.has(file.id),
                 );
                 const isPlaybackPaused =
                   isPlayingAncestor || isCurrentlyPlaying ? !isPlaying : false;

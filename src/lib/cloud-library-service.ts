@@ -22,7 +22,7 @@ import {
   listFavoriteTracksByUser,
   upsertFavoriteTrack,
 } from "@/db/favorite-tracks";
-import { deleteUserByGoogleId, upsertUser } from "@/db/users";
+import { deleteUserByGoogleId, recordUserVisit, upsertUser } from "@/db/users";
 import type { CloudLibrarySyncPayload } from "@/lib/cloud-library-shared";
 import type { Playlist, PlaylistTrack } from "@/types";
 
@@ -61,7 +61,7 @@ async function ensureUserRecord(user: AuthUser) {
 export async function getCloudLibrarySyncPayload(
   user: AuthUser,
 ): Promise<CloudLibrarySyncPayload> {
-  await ensureUserRecord(user);
+  await recordUserVisit(user);
 
   const [playlists, favoriteRows] = await Promise.all([
     listPlaylistsByUser(user.id),
@@ -196,6 +196,16 @@ export async function reorderPlaylistTracksRecords(
   });
   if (!ownsPlaylist || fileIds.length === 0) {
     return;
+  }
+
+  const existingRows = await listTrackFileIdsByPlaylist(playlistId);
+  if (existingRows.length !== fileIds.length) {
+    throw new Error("Invalid reorder payload");
+  }
+
+  const existingIds = new Set(existingRows.map((row) => row.file_id));
+  if (fileIds.some((fileId) => !existingIds.has(fileId))) {
+    throw new Error("Invalid reorder payload");
   }
 
   await reorderPlaylistTracks({ playlistId, fileIds });

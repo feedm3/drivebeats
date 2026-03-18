@@ -22,12 +22,11 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default:
-      "DriveBeats | Stream Your Music Collection from Google Drive",
+    default: "DriveBeats | Stream Your Music Collection from Google Drive",
     template: "%s | DriveBeats",
   },
   description:
-    "Free online music player for Google Drive. Stream MP3, FLAC, WAV, AAC, and OGG files directly from Drive. No downloads, no uploads, no storage limits. Shuffle, repeat, and full playback controls.",
+    "Free music player for Google Drive. Stream MP3, FLAC, WAV, AAC, and OGG files, sync playlists and favorites across devices, and download tracks for offline playback.",
   keywords: [
     "google drive mp3 player",
     "google drive flac player",
@@ -65,13 +64,13 @@ export const metadata: Metadata = {
     siteName: "DriveBeats",
     title: "DriveBeats | Stream Your Music Collection from Google Drive",
     description:
-      "Stream your music collection directly from Google Drive. MP3, FLAC, WAV, AAC, OGG supported. Free, no uploads.",
+      "Free music player for Google Drive. Stream your collection, sync playlists and favorites across devices, and listen offline.",
   },
   twitter: {
     card: "summary_large_image",
     title: "DriveBeats | Stream Your Music Collection from Google Drive",
     description:
-      "Stream your music collection directly from Google Drive. MP3, FLAC, WAV, AAC, OGG supported. Free, no uploads.",
+      "Free music player for Google Drive. Stream your collection, sync playlists and favorites across devices, and listen offline.",
   },
   robots: {
     index: true,
@@ -102,7 +101,7 @@ export default function RootLayout({
     name: "DriveBeats",
     url: siteUrl,
     description:
-      "Free online music player for Google Drive. Stream MP3, FLAC, WAV, AAC, and OGG directly from Drive with Spotify-style controls.",
+      "Free music player for Google Drive. Stream MP3, FLAC, WAV, AAC, and OGG files, sync playlists and favorites across devices, and download tracks for offline playback.",
     applicationCategory: "MultimediaApplication",
     operatingSystem: "Any",
     offers: {
@@ -112,11 +111,12 @@ export default function RootLayout({
     },
     featureList: [
       "Stream MP3, FLAC, WAV, AAC, and OGG files from Google Drive",
+      "Cross-device playlist and favorite sync",
+      "Offline playback",
+      "PWA installable",
       "Shuffle and repeat playback",
       "Browse folders",
-      "Volume control",
       "Keyboard shortcuts",
-      "No downloads required",
     ],
   };
 

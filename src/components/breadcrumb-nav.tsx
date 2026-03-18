@@ -31,7 +31,9 @@ export function BreadcrumbNav({ folderStack, onNavigate }: BreadcrumbNavProps) {
                   {folder.name}
                 </BreadcrumbLink>
               ) : (
-                <span className="font-semibold text-foreground">{folder.name}</span>
+                <span className="font-semibold text-foreground">
+                  {folder.name}
+                </span>
               )}
             </BreadcrumbItem>
           </Fragment>

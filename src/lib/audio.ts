@@ -28,7 +28,9 @@ export function inferAudioMimeType(name: string) {
   return AUDIO_EXTENSION_TO_MIME[extension];
 }
 
-export function isSupportedAudioFile(file: Pick<DriveFile, "mimeType" | "name">) {
+export function isSupportedAudioFile(
+  file: Pick<DriveFile, "mimeType" | "name">,
+) {
   return (
     SUPPORTED_AUDIO_MIME_TYPES.includes(
       file.mimeType as (typeof SUPPORTED_AUDIO_MIME_TYPES)[number],
@@ -52,7 +54,8 @@ export function playlistTrackToDriveFile(track: PlaylistTrack): DriveFile {
   return {
     id: track.fileId,
     name: track.fileName,
-    mimeType: track.mimeType ?? inferAudioMimeType(track.fileName) ?? "audio/mpeg",
+    mimeType:
+      track.mimeType ?? inferAudioMimeType(track.fileName) ?? "audio/mpeg",
     size: track.size,
     modifiedTime: track.modifiedTime,
     parents: track.parents,

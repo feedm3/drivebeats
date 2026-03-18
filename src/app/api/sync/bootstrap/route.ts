@@ -14,9 +14,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = (await request.json().catch(() => null)) as
-    | Record<string, unknown>
-    | null;
+  const body = (await request.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
   const payload = parseBootstrapPayload(body);
   if (!payload) {
     return NextResponse.json(

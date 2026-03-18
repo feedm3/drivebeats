@@ -36,7 +36,9 @@ export function FolderTree({
   activePlaylistId,
   onSelectPlaylist,
 }: FolderTreeProps) {
-  const importedRootFolders = useImportedDriveStore((state) => state.rootFolders);
+  const importedRootFolders = useImportedDriveStore(
+    (state) => state.rootFolders,
+  );
   const importedRootFileCount = useImportedDriveStore(
     (state) => state.rootFiles.length,
   );
@@ -120,7 +122,9 @@ export function FolderTree({
                   : "No imported folders yet."}
               </p>
               <DriveImportButton size="sm" className="w-full justify-center">
-                {importedRootFileCount > 0 ? "Add folder from Drive" : "Add from Drive"}
+                {importedRootFileCount > 0
+                  ? "Add folder from Drive"
+                  : "Add from Drive"}
               </DriveImportButton>
             </div>
           ) : (

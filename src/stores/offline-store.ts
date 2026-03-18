@@ -22,10 +22,7 @@ interface OfflineState {
   refCounts: Record<string, number>;
   isDownloading: boolean;
 
-  enableCollection: (
-    collectionId: string,
-    trackFileIds: string[],
-  ) => void;
+  enableCollection: (collectionId: string, trackFileIds: string[]) => void;
   disableCollection: (collectionId: string) => void;
   syncCollectionTracks: (
     collectionId: string,

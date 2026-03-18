@@ -20,11 +20,7 @@ function formatSize(bytes: string | undefined) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function FileItem({
-  file,
-  allMp3s,
-  onFolderClick,
-}: FileItemProps) {
+export function FileItem({ file, allMp3s, onFolderClick }: FileItemProps) {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -49,12 +45,32 @@ export function FileItem({
     >
       <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
         {folder ? (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
           </svg>
         ) : (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M9 18V5l12-2v13" />
+            <circle cx="6" cy="18" r="3" />
+            <circle cx="18" cy="16" r="3" />
           </svg>
         )}
       </span>

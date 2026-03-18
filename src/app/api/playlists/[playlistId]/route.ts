@@ -4,6 +4,7 @@ import {
   renamePlaylistRecord,
 } from "@/lib/cloud-library-service";
 import { getServerAuthSession } from "@/lib/server-auth";
+import { parsePlaylistNameInput } from "@/lib/cloud-library-validation";
 
 export const runtime = "nodejs";
 
@@ -20,15 +21,19 @@ export async function PATCH(
   }
 
   const { playlistId } = await context.params;
-  const body = (await request.json()) as Partial<{ name: string }>;
-  if (typeof body.name !== "string" || body.name.trim().length === 0) {
+  const body = (await request.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+  const payload = parsePlaylistNameInput(body);
+  if (!payload) {
     return NextResponse.json(
       { error: "Invalid payload" },
       { status: 400, headers: { "Cache-Control": "no-store" } },
     );
   }
 
-  await renamePlaylistRecord(session.user, playlistId, body.name.trim());
+  await renamePlaylistRecord(session.user, playlistId, payload.name);
   return NextResponse.json(
     { ok: true },
     { headers: { "Cache-Control": "no-store" } },

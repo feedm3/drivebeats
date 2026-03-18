@@ -18,9 +18,10 @@ export async function PUT(
   }
 
   const { fileId } = await context.params;
-  const body = (await request.json().catch(() => null)) as
-    | Record<string, unknown>
-    | null;
+  const body = (await request.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
   const payload = parseFavoriteTrackInput(body, fileId);
   if (!payload) {
     return NextResponse.json(
@@ -49,9 +50,10 @@ export async function DELETE(
   }
 
   const { fileId } = await context.params;
-  const body = (await request.json().catch(() => null)) as
-    | Record<string, unknown>
-    | null;
+  const body = (await request.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
   const payload = parseFavoriteTrackInput(body, fileId);
   if (!payload) {
     return NextResponse.json(

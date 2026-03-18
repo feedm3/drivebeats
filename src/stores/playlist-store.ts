@@ -13,7 +13,8 @@ import {
 import { resolveParentFolderName } from "@/lib/resolve-parent-folder";
 import type { Playlist, PlaylistTrack } from "@/types";
 
-const PLAYLIST_SYNC_ERROR = "Could not sync playlists. Restored the last cloud state.";
+const PLAYLIST_SYNC_ERROR =
+  "Could not sync playlists. Restored the last cloud state.";
 
 const playlistMutationQueues = new Map<string, Promise<void>>();
 

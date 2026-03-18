@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import type { CreatePlaylistInput } from "@/lib/cloud-library-shared";
 import { createPlaylistRecord } from "@/lib/cloud-library-service";
 import { getServerAuthSession } from "@/lib/server-auth";
+import { parseCreatePlaylistInput } from "@/lib/cloud-library-validation";
 
 export const runtime = "nodejs";
 
@@ -14,23 +14,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = (await request.json()) as Partial<CreatePlaylistInput>;
-  if (
-    typeof body.id !== "string" ||
-    body.id.length === 0 ||
-    typeof body.name !== "string" ||
-    body.name.trim().length === 0
-  ) {
+  const body = (await request.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+  const payload = parseCreatePlaylistInput(body);
+  if (!payload) {
     return NextResponse.json(
       { error: "Invalid payload" },
       { status: 400, headers: { "Cache-Control": "no-store" } },
     );
   }
 
-  await createPlaylistRecord(session.user, {
-    id: body.id,
-    name: body.name.trim(),
-  });
+  await createPlaylistRecord(session.user, payload);
 
   return NextResponse.json(
     { ok: true },

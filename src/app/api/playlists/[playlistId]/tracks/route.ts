@@ -18,9 +18,10 @@ export async function POST(
   }
 
   const { playlistId } = await context.params;
-  const body = (await request.json().catch(() => null)) as
-    | Record<string, unknown>
-    | null;
+  const body = (await request.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
   const payload = parseAddPlaylistTracksInput(body);
   if (!payload) {
     return NextResponse.json(

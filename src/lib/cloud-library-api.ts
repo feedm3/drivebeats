@@ -12,9 +12,9 @@ import type { Playlist, PlaylistTrack } from "@/types";
 const CLOUD_API_TIMEOUT_MS = 10_000;
 
 async function readError(response: Response) {
-  const data = (await response.json().catch(() => null)) as
-    | { error?: string }
-    | null;
+  const data = (await response.json().catch(() => null)) as {
+    error?: string;
+  } | null;
 
   if (data?.error) {
     return data.error;
@@ -28,7 +28,10 @@ async function request(
   init?: RequestInit,
 ): Promise<Response> {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), CLOUD_API_TIMEOUT_MS);
+  const timeoutId = window.setTimeout(
+    () => controller.abort(),
+    CLOUD_API_TIMEOUT_MS,
+  );
 
   let response: Response;
   try {

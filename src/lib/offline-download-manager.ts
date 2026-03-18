@@ -272,9 +272,7 @@ async function recoverOfflineState(): Promise<void> {
 
   try {
     const persistedTracks = await offlineDb.getAllTrackSizes();
-    const downloadedIds = new Set(
-      persistedTracks.map(({ fileId }) => fileId),
-    );
+    const downloadedIds = new Set(persistedTracks.map(({ fileId }) => fileId));
 
     useOfflineStore.setState((state) => {
       const nextTrackStatus: Record<string, OfflineTrackStatus> = {};
@@ -286,7 +284,8 @@ async function recoverOfflineState(): Promise<void> {
           continue;
         }
 
-        nextTrackStatus[fileId] = currentStatus === "failed" ? "failed" : "queued";
+        nextTrackStatus[fileId] =
+          currentStatus === "failed" ? "failed" : "queued";
       }
 
       return { trackStatus: nextTrackStatus };
@@ -458,9 +457,8 @@ export async function syncCollection(collectionId: string): Promise<void> {
   store.syncCollectionTracks(collectionId, fileIds);
 
   const changedTracks = staleTracks.filter(
-    (
-      track,
-    ): track is NonNullable<(typeof staleTracks)[number]> => track !== null,
+    (track): track is NonNullable<(typeof staleTracks)[number]> =>
+      track !== null,
   );
   if (changedTracks.length > 0) {
     const metadataById = new Map(

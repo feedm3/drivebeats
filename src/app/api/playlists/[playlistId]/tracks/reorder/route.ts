@@ -18,9 +18,10 @@ export async function PUT(
   }
 
   const { playlistId } = await context.params;
-  const body = (await request.json().catch(() => null)) as
-    | Record<string, unknown>
-    | null;
+  const body = (await request.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
   const payload = parseReorderPlaylistTracksInput(body);
   if (!payload) {
     return NextResponse.json(
@@ -29,7 +30,22 @@ export async function PUT(
     );
   }
 
-  await reorderPlaylistTracksRecords(session.user, playlistId, payload.fileIds);
+  try {
+    await reorderPlaylistTracksRecords(
+      session.user,
+      playlistId,
+      payload.fileIds,
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message === "Invalid reorder payload") {
+      return NextResponse.json(
+        { error: "Invalid payload" },
+        { status: 400, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
+    throw error;
+  }
   return NextResponse.json(
     { ok: true },
     { headers: { "Cache-Control": "no-store" } },

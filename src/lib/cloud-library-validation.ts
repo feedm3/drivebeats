@@ -1,6 +1,7 @@
 import type {
   AddPlaylistTracksInput,
   CloudLibrarySyncPayload,
+  CreatePlaylistInput,
   FavoriteTrackInput,
   ReorderPlaylistTracksInput,
 } from "@/lib/cloud-library-shared";
@@ -22,16 +23,13 @@ export const MAX_EMAIL_LENGTH = 320;
 
 function isNonEmptyString(value: unknown, maxLength: number) {
   return (
-    typeof value === "string" &&
-    value.length > 0 &&
-    value.length <= maxLength
+    typeof value === "string" && value.length > 0 && value.length <= maxLength
   );
 }
 
 function isOptionalString(value: unknown, maxLength: number) {
   return (
-    value == null ||
-    (typeof value === "string" && value.length <= maxLength)
+    value == null || (typeof value === "string" && value.length <= maxLength)
   );
 }
 
@@ -102,6 +100,43 @@ export function parseBootstrapPayload(
   } satisfies CloudLibrarySyncPayload;
 }
 
+export function parseCreatePlaylistInput(
+  body: Partial<CreatePlaylistInput> | null,
+): CreatePlaylistInput | null {
+  const id = body?.id;
+  const name = body?.name?.trim();
+
+  if (
+    typeof id !== "string" ||
+    typeof name !== "string" ||
+    !isNonEmptyString(id, MAX_GOOGLE_ID_LENGTH) ||
+    !isNonEmptyString(name, MAX_TEXT_NAME_LENGTH)
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    name,
+  } satisfies CreatePlaylistInput;
+}
+
+export function parsePlaylistNameInput(
+  body: Partial<{ name: string }> | null,
+): { name: string } | null {
+  const name = body?.name?.trim();
+  if (
+    typeof name !== "string" ||
+    !isNonEmptyString(name, MAX_TEXT_NAME_LENGTH)
+  ) {
+    return null;
+  }
+
+  return {
+    name,
+  } satisfies { name: string };
+}
+
 export function parseAddPlaylistTracksInput(
   body: Partial<AddPlaylistTracksInput> | null,
 ) {
@@ -125,7 +160,9 @@ export function parseReorderPlaylistTracksInput(
     !Array.isArray(body.fileIds) ||
     body.fileIds.length === 0 ||
     body.fileIds.length > MAX_REORDER_FILE_IDS ||
-    body.fileIds.some((fileId) => !isNonEmptyString(fileId, MAX_GOOGLE_ID_LENGTH))
+    body.fileIds.some(
+      (fileId) => !isNonEmptyString(fileId, MAX_GOOGLE_ID_LENGTH),
+    )
   ) {
     return null;
   }

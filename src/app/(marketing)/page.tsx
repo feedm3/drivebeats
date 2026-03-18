@@ -38,97 +38,24 @@ export default function LandingPage() {
           className="mb-2 rounded-2xl"
         />
         <h1 className="max-w-lg text-4xl font-bold tracking-tight">
-          Your Google Drive music player, now with cross-device sync
+          Play your Google Drive music on any device
         </h1>
         <p className="max-w-md text-lg text-muted-foreground">
-          Import only the folders you choose, keep playlists and favorites in
-          sync between desktop and mobile, and download tracks for offline
-          listening on the device you are using.
+          Pick the folders you want, stream your MP3s, FLACs, and more. Keep
+          playlists and favorites in sync across all your devices. Download
+          tracks for offline playback.
         </p>
         <SignInButton className="mt-4 inline-flex h-11 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90" />
         <p className="text-xs text-muted-foreground">
-          DriveBeats only sees the files and folders you pick. Your imported
-          library and offline downloads stay local to this device. Your
-          playlists and favorites sync so they are ready when you switch
-          screens.
+          Free forever. Set up in under a minute.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          DriveBeats only accesses the Drive files you choose.
         </p>
       </div>
 
-      {/* Features */}
-      <section className="w-full max-w-3xl py-12">
-        <h2 className="mb-8 text-center text-2xl font-semibold">
-          Your Drive music, your way
-        </h2>
-        <div className="grid gap-6 sm:grid-cols-2">
-          <div className="text-center">
-            <div className="mb-2">
-              <Heart className="mx-auto size-6" aria-hidden="true" />
-            </div>
-            <h3 className="text-sm font-semibold">Quick favorites</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Save tracks once, then open your Favorites view on desktop,
-              tablet, or phone without rebuilding the same list on each device.
-            </p>
-          </div>
-          <div className="text-center">
-            <div className="mb-2">
-              <Download className="mx-auto size-6" aria-hidden="true" />
-            </div>
-            <h3 className="text-sm font-semibold">Offline playback</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Download playlists and favorites to the device you&apos;re using,
-              then keep listening when your connection drops. Your downloads
-              stay local and can be cleared anytime.
-            </p>
-          </div>
-          <div className="text-center">
-            <div className="mb-2">
-              <FolderOpen className="mx-auto size-6" aria-hidden="true" />
-            </div>
-            <h3 className="text-sm font-semibold">Import only what you want</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Pick specific folders or audio files, then browse them in a
-              focused library. The rest of your Drive stays private.
-            </p>
-          </div>
-          <div className="text-center">
-            <div className="mb-2">
-              <ListMusic className="mx-auto size-6" aria-hidden="true" />
-            </div>
-            <h3 className="text-sm font-semibold">Cross-folder playlists</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Mix songs from any folder into custom playlists. Drag to add,
-              drag to reorder, and pick up the same playlists on desktop or
-              mobile.
-            </p>
-          </div>
-          <div className="text-center">
-            <div className="mb-2">
-              <Play className="mx-auto size-6" aria-hidden="true" />
-            </div>
-            <h3 className="text-sm font-semibold">Full playback controls</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Shuffle, repeat, volume, seekable progress bar, and keyboard
-              shortcuts, whether you&apos;re streaming or playing downloaded
-              tracks.
-            </p>
-          </div>
-          <div className="text-center">
-            <div className="mb-2">
-              <Lock className="mx-auto size-6" aria-hidden="true" />
-            </div>
-            <h3 className="text-sm font-semibold">Private by design</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              DriveBeats only sees files and folders you explicitly share.
-              Recently played, imported items, and offline files stay on your
-              device.
-            </p>
-          </div>
-        </div>
-      </section>
-
       {/* How it works */}
-      <section className="w-full max-w-3xl border-t border-border/50 py-12">
+      <section className="w-full max-w-3xl py-12">
         <h2 className="mb-8 text-center text-2xl font-semibold">
           How it works
         </h2>
@@ -139,7 +66,7 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Sign in</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Sign in with Google to get started.
+              Connect your Google account. DriveBeats never sees your password.
             </p>
           </div>
           <div className="text-center">
@@ -158,9 +85,77 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Play</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Stream your MP3, FLAC, WAV, AAC, and OGG files, build playlists
-              across folders, and keep your favorites ready wherever you sign
-              in.
+              Stream, build playlists, and favorite tracks. Everything syncs so
+              it&apos;s ready on your next device.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="w-full max-w-3xl border-t border-border/50 py-12">
+        <h2 className="mb-8 text-center text-2xl font-semibold">
+          Your Drive music, your way
+        </h2>
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div className="text-center">
+            <div className="mb-2">
+              <Heart className="mx-auto size-6" aria-hidden="true" />
+            </div>
+            <h3 className="text-sm font-semibold">Favorites that follow you</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Heart a song on one device, find it in your Favorites on every
+              other.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="mb-2">
+              <Download className="mx-auto size-6" aria-hidden="true" />
+            </div>
+            <h3 className="text-sm font-semibold">Offline playback</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Download playlists and favorites so you can keep listening on a
+              plane, on your commute, or anywhere without a connection.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="mb-2">
+              <FolderOpen className="mx-auto size-6" aria-hidden="true" />
+            </div>
+            <h3 className="text-sm font-semibold">Import only what you want</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Pick specific folders or audio files for a clean library view.
+              Nothing else is touched.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="mb-2">
+              <ListMusic className="mx-auto size-6" aria-hidden="true" />
+            </div>
+            <h3 className="text-sm font-semibold">Playlists from any folder</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Combine songs from different folders into playlists. Drag to
+              reorder, pick them up on any device.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="mb-2">
+              <Play className="mx-auto size-6" aria-hidden="true" />
+            </div>
+            <h3 className="text-sm font-semibold">A real music player</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Shuffle, repeat, progress bar, and keyboard shortcuts. Works the
+              same whether you&apos;re streaming or playing downloaded tracks.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="mb-2">
+              <Lock className="mx-auto size-6" aria-hidden="true" />
+            </div>
+            <h3 className="text-sm font-semibold">Private by design</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              No full-Drive access. Your listening history, imported library,
+              and offline downloads never leave your browser.
             </p>
           </div>
         </div>
@@ -172,14 +167,6 @@ export default function LandingPage() {
           Frequently asked questions
         </h2>
         <div className="space-y-4">
-          <details className="rounded-lg border border-border px-4 py-3">
-            <summary className="cursor-pointer text-sm font-semibold">
-              Is DriveBeats really free?
-            </summary>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Yes. DriveBeats is free to use, with no paid tiers and no ads.
-            </p>
-          </details>
           <details className="rounded-lg border border-border px-4 py-3">
             <summary className="cursor-pointer text-sm font-semibold">
               How does signing up work?
@@ -199,13 +186,10 @@ export default function LandingPage() {
               What permissions does DriveBeats need?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              DriveBeats requests{" "}
-              <code>https://www.googleapis.com/auth/drive.file</code> so you can
-              choose the folders and audio files you want to use without
-              granting access to your entire Drive. It also requests{" "}
-              <code>openid</code>, <code>userinfo.email</code>, and{" "}
-              <code>userinfo.profile</code> so the app can sign you in and show
-              your account inside DriveBeats.
+              DriveBeats requests read-only access to the specific folders and
+              audio files you select — it never sees your entire Drive. It also
+              uses basic sign-in info (your name, email, and profile picture) to
+              identify your account within the app.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -214,9 +198,9 @@ export default function LandingPage() {
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
               DriveBeats is built to read and play the files you choose. It does
-              not upload, edit, rename, move, or delete your Drive files.
-              Access is limited to the items you select with Google Picker,
-              rather than your entire Drive.
+              not upload, edit, rename, move, or delete your Drive files. Access
+              is limited to the items you select with Google Picker, rather than
+              your entire Drive.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -229,36 +213,6 @@ export default function LandingPage() {
               downloaded tracks are stored locally in your browser on this
               device. Only playlist and favorite metadata is synced so those
               collections can follow you across devices.
-            </p>
-          </details>
-          <details className="rounded-lg border border-border px-4 py-3">
-            <summary className="cursor-pointer text-sm font-semibold">
-              What file formats are supported?
-            </summary>
-            <p className="mt-2 text-sm text-muted-foreground">
-              DriveBeats is built for MP3, FLAC, WAV, AAC/M4A, and OGG files.
-              You can import individual tracks or folders that contain them.
-            </p>
-          </details>
-          <details className="rounded-lg border border-border px-4 py-3">
-            <summary className="cursor-pointer text-sm font-semibold">
-              Can I use DriveBeats on my phone or tablet?
-            </summary>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Yes. DriveBeats works in modern mobile and desktop browsers, so
-              you can browse your library and control playback on phones,
-              tablets, and computers.
-            </p>
-          </details>
-          <details className="rounded-lg border border-border px-4 py-3">
-            <summary className="cursor-pointer text-sm font-semibold">
-              Does DriveBeats work offline?
-            </summary>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Yes. You can download playlists and favorites for offline
-              playback on the device you&apos;re using. Those downloads stay in
-              your browser storage and can be removed anytime from Offline
-              storage.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -291,18 +245,19 @@ export default function LandingPage() {
               Logging out removes your local DriveBeats data from this browser,
               including imported items, recently played tracks, offline
               downloads, and saved player state. Your synced playlists and
-              favorites stay in your account unless you delete them from
-              Offline storage.
+              favorites stay in your account unless you delete them from Offline
+              storage.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
             <summary className="cursor-pointer text-sm font-semibold">
-              What happens when I add new songs to an imported folder?
+              Can I install DriveBeats as an app on my phone or computer?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              When you open or refresh that folder in DriveBeats, it loads the
-              current contents from Google Drive. Playlists stay the way you set
-              them up until you change them.
+              Yes. DriveBeats is a Progressive Web App, so you can add it to
+              your home screen on Android, iOS, or your desktop from your
+              browser menu. It works offline and doesn&apos;t require an app
+              store download.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -328,10 +283,11 @@ export default function LandingPage() {
       {/* Final CTA */}
       <section className="w-full max-w-3xl border-t border-border/50 py-16 text-center">
         <h2 className="mb-2 text-2xl font-semibold">
-          Ready to sync your music setup?
+          Your music, on every device, for free
         </h2>
         <p className="mb-4 text-sm text-muted-foreground">
-          Build playlists on your computer, then pick them up on mobile.
+          Stream from Google Drive, keep playlists and favorites in sync, and
+          listen offline.
         </p>
         <SignInButton className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90" />
       </section>

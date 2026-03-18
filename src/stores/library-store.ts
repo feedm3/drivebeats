@@ -58,8 +58,7 @@ function toLibraryMeta(
     size: track.size ?? existing?.size,
     modifiedTime: track.modifiedTime ?? existing?.modifiedTime,
     parents: track.parents ?? existing?.parents,
-    parentFolderName:
-      track.parentFolderName ?? existing?.parentFolderName,
+    parentFolderName: track.parentFolderName ?? existing?.parentFolderName,
     isFavorite: existing?.isFavorite,
     lastPlayedAt: existing?.lastPlayedAt,
     playCount: existing?.playCount ?? 0,
@@ -104,13 +103,13 @@ export function getFavoriteTracks(
         parents,
         parentFolderName,
       }) => ({
-      fileId,
-      fileName,
-      mimeType,
-      size,
-      modifiedTime,
-      parents,
-      parentFolderName,
+        fileId,
+        fileName,
+        mimeType,
+        size,
+        modifiedTime,
+        parents,
+        parentFolderName,
       }),
     );
 }
@@ -133,13 +132,13 @@ export function getRecentlyPlayedTracks(
         parents,
         parentFolderName,
       }) => ({
-      fileId,
-      fileName,
-      mimeType,
-      size,
-      modifiedTime,
-      parents,
-      parentFolderName,
+        fileId,
+        fileName,
+        mimeType,
+        size,
+        modifiedTime,
+        parents,
+        parentFolderName,
       }),
     );
 }

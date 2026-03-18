@@ -25,6 +25,17 @@ export function formatRelativeDate(timestamp: number): string {
   });
 }
 
+export function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  );
+  const value = bytes / 1024 ** i;
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[i]}`;
+}
+
 export function getHistoryStateWithFolderStack(
   folderStack: { id: string; name: string }[],
   activePlaylistId: string | null = null,

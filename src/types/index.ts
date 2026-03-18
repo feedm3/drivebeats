@@ -3,7 +3,9 @@ export interface DriveFile {
   name: string;
   mimeType: string;
   size?: string;
+  modifiedTime?: string;
   parents?: string[];
+  parentFolderName?: string;
 }
 
 export interface AuthTokens {
@@ -28,7 +30,10 @@ export interface PlaylistTrack {
   fileId: string;
   fileName: string;
   mimeType?: string;
+  size?: string;
+  modifiedTime?: string;
   parents?: string[];
+  parentFolderName?: string;
 }
 
 export interface Playlist {

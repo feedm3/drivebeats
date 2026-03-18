@@ -16,7 +16,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
 import type { DriveFile } from "@/types";
 
-const DRIVE_METADATA_FIELDS = "id,name,mimeType,size,parents";
+const DRIVE_METADATA_FIELDS = "id,name,mimeType,size,modifiedTime,parents";
 
 function toDriveFile(file: GoogleDriveFileMetadataResponse): DriveFile | null {
   if (!file.id || !file.name || !file.mimeType) {
@@ -28,6 +28,7 @@ function toDriveFile(file: GoogleDriveFileMetadataResponse): DriveFile | null {
     name: file.name,
     mimeType: file.mimeType,
     size: file.size,
+    modifiedTime: file.modifiedTime,
     parents: file.parents,
   };
 }

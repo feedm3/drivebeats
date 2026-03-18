@@ -1,11 +1,19 @@
 "use client";
 
-import { GripVertical, Music4, X } from "lucide-react";
+import {
+  ArrowDown,
+  Check,
+  GripVertical,
+  Loader2,
+  Music4,
+  X,
+} from "lucide-react";
 import { NowPlayingBars } from "@/components/now-playing-bars";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { getTrackDisplayName } from "@/lib/audio";
 import { cn } from "@/lib/utils";
+import type { OfflineTrackStatus } from "@/stores/offline-store";
 import type { PlaylistTrack } from "@/types";
 
 interface PlaylistTrackItemProps {
@@ -17,6 +25,7 @@ interface PlaylistTrackItemProps {
   isDragging: boolean;
   dropIndicator: "above" | "below" | null;
   isReorderable?: boolean;
+  offlineStatus?: OfflineTrackStatus;
   subtitle?: string;
   onPlay: () => void;
   onRemove: () => void;
@@ -32,6 +41,7 @@ export function PlaylistTrackItem({
   isDragging,
   dropIndicator,
   isReorderable = true,
+  offlineStatus,
   subtitle,
   onPlay,
   onRemove,
@@ -94,6 +104,39 @@ export function PlaylistTrackItem({
             {getTrackDisplayName(track.fileName)}
           </span>
         </span>
+        {offlineStatus && (
+          <span
+            className={cn(
+              "shrink-0 ml-1",
+              offlineStatus === "downloaded"
+                ? "text-emerald-500"
+                : offlineStatus === "failed"
+                  ? "text-destructive"
+                  : "text-muted-foreground",
+            )}
+            title={
+              offlineStatus === "downloaded"
+                ? "Downloaded"
+                : offlineStatus === "downloading" ||
+                    offlineStatus === "updating"
+                  ? "Downloading"
+                  : offlineStatus === "failed"
+                    ? "Download failed"
+                    : "Queued"
+            }
+          >
+            {offlineStatus === "downloaded" ? (
+              <Check className="size-3" />
+            ) : offlineStatus === "downloading" ||
+              offlineStatus === "updating" ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : offlineStatus === "failed" ? (
+              <X className="size-3" />
+            ) : (
+              <ArrowDown className="size-3" />
+            )}
+          </span>
+        )}
       </div>
       {subtitle && (
         <span className="shrink-0 px-2 text-xs tabular-nums text-muted-foreground">

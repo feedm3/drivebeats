@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, History, ListMusic, Plus } from "lucide-react";
+import { Download, Heart, History, ListMusic, Plus } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -21,6 +21,7 @@ import {
   getRecentlyPlayedTracks,
   useLibraryStore,
 } from "@/stores/library-store";
+import { useOfflineStore } from "@/stores/offline-store";
 import { usePlayerStore } from "@/stores/player-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
 import type { PlaylistTrack } from "@/types";
@@ -62,6 +63,7 @@ export const PlaylistSection = forwardRef<
   const getCachedFiles = useFolderCacheStore((s) => s.getFiles);
   const playingPlaylistId = usePlayerStore((s) => s.playingPlaylistId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const offlineCollections = useOfflineStore((s) => s.collections);
 
   const [creating, setCreating] = useState(false);
   const [createName, setCreateName] = useState("");
@@ -180,6 +182,9 @@ export const PlaylistSection = forwardRef<
                   <span className="min-w-0 flex-1 truncate">
                     {collection.label}
                   </span>
+                  {offlineCollections[collection.id]?.enabled && (
+                    <Download className="size-3 shrink-0 text-primary/60" />
+                  )}
                   <span className="shrink-0 min-w-6 text-center text-xs text-muted-foreground tabular-nums">
                     {collection.count}
                   </span>
@@ -240,6 +245,9 @@ export const PlaylistSection = forwardRef<
               const isPlayingThis = playingPlaylistId === playlist.id;
               const isDragOver = dragOverId === playlist.id;
 
+              const isOfflineEnabled =
+                !!offlineCollections[playlist.id]?.enabled;
+
               return (
                 <button
                   key={playlist.id}
@@ -279,6 +287,9 @@ export const PlaylistSection = forwardRef<
                   <span className="min-w-0 flex-1 truncate">
                     {playlist.name}
                   </span>
+                  {isOfflineEnabled && (
+                    <Download className="size-3 shrink-0 text-primary/60" />
+                  )}
                   <span className="shrink-0 min-w-6 text-center text-xs text-muted-foreground tabular-nums">
                     {playlist.tracks.length}
                   </span>

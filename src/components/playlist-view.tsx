@@ -1,6 +1,14 @@
 "use client";
 
-import { ArrowLeft, ListMusic, Pencil, Play, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Download,
+  ListMusic,
+  Loader2,
+  Pencil,
+  Play,
+  Trash2,
+} from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { PlaylistTrackItem } from "@/components/playlist-track-item";
 import { Button } from "@/components/ui/button";
@@ -16,8 +24,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { playlistTrackToDriveFile } from "@/lib/audio";
+import {
+  startCollectionDownload,
+  stopCollectionDownload,
+} from "@/lib/offline-download-manager";
 import { cn, formatRelativeDate } from "@/lib/utils";
 import { useLibraryStore } from "@/stores/library-store";
+import { useOfflineStore } from "@/stores/offline-store";
 import { usePlayerStore } from "@/stores/player-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
 import type { DriveFile, TrackCollection } from "@/types";
@@ -209,6 +222,26 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const removeFromRecent = useLibraryStore((s) => s.removeFromRecent);
   const clearRecent = useLibraryStore((s) => s.clearRecent);
 
+  const offlineCollection = useOfflineStore(
+    (s) => s.collections[collection.id],
+  );
+  const offlineTrackStatus = useOfflineStore((s) => s.trackStatus);
+  const isOfflineEnabled = !!offlineCollection?.enabled;
+  const [offlineToggling, setOfflineToggling] = useState(false);
+
+  const handleOfflineToggle = useCallback(async () => {
+    setOfflineToggling(true);
+    try {
+      if (isOfflineEnabled) {
+        await stopCollectionDownload(collection.id);
+      } else {
+        await startCollectionDownload(collection.id);
+      }
+    } finally {
+      setOfflineToggling(false);
+    }
+  }, [collection.id, isOfflineEnabled]);
+
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const editRef = useRef<HTMLInputElement>(null);
@@ -250,8 +283,9 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
     setEditing(false);
   }, [collection.id, editName, isEditablePlaylist, renamePlaylist]);
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = useCallback(async () => {
     if (!isEditablePlaylist) return;
+    await stopCollectionDownload(collection.id);
     deletePlaylist(collection.id);
     setActivePlaylist(null);
     setDeleteOpen(false);
@@ -266,7 +300,10 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
             fileId,
             fileName,
             mimeType: track?.mimeType,
+            size: track?.size,
+            modifiedTime: track?.modifiedTime,
             parents: track?.parents,
+            parentFolderName: track?.parentFolderName,
           },
           false,
         );
@@ -350,6 +387,46 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
             <Play className="size-3.5" />
             Play All
           </Button>
+          {collection.id !== RECENTLY_PLAYED_COLLECTION_ID && (
+            <IconTooltip
+              label={
+                isOfflineEnabled
+                  ? offlineCollection.downloadedCount ===
+                    offlineCollection.totalCount
+                    ? "Remove downloads"
+                    : `${offlineCollection.downloadedCount}/${offlineCollection.totalCount} downloaded`
+                  : "Available offline"
+              }
+            >
+              <Button
+                variant={isOfflineEnabled ? "secondary" : "ghost"}
+                size="icon-sm"
+                className="text-muted-foreground"
+                onClick={handleOfflineToggle}
+                disabled={
+                  offlineToggling || collection.tracks.length === 0
+                }
+                aria-label={
+                  isOfflineEnabled ? "Remove downloads" : "Available offline"
+                }
+              >
+                {offlineToggling ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Download
+                    className={cn(
+                      "size-4",
+                      isOfflineEnabled && "text-primary",
+                    )}
+                  />
+                )}
+              </Button>
+            </IconTooltip>
+          )}
+          {(collection.id === RECENTLY_PLAYED_COLLECTION_ID ||
+            isEditablePlaylist) && (
+            <div className="h-4 w-px bg-border/60" />
+          )}
           {collection.id === RECENTLY_PLAYED_COLLECTION_ID ? (
             <IconTooltip label="Clear recently played">
               <Button
@@ -380,6 +457,17 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
       </div>
 
       <Separator className="my-3" />
+
+      {isOfflineEnabled &&
+        offlineCollection.downloadedCount < offlineCollection.totalCount && (
+          <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="size-3 animate-spin" />
+            <span>
+              {offlineCollection.downloadedCount}/
+              {offlineCollection.totalCount} downloaded
+            </span>
+          </div>
+        )}
 
       {collection.tracks.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
@@ -431,6 +519,11 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                     drag.overIndex === index ? drag.position : null
                   }
                   isReorderable={isEditablePlaylist}
+                  offlineStatus={
+                    isOfflineEnabled
+                      ? offlineTrackStatus[track.fileId]
+                      : undefined
+                  }
                   onPlay={() =>
                     isPlayingThisPlaylist && currentTrack?.id === track.fileId
                       ? togglePlay()

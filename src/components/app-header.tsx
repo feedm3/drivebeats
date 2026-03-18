@@ -1,10 +1,11 @@
 "use client";
 
-import { ChevronDown, LogOut, UserRound } from "lucide-react";
+import { ChevronDown, HardDrive, LogOut, UserRound } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { OfflineStorageDialog } from "@/components/offline-storage-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +20,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { removeAllDownloads } from "@/lib/offline-download-manager";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
@@ -111,6 +113,7 @@ export function AppHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [offlineStorageOpen, setOfflineStorageOpen] = useState(false);
   const user = useAuthStore((state) => state.user);
   const userLabel = user ? getUserLabel(user.name, user.email) : null;
   const userInitials = user ? getUserInitials(user.name, user.email) : "";
@@ -143,6 +146,12 @@ export function AppHeader() {
 
     usePlaylistStore.setState({ playlists: [], activePlaylistId: null });
     usePlaylistStore.persist.clearStorage();
+
+    try {
+      await removeAllDownloads();
+    } catch (error) {
+      console.warn("Failed to clear offline downloads during logout:", error);
+    }
 
     useFolderCacheStore.getState().clear();
     useImportedDriveStore.getState().clear();
@@ -232,6 +241,18 @@ export function AppHeader() {
                   <div className="mx-1 my-1 h-px bg-border/60" />
                   <button
                     type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setOfflineStorageOpen(true);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+                  >
+                    <HardDrive className="size-4" />
+                    Offline storage
+                  </button>
+                  <div className="mx-1 my-1 h-px bg-border/60" />
+                  <button
+                    type="button"
                     onClick={() => setLogoutOpen(true)}
                     className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-destructive/8 hover:text-destructive"
                   >
@@ -268,6 +289,10 @@ export function AppHeader() {
           </div>
         </DialogContent>
       </Dialog>
+      <OfflineStorageDialog
+        open={offlineStorageOpen}
+        onOpenChange={setOfflineStorageOpen}
+      />
     </header>
   );
 }

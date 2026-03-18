@@ -37,7 +37,7 @@ export function useFolderContents() {
         const query = getSupportedAudioQuery(folderId);
         const params = new URLSearchParams({
           q: query,
-          fields: "files(id,name,mimeType,size,parents)",
+          fields: "files(id,name,mimeType,size,modifiedTime,parents)",
           orderBy: "folder,name",
           pageSize: "1000",
           supportsAllDrives: "true",

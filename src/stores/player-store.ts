@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { downloadGoogleDriveFileMedia } from "@/lib/google-api";
+import * as offlineDb from "@/lib/offline-db";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
@@ -64,6 +65,11 @@ function deriveFolderStack(track: DriveFile): FolderEntry[] {
     if (entry.files.some((file) => file.id === track.id)) {
       return buildPathFromFolderId(folderId);
     }
+  }
+
+  // Last resort: use the stored parent folder name so the title is still clickable
+  if (parentId && track.parentFolderName) {
+    return [...INITIAL_STACK, { id: parentId, name: track.parentFolderName }];
   }
 
   return [];
@@ -175,6 +181,28 @@ export const usePlayerStore = create<PlayerState>()(
           await applySource(cached);
           set({ isLoading: false });
           return true;
+        }
+
+        // Check IndexedDB for offline-cached blob
+        try {
+          const offlineRecord = await offlineDb.getTrack(fileId);
+          if (offlineRecord && !controller.signal.aborted) {
+            const blobUrl = URL.createObjectURL(offlineRecord.blob);
+            if (blobCache.size >= MAX_CACHE_SIZE) {
+              const oldestEntry = blobCache.keys().next();
+              if (!oldestEntry.done) {
+                const oldestUrl = blobCache.get(oldestEntry.value);
+                if (oldestUrl) URL.revokeObjectURL(oldestUrl);
+                blobCache.delete(oldestEntry.value);
+              }
+            }
+            blobCache.set(fileId, blobUrl);
+            await applySource(blobUrl);
+            set({ isLoading: false });
+            return true;
+          }
+        } catch {
+          // IndexedDB unavailable, fall through to Drive fetch
         }
 
         set({ isLoading: true });

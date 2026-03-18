@@ -1,11 +1,16 @@
 "use client";
 
+import { useEffect } from "react";
 import { AppHeader } from "@/components/app-header";
 import { GooglePickerCloseButton } from "@/components/google-picker-close-button";
 import { GooglePickerScripts } from "@/components/google-picker-scripts";
 import { Providers } from "@/components/providers";
+import { initOfflineSync } from "@/lib/offline-download-manager";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    initOfflineSync();
+  }, []);
   return (
     <Providers>
       <GooglePickerScripts />

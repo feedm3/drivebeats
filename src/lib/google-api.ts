@@ -42,6 +42,7 @@ export interface GoogleDriveFileMetadataResponse {
   mimeType?: string;
   parents?: string[];
   size?: string;
+  modifiedTime?: string;
 }
 
 export interface GoogleDriveFilesListResponse {

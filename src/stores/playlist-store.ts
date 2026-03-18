@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { resolveParentFolderName } from "@/lib/resolve-parent-folder";
 import type { Playlist, PlaylistTrack } from "@/types";
 
 interface PlaylistState {
@@ -53,7 +54,14 @@ export const usePlaylistStore = create<PlaylistState>()(
           playlists: get().playlists.map((p) => {
             if (p.id !== playlistId) return p;
             const existingIds = new Set(p.tracks.map((t) => t.fileId));
-            const newTracks = tracks.filter((t) => !existingIds.has(t.fileId));
+            const newTracks = tracks
+              .filter((t) => !existingIds.has(t.fileId))
+              .map((t) => ({
+                ...t,
+                parentFolderName:
+                  t.parentFolderName ??
+                  resolveParentFolderName(t.parents?.[0]),
+              }));
             return { ...p, tracks: [...p.tracks, ...newTracks] };
           }),
         });

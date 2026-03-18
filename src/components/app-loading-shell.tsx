@@ -170,7 +170,7 @@ function BrowserSkeleton({ mobile = false }: { mobile?: boolean }) {
 export function AppLoadingShell() {
   return (
     <div className="h-full" aria-busy="true" aria-live="polite">
-      <div hidden className="mx-auto hidden h-full max-w-[1440px] md:flex">
+      <div className="mx-auto hidden h-full max-w-[1440px] md:flex">
         <div className="w-[280px] shrink-0 overflow-y-auto">
           <SidebarSkeleton />
         </div>

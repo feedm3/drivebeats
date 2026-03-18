@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { AppLoadingShell } from "@/components/app-loading-shell";
 import { useAuthStore } from "@/stores/auth-store";
+import { useImportedDriveStore } from "@/stores/imported-drive-store";
+import { useLibraryStore } from "@/stores/library-store";
 import { useOfflineStore } from "@/stores/offline-store";
+import { usePlaylistStore } from "@/stores/playlist-store";
 
 const OFFLINE_STORE_HYDRATION_TIMEOUT_MS = 3_000;
 
@@ -16,12 +19,22 @@ function hasOfflinePlaybackAvailable() {
   return Object.values(trackStatus).some((status) => status === "downloaded");
 }
 
-function canUseOfflineMode() {
+function hasPersistedAppData() {
+  const { rootFolders, rootFiles } = useImportedDriveStore.getState();
+  const { playlists } = usePlaylistStore.getState();
+  const { tracks } = useLibraryStore.getState();
+
   return (
-    typeof navigator !== "undefined" &&
-    !navigator.onLine &&
+    rootFolders.length > 0 ||
+    rootFiles.length > 0 ||
+    playlists.length > 0 ||
+    Object.keys(tracks).length > 0 ||
     hasOfflinePlaybackAvailable()
   );
+}
+
+function canUseOfflineMode() {
+  return hasPersistedAppData() || isOffline();
 }
 
 function isOffline() {
@@ -36,8 +49,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       ? false
       : (useOfflineStore.persist?.hasHydrated?.() ?? false),
   );
-  const [ready, setReady] = useState(false);
-  const [offlineAccessAllowed, setOfflineAccessAllowed] = useState(false);
+  const [{ ready, offlineAccessAllowed }, setAccessState] = useState({
+    ready: false,
+    offlineAccessAllowed: false,
+  });
 
   useEffect(() => {
     if (offlineStoreHydrated) {
@@ -70,19 +85,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     if (isAuthenticated()) {
-      setReady(true);
+      setAccessState({ ready: true, offlineAccessAllowed: false });
       return;
     }
 
     if (canUseOfflineMode()) {
-      setOfflineAccessAllowed(true);
-      setReady(true);
-      return;
-    }
-
-    if (isOffline()) {
-      setOfflineAccessAllowed(true);
-      setReady(true);
+      setAccessState({ ready: true, offlineAccessAllowed: true });
       return;
     }
 
@@ -93,15 +101,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       }
 
       if (ok || isAuthenticated()) {
-        setReady(true);
+        setAccessState({ ready: true, offlineAccessAllowed: false });
         return;
       }
 
-      if (canUseOfflineMode()) {
-        setOfflineAccessAllowed(true);
-      }
-
-      setReady(true);
+      setAccessState({
+        ready: true,
+        offlineAccessAllowed: canUseOfflineMode(),
+      });
     });
 
     return () => {

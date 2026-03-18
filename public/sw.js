@@ -1,4 +1,4 @@
-const CACHE_NAME = "drivebeats-shell-v1";
+const CACHE_NAME = "drivebeats-shell-v2";
 const APP_SHELL_URLS = [
   "/",
   "/app",
@@ -67,12 +67,16 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(async () => {
+          const cachedApp = await caches.match("/app");
+          if (cachedApp && url.pathname === "/") {
+            return cachedApp;
+          }
+
           const cachedResponse = await caches.match(request);
           if (cachedResponse) {
             return cachedResponse;
           }
 
-          const cachedApp = await caches.match("/app");
           if (cachedApp) {
             return cachedApp;
           }

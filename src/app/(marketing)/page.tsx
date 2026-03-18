@@ -1,4 +1,11 @@
-import { Clock, FolderOpen, Heart, ListMusic, Lock, Play } from "lucide-react";
+import {
+  Download,
+  FolderOpen,
+  Heart,
+  ListMusic,
+  Lock,
+  Play,
+} from "lucide-react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import { Suspense } from "react";
@@ -10,7 +17,7 @@ export const metadata: Metadata = {
     absolute: "DriveBeats - Google Drive Music Player",
   },
   description:
-    "Stream MP3, FLAC, WAV, AAC, and OGG files from Google Drive with playlists, favorites, and access limited to only the files you choose.",
+    "Stream MP3, FLAC, WAV, AAC, and OGG files from Google Drive, then save playlists and favorites for offline playback on this device.",
 };
 
 export default function LandingPage() {
@@ -31,16 +38,17 @@ export default function LandingPage() {
           className="mb-2 rounded-2xl"
         />
         <h1 className="max-w-lg text-4xl font-bold tracking-tight">
-          Stream your music collection from Google Drive
+          Stream your music collection from Google Drive, online or offline
         </h1>
         <p className="max-w-md text-lg text-muted-foreground">
-          Pick your folders, then play them right here. Playlists, favorites,
-          full playback controls. No uploads, no syncing, no extra apps.
+          Pick your folders, press play, and download playlists or favorites for
+          offline listening on this device. No uploads, no syncing to another
+          service, no extra apps.
         </p>
         <SignInButton className="mt-4 inline-flex h-11 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90" />
         <p className="text-xs text-muted-foreground">
-          DriveBeats can only access the files you choose. Nothing else in your
-          Drive.
+          DriveBeats can only access the files you choose. Offline downloads
+          stay in your browser on this device, not on our servers.
         </p>
       </div>
 
@@ -62,14 +70,12 @@ export default function LandingPage() {
           </div>
           <div className="text-center">
             <div className="mb-2">
-              <Clock className="mx-auto size-6" aria-hidden="true" />
+              <Download className="mx-auto size-6" aria-hidden="true" />
             </div>
-            <h3 className="text-sm font-semibold">
-              Recently played at a glance
-            </h3>
+            <h3 className="text-sm font-semibold">Offline playback</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Jump back into the tracks you listened to most recently without
-              rebuilding the queue by hand.
+              Save playlists and favorites on the device you&apos;re using, then
+              keep listening when your connection drops or you&apos;re on the move.
             </p>
           </div>
           <div className="text-center">
@@ -89,7 +95,7 @@ export default function LandingPage() {
             <h3 className="text-sm font-semibold">Cross-folder playlists</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               Mix songs from any folder into custom playlists. Drag to add, drag
-              to reorder, and everything saves to your browser automatically.
+              to reorder, and save the ones you want available offline.
             </p>
           </div>
           <div className="text-center">
@@ -99,7 +105,8 @@ export default function LandingPage() {
             <h3 className="text-sm font-semibold">Full playback controls</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               Shuffle, repeat, volume, seekable progress bar, and keyboard
-              shortcuts. Everything you&apos;d expect from a music player.
+              shortcuts, whether you&apos;re streaming or playing downloaded
+              tracks.
             </p>
           </div>
           <div className="text-center">
@@ -147,8 +154,8 @@ export default function LandingPage() {
             <h3 className="text-sm font-semibold">Play</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               Stream your MP3, FLAC, WAV, AAC, and OGG files, build playlists
-              across folders, and control playback with shuffle, repeat, and
-              keyboard shortcuts.
+              across folders, then keep your favorites and playlists available
+              offline on this device.
             </p>
           </div>
         </div>
@@ -212,9 +219,10 @@ export default function LandingPage() {
               Do my files get downloaded or stored on your servers?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              No. DriveBeats plays your audio from Google Drive in your browser.
-              Your files are not uploaded, copied, or stored on DriveBeats
-              servers.
+              Not on our servers. DriveBeats streams your audio from Google
+              Drive in your browser, and if you choose offline playback, the
+              downloaded tracks are stored locally in your browser on this
+              device.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -241,8 +249,9 @@ export default function LandingPage() {
               Does DriveBeats work offline?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              No. DriveBeats plays music from Google Drive in your browser, so
-              you need an internet connection to load and play tracks.
+              Yes. You can save playlists and favorites for offline playback on
+              the device you&apos;re using. Those downloads stay in your browser
+              storage and can be removed anytime from Offline storage.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -251,8 +260,9 @@ export default function LandingPage() {
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
               Playlists, favorites, recently played tracks, and imported items
-              are stored locally in your browser on this device. DriveBeats
-              does not write them back to your Google Drive.
+              are stored locally in your browser on this device. Offline tracks
+              are also stored locally when you download them. DriveBeats does
+              not write that data back to your Google Drive.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">

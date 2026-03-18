@@ -2,6 +2,7 @@
 
 import { HardDrive, Loader2, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,9 +11,12 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { deleteAllCloudLibraryData } from "@/lib/cloud-library-api";
 import { removeAllDownloads } from "@/lib/offline-download-manager";
 import * as offlineDb from "@/lib/offline-db";
 import { formatBytes } from "@/lib/utils";
+import { getFavoriteTracks, useLibraryStore } from "@/stores/library-store";
+import { usePlaylistStore } from "@/stores/playlist-store";
 
 interface OfflineStorageDialogProps {
   open: boolean;
@@ -29,6 +33,10 @@ export function OfflineStorageDialog({
     null,
   );
   const [removing, setRemoving] = useState(false);
+  const [deletingCloudData, setDeletingCloudData] = useState(false);
+  const playlists = usePlaylistStore((state) => state.playlists);
+  const libraryTracks = useLibraryStore((state) => state.tracks);
+  const favoriteCount = getFavoriteTracks(libraryTracks).length;
 
   const loadStats = useCallback(async () => {
     try {
@@ -70,6 +78,22 @@ export function OfflineStorageDialog({
     }
   }, [onOpenChange]);
 
+  const handleDeleteCloudData = useCallback(async () => {
+    setDeletingCloudData(true);
+    try {
+      await deleteAllCloudLibraryData();
+      usePlaylistStore.getState().clearCloudState();
+      usePlaylistStore.persist.clearStorage();
+      useLibraryStore.getState().clearCloudFavorites();
+      toast.success("Deleted synced playlists and favorites.");
+    } catch (error) {
+      console.error("Delete cloud data failed:", error);
+      toast.error("Could not delete cloud data.");
+    } finally {
+      setDeletingCloudData(false);
+    }
+  }, []);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -78,7 +102,8 @@ export function OfflineStorageDialog({
           Offline storage
         </DialogTitle>
         <DialogDescription>
-          Manage downloaded tracks stored on this device.
+          Manage downloaded tracks on this device and synced music data in your
+          account.
         </DialogDescription>
 
         <div className="mt-2 space-y-3 text-sm">
@@ -102,10 +127,42 @@ export function OfflineStorageDialog({
           )}
         </div>
 
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-5 space-y-3 border-t pt-4 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Synced playlists</span>
+            <span className="font-medium tabular-nums">{playlists.length}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Synced favorites</span>
+            <span className="font-medium tabular-nums">{favoriteCount}</span>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
           <DialogClose render={<Button variant="outline" size="sm" />}>
             Close
           </DialogClose>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleDeleteCloudData}
+            disabled={
+              deletingCloudData ||
+              (playlists.length === 0 && favoriteCount === 0)
+            }
+          >
+            {deletingCloudData ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Deleting cloud data...
+              </>
+            ) : (
+              <>
+                <Trash2 className="size-3.5" />
+                Delete cloud data
+              </>
+            )}
+          </Button>
           <Button
             variant="destructive"
             size="sm"

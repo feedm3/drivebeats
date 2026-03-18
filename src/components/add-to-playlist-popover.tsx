@@ -56,10 +56,10 @@ export function AddToPlaylistPopover({
     return tracks;
   }
 
-  function handleAdd(playlistId: string, playlistName: string) {
+  async function handleAdd(playlistId: string, playlistName: string) {
     const tracks = getTracksForFile();
     if (!tracks) return;
-    addTracks(playlistId, tracks);
+    await addTracks(playlistId, tracks);
     toast.success(
       `Added ${tracks.length} track${tracks.length > 1 ? "s" : ""} to ${playlistName}`,
     );
@@ -68,13 +68,13 @@ export function AddToPlaylistPopover({
     setNewName("");
   }
 
-  function handleCreateAndAdd() {
+  async function handleCreateAndAdd() {
     const name = newName.trim();
     if (!name) return;
     const tracks = getTracksForFile();
     if (!tracks) return;
-    const id = createPlaylist(name);
-    addTracks(id, tracks);
+    const id = await createPlaylist(name);
+    await addTracks(id, tracks);
     toast.success(
       `Created "${name}" with ${tracks.length} track${tracks.length > 1 ? "s" : ""}`,
     );
@@ -120,7 +120,7 @@ export function AddToPlaylistPopover({
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
               onClick={(e) => {
                 e.stopPropagation();
-                handleAdd(p.id, p.name);
+                void handleAdd(p.id, p.name);
               }}
             >
               <ListMusic className="size-3.5 shrink-0 text-muted-foreground" />
@@ -143,7 +143,7 @@ export function AddToPlaylistPopover({
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
                 e.stopPropagation();
-                if (e.key === "Enter") handleCreateAndAdd();
+                if (e.key === "Enter") void handleCreateAndAdd();
                 if (e.key === "Escape") {
                   setCreating(false);
                   setNewName("");

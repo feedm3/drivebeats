@@ -53,7 +53,7 @@ export function FavoriteToggleButton({
         aria-pressed={isFavorite}
         onClick={(event) => {
           event.stopPropagation();
-          toggleFavorite({ fileId, fileName, mimeType, parents });
+          void toggleFavorite({ fileId, fileName, mimeType, parents });
         }}
       >
         <Heart

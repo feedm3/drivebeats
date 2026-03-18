@@ -141,10 +141,10 @@ export function AppHeader() {
     });
     usePlayerStore.persist.clearStorage();
 
-    useLibraryStore.setState({ tracks: {} });
+    useLibraryStore.getState().clearAll();
     useLibraryStore.persist.clearStorage();
 
-    usePlaylistStore.setState({ playlists: [], activePlaylistId: null });
+    usePlaylistStore.getState().clearCloudState();
     usePlaylistStore.persist.clearStorage();
 
     try {
@@ -267,12 +267,12 @@ export function AppHeader() {
       </div>
       <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
         <DialogContent>
-          <DialogTitle>Log out and delete local data</DialogTitle>
+          <DialogTitle>Log out and clear this device</DialogTitle>
           <DialogDescription>
-            Logging out will delete your local playlists, favorites, recently
-            played tracks, imported library, and saved player state from this
-            browser. Continue only if you want to remove all app data from this
-            device.
+            Logging out will remove cached playlists, favorites, recently
+            played tracks, imported library, offline downloads, and saved player
+            state from this browser. Your synced cloud data will stay in your
+            account.
           </DialogDescription>
           <div className="mt-4 flex justify-end gap-2">
             <DialogClose render={<Button variant="outline" size="sm" />}>
@@ -284,7 +284,7 @@ export function AppHeader() {
               onClick={handleLogout}
               disabled={isLoggingOut}
             >
-              {isLoggingOut ? "Logging out..." : "Log out and delete data"}
+              {isLoggingOut ? "Logging out..." : "Log out and clear device"}
             </Button>
           </div>
         </DialogContent>

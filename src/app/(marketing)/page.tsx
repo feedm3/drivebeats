@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     absolute: "DriveBeats - Google Drive Music Player",
   },
   description:
-    "Stream MP3, FLAC, WAV, AAC, and OGG files from Google Drive, then save playlists and favorites for offline playback on this device.",
+    "Stream MP3, FLAC, WAV, AAC, and OGG files from Google Drive, keep playlists and favorites synced across devices, and download music for offline playback.",
 };
 
 export default function LandingPage() {
@@ -38,17 +38,19 @@ export default function LandingPage() {
           className="mb-2 rounded-2xl"
         />
         <h1 className="max-w-lg text-4xl font-bold tracking-tight">
-          Stream your music collection from Google Drive, online or offline
+          Your Google Drive music player, now with cross-device sync
         </h1>
         <p className="max-w-md text-lg text-muted-foreground">
-          Pick your folders, press play, and download playlists or favorites for
-          offline listening on this device. No uploads, no syncing to another
-          service, no extra apps.
+          Import only the folders you choose, keep playlists and favorites in
+          sync between desktop and mobile, and download tracks for offline
+          listening on the device you are using.
         </p>
         <SignInButton className="mt-4 inline-flex h-11 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90" />
         <p className="text-xs text-muted-foreground">
-          DriveBeats can only access the files you choose. Offline downloads
-          stay in your browser on this device, not on our servers.
+          DriveBeats only sees the files and folders you pick. Your imported
+          library and offline downloads stay local to this device. Your
+          playlists and favorites sync so they are ready when you switch
+          screens.
         </p>
       </div>
 
@@ -64,8 +66,8 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Quick favorites</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Save tracks as favorites wherever you find them, then open your
-              Favorites view to play them back as a quick personal library.
+              Save tracks once, then open your Favorites view on desktop,
+              tablet, or phone without rebuilding the same list on each device.
             </p>
           </div>
           <div className="text-center">
@@ -74,8 +76,9 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Offline playback</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Save playlists and favorites on the device you&apos;re using, then
-              keep listening when your connection drops or you&apos;re on the move.
+              Download playlists and favorites to the device you&apos;re using,
+              then keep listening when your connection drops. Your downloads
+              stay local and can be cleared anytime.
             </p>
           </div>
           <div className="text-center">
@@ -94,8 +97,9 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Cross-folder playlists</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Mix songs from any folder into custom playlists. Drag to add, drag
-              to reorder, and save the ones you want available offline.
+              Mix songs from any folder into custom playlists. Drag to add,
+              drag to reorder, and pick up the same playlists on desktop or
+              mobile.
             </p>
           </div>
           <div className="text-center">
@@ -115,8 +119,9 @@ export default function LandingPage() {
             </div>
             <h3 className="text-sm font-semibold">Private by design</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              DriveBeats only sees files and folders you explicitly share. The
-              rest of your Drive is never visible.
+              DriveBeats only sees files and folders you explicitly share.
+              Recently played, imported items, and offline files stay on your
+              device.
             </p>
           </div>
         </div>
@@ -154,8 +159,8 @@ export default function LandingPage() {
             <h3 className="text-sm font-semibold">Play</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               Stream your MP3, FLAC, WAV, AAC, and OGG files, build playlists
-              across folders, then keep your favorites and playlists available
-              offline on this device.
+              across folders, and keep your favorites ready wherever you sign
+              in.
             </p>
           </div>
         </div>
@@ -222,7 +227,8 @@ export default function LandingPage() {
               Not on our servers. DriveBeats streams your audio from Google
               Drive in your browser, and if you choose offline playback, the
               downloaded tracks are stored locally in your browser on this
-              device.
+              device. Only playlist and favorite metadata is synced so those
+              collections can follow you across devices.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -249,9 +255,10 @@ export default function LandingPage() {
               Does DriveBeats work offline?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              Yes. You can save playlists and favorites for offline playback on
-              the device you&apos;re using. Those downloads stay in your browser
-              storage and can be removed anytime from Offline storage.
+              Yes. You can download playlists and favorites for offline
+              playback on the device you&apos;re using. Those downloads stay in
+              your browser storage and can be removed anytime from Offline
+              storage.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -259,10 +266,21 @@ export default function LandingPage() {
               Where is my DriveBeats data stored?
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              Playlists, favorites, recently played tracks, and imported items
-              are stored locally in your browser on this device. Offline tracks
-              are also stored locally when you download them. DriveBeats does
-              not write that data back to your Google Drive.
+              Playlists and favorites sync to your DriveBeats account so they
+              can follow you across devices. Recently played tracks, imported
+              items, player state, and offline downloads stay local to this
+              browser. DriveBeats does not write any of this app data back to
+              your Google Drive.
+            </p>
+          </details>
+          <details className="rounded-lg border border-border px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold">
+              Can I delete my synced data?
+            </summary>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Yes. Open Offline storage in the app to delete synced playlists
+              and favorites from your account, or clear only the downloads
+              stored on this device.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -271,9 +289,10 @@ export default function LandingPage() {
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
               Logging out removes your local DriveBeats data from this browser,
-              including imported items, playlists, favorites, recently played
-              tracks, and saved player state. Your files in Google Drive stay
-              exactly as they are.
+              including imported items, recently played tracks, offline
+              downloads, and saved player state. Your synced playlists and
+              favorites stay in your account unless you delete them from
+              Offline storage.
             </p>
           </details>
           <details className="rounded-lg border border-border px-4 py-3">
@@ -308,7 +327,12 @@ export default function LandingPage() {
 
       {/* Final CTA */}
       <section className="w-full max-w-3xl border-t border-border/50 py-16 text-center">
-        <h2 className="mb-4 text-2xl font-semibold">Ready to listen?</h2>
+        <h2 className="mb-2 text-2xl font-semibold">
+          Ready to sync your music setup?
+        </h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          Build playlists on your computer, then pick them up on mobile.
+        </p>
         <SignInButton className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90" />
       </section>
     </div>

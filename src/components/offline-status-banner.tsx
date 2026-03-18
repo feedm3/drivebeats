@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 
 export function OfflineStatusBanner() {
-  const [isOnline, setIsOnline] = useState(() =>
-    typeof navigator === "undefined" ? true : navigator.onLine,
-  );
+  const [hydrated, setHydrated] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
+    setHydrated(true);
+    setIsOnline(navigator.onLine);
+
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
@@ -20,7 +22,7 @@ export function OfflineStatusBanner() {
     };
   }, []);
 
-  if (isOnline) {
+  if (!hydrated || isOnline) {
     return null;
   }
 

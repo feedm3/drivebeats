@@ -80,19 +80,19 @@ export const PlaylistSection = forwardRef<
     startCreating: handleStartCreating,
   }));
 
-  const handleCreate = useCallback(() => {
+  const handleCreate = useCallback(async () => {
     const name = createName.trim();
     if (!name) {
       setCreating(false);
       return;
     }
-    createPlaylist(name);
+    await createPlaylist(name);
     setCreateName("");
     setCreating(false);
   }, [createName, createPlaylist]);
 
   const handleDrop = useCallback(
-    (playlistId: string, e: React.DragEvent) => {
+    async (playlistId: string, e: React.DragEvent) => {
       e.preventDefault();
       setDragOverId(null);
       try {
@@ -101,7 +101,7 @@ export const PlaylistSection = forwardRef<
         const data = JSON.parse(raw);
         if (data.type === "tracks") {
           const tracks: PlaylistTrack[] = data.tracks;
-          addTracks(playlistId, tracks);
+          await addTracks(playlistId, tracks);
           toast.success(
             `Added ${tracks.length} track${tracks.length > 1 ? "s" : ""}`,
           );
@@ -112,7 +112,7 @@ export const PlaylistSection = forwardRef<
               .filter((f) => f.mimeType !== FOLDER_MIME)
               .map(createPlaylistTrack);
             if (tracks.length > 0) {
-              addTracks(playlistId, tracks);
+              await addTracks(playlistId, tracks);
               toast.success(
                 `Added ${tracks.length} track${tracks.length > 1 ? "s" : ""}`,
               );
@@ -222,13 +222,13 @@ export const PlaylistSection = forwardRef<
                 value={createName}
                 onChange={(e) => setCreateName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleCreate();
+                  if (e.key === "Enter") void handleCreate();
                   if (e.key === "Escape") {
                     setCreating(false);
                     setCreateName("");
                   }
                 }}
-                onBlur={handleCreate}
+                onBlur={() => void handleCreate()}
               />
             </div>
           )}
@@ -270,7 +270,7 @@ export const PlaylistSection = forwardRef<
                       setDragOverId(null);
                     }
                   }}
-                  onDrop={(e) => handleDrop(playlist.id, e)}
+                  onDrop={(e) => void handleDrop(playlist.id, e)}
                 >
                   <span
                     className={cn(

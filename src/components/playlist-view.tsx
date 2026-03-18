@@ -255,7 +255,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const handleReorder = useCallback(
     (from: number, to: number) => {
       if (!isEditablePlaylist) return;
-      reorderTracks(collection.id, from, to);
+      void reorderTracks(collection.id, from, to);
     },
     [collection.id, isEditablePlaylist, reorderTracks],
   );
@@ -278,7 +278,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const handleRename = useCallback(() => {
     const name = editName.trim();
     if (name && isEditablePlaylist) {
-      renamePlaylist(collection.id, name);
+      void renamePlaylist(collection.id, name);
     }
     setEditing(false);
   }, [collection.id, editName, isEditablePlaylist, renamePlaylist]);
@@ -286,7 +286,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const handleDelete = useCallback(async () => {
     if (!isEditablePlaylist) return;
     await stopCollectionDownload(collection.id);
-    deletePlaylist(collection.id);
+    await deletePlaylist(collection.id);
     setActivePlaylist(null);
     setDeleteOpen(false);
   }, [collection.id, deletePlaylist, isEditablePlaylist, setActivePlaylist]);
@@ -295,7 +295,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
     (fileId: string, fileName: string) => {
       if (collection.id === FAVORITES_COLLECTION_ID) {
         const track = collection.tracks.find((item) => item.fileId === fileId);
-        setFavorite(
+        void setFavorite(
           {
             fileId,
             fileName,
@@ -315,9 +315,15 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
         return;
       }
 
-      removeTrack(collection.id, fileId);
+      void removeTrack(collection.id, fileId);
     },
-    [collection.id, collection.tracks, removeFromRecent, removeTrack, setFavorite],
+    [
+      collection.id,
+      collection.tracks,
+      removeFromRecent,
+      removeTrack,
+      setFavorite,
+    ],
   );
 
   const activeTrackId = pendingTrackId ?? currentTrack?.id;

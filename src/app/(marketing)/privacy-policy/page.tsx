@@ -14,14 +14,16 @@ export default function PrivacyPolicyPage() {
       <div className="mx-auto max-w-2xl space-y-6 text-sm text-muted-foreground">
         <h1 className="text-2xl font-bold text-foreground">Privacy Policy</h1>
         <p>
-          <strong className="text-foreground">Last updated:</strong> March 10,
+          <strong className="text-foreground">Last updated:</strong> March 18,
           2026
         </p>
 
         <h2 className="text-lg font-semibold text-foreground">What we do</h2>
         <p>
-          DriveBeats lets you stream audio files (MP3, FLAC, WAV, AAC, OGG) stored in your Google
-          Drive. It does not upload or re-host your audio files on our servers.
+          DriveBeats lets you stream audio files (MP3, FLAC, WAV, AAC, OGG)
+          stored in your Google Drive. It also lets you sync playlists and
+          favorites between devices. It does not upload or re-host your audio
+          files on our servers.
         </p>
 
         <h2 className="text-lg font-semibold text-foreground">
@@ -63,11 +65,28 @@ export default function PrivacyPolicyPage() {
           cookies are used.
         </p>
         <p>
-          We also store app data locally in your browser, such as playlists,
-          favorites, recently played tracks, your imported library, and player
-          state. This data stays on your device and is not sent to our servers.
-          When you choose to log out, the app shows a confirmation dialog and
-          then deletes that local app data from the browser if you confirm.
+          We store some app data locally in your browser, including recently
+          played tracks, your imported library, offline downloads, and player
+          state. Playlists and favorites are also cached locally for faster
+          loading, but they are synced to our database so they can follow you
+          across devices. When you choose to log out, the app shows a
+          confirmation dialog and then deletes that local app data from the
+          browser if you confirm.
+        </p>
+        <p>
+          We store playlist and favorite metadata in our Neon-hosted Postgres
+          database so those collections can sync between your devices. This
+          metadata includes the file ids and display metadata needed to rebuild
+          those collections inside the app, including parent folder references.
+          We do not upload or copy the audio files themselves into our
+          database. Recently played history is not synced and remains on the
+          device where it was created.
+        </p>
+        <p>
+          Inside the app, you can delete synced playlists and favorites from
+          the Offline storage screen. Logging out clears local device data, but
+          it does not delete your synced cloud data unless you explicitly
+          choose that delete action.
         </p>
 
         <h2 className="text-lg font-semibold text-foreground">Analytics</h2>
@@ -88,13 +107,14 @@ export default function PrivacyPolicyPage() {
         <h2 className="text-lg font-semibold text-foreground">Data sharing</h2>
         <p>
           Your Google Drive files are requested directly from Google and stream
-          to your browser. We don{"'"}t sell your data, share it with data
+          to your browser. We don&apos;t sell your data, share it with data
           brokers, or use it for advertising.
         </p>
         <p>
           Limited data is shared with service providers that operate the app,
           such as Google for authentication, Google Picker, and Drive access,
-          and Vercel for hosting and privacy-friendly analytics.
+          Neon for synced playlist and favorite storage, and Vercel for hosting
+          and privacy-friendly analytics.
         </p>
 
         <h2 className="text-lg font-semibold text-foreground">Contact</h2>

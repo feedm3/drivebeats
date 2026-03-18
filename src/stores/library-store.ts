@@ -1,8 +1,30 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { toast } from "sonner";
+import {
+  fetchCloudLibrarySync,
+  removeCloudFavorite,
+  setCloudFavorite,
+} from "@/lib/cloud-library-api";
 import type { PlaylistTrack } from "@/types";
 
 const MAX_RECENT_TRACKS = 50;
+const FAVORITES_SYNC_ERROR =
+  "Could not sync favorites. Restored the last cloud state.";
+
+const favoriteMutationQueues = new Map<string, Promise<void>>();
+
+function queueFavoriteMutation(fileId: string, task: () => Promise<void>) {
+  const previous = favoriteMutationQueues.get(fileId) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(task);
+  const settled = next.finally(() => {
+    if (favoriteMutationQueues.get(fileId) === settled) {
+      favoriteMutationQueues.delete(fileId);
+    }
+  });
+  favoriteMutationQueues.set(fileId, settled);
+  return settled;
+}
 
 export interface TrackLibraryMeta extends PlaylistTrack {
   isFavorite?: boolean;
@@ -12,11 +34,17 @@ export interface TrackLibraryMeta extends PlaylistTrack {
 
 interface LibraryState {
   tracks: Record<string, TrackLibraryMeta>;
-  setFavorite: (track: PlaylistTrack, isFavorite: boolean) => void;
-  toggleFavorite: (track: PlaylistTrack) => void;
+  isCloudHydrated: boolean;
+  isCloudSyncing: boolean;
+  setFavorite: (track: PlaylistTrack, isFavorite: boolean) => Promise<void>;
+  toggleFavorite: (track: PlaylistTrack) => Promise<void>;
   markPlayed: (track: PlaylistTrack) => void;
   removeFromRecent: (fileId: string) => void;
   clearRecent: () => void;
+  replaceFavoritesFromCloud: (favorites: PlaylistTrack[]) => void;
+  syncFavoritesFromCloud: () => Promise<void>;
+  clearCloudFavorites: () => void;
+  clearAll: () => void;
 }
 
 function toLibraryMeta(
@@ -43,6 +71,21 @@ function sortTracksByName(a: PlaylistTrack, b: PlaylistTrack) {
     sensitivity: "base",
     numeric: true,
   });
+}
+
+function pruneTrack(track: TrackLibraryMeta | undefined) {
+  if (!track) {
+    return undefined;
+  }
+
+  const isFavorite = Boolean(track.isFavorite);
+  const hasRecent = typeof track.lastPlayedAt === "number";
+
+  if (!isFavorite && !hasRecent) {
+    return undefined;
+  }
+
+  return track;
 }
 
 export function getFavoriteTracks(
@@ -103,37 +146,47 @@ export function getRecentlyPlayedTracks(
 
 export const useLibraryStore = create<LibraryState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       tracks: {},
+      isCloudHydrated: false,
+      isCloudSyncing: false,
 
-      setFavorite: (track, isFavorite) => {
+      setFavorite: async (track, isFavorite) => {
         set((state) => {
           const existing = state.tracks[track.fileId];
+          const nextTrack = {
+            ...toLibraryMeta(existing, track),
+            isFavorite,
+          };
+
+          const pruned = pruneTrack(nextTrack);
+          if (!pruned) {
+            const { [track.fileId]: _removed, ...remaining } = state.tracks;
+            return { tracks: remaining };
+          }
+
           return {
             tracks: {
               ...state.tracks,
-              [track.fileId]: {
-                ...toLibraryMeta(existing, track),
-                isFavorite,
-              },
+              [track.fileId]: pruned,
             },
           };
         });
+
+        try {
+          await queueFavoriteMutation(track.fileId, () =>
+            isFavorite ? setCloudFavorite(track) : removeCloudFavorite(track),
+          );
+        } catch (error) {
+          console.error("Favorite sync failed:", error);
+          await get().syncFavoritesFromCloud();
+          toast.error(FAVORITES_SYNC_ERROR);
+        }
       },
 
-      toggleFavorite: (track) => {
-        set((state) => {
-          const existing = state.tracks[track.fileId];
-          return {
-            tracks: {
-              ...state.tracks,
-              [track.fileId]: {
-                ...toLibraryMeta(existing, track),
-                isFavorite: !existing?.isFavorite,
-              },
-            },
-          };
-        });
+      toggleFavorite: async (track) => {
+        const isFavorite = Boolean(get().tracks[track.fileId]?.isFavorite);
+        await get().setFavorite(track, !isFavorite);
       },
 
       markPlayed: (track) => {
@@ -157,13 +210,20 @@ export const useLibraryStore = create<LibraryState>()(
           const existing = state.tracks[fileId];
           if (!existing?.lastPlayedAt) return state;
 
+          const nextTrack = pruneTrack({
+            ...existing,
+            lastPlayedAt: undefined,
+          });
+
+          if (!nextTrack) {
+            const { [fileId]: _removed, ...remaining } = state.tracks;
+            return { tracks: remaining };
+          }
+
           return {
             tracks: {
               ...state.tracks,
-              [fileId]: {
-                ...existing,
-                lastPlayedAt: undefined,
-              },
+              [fileId]: nextTrack,
             },
           };
         });
@@ -172,19 +232,96 @@ export const useLibraryStore = create<LibraryState>()(
       clearRecent: () => {
         set((state) => ({
           tracks: Object.fromEntries(
-            Object.entries(state.tracks).map(([fileId, track]) => [
-              fileId,
-              {
-                ...track,
-                lastPlayedAt: undefined,
-              },
-            ]),
+            Object.entries(state.tracks)
+              .map(([fileId, track]) => [
+                fileId,
+                pruneTrack({
+                  ...track,
+                  lastPlayedAt: undefined,
+                }),
+              ])
+              .filter(([, track]) => Boolean(track)),
           ),
         }));
+      },
+
+      replaceFavoritesFromCloud: (favorites) => {
+        set((state) => {
+          const nextTracks: Record<string, TrackLibraryMeta> = {};
+
+          for (const [fileId, track] of Object.entries(state.tracks)) {
+            const nextTrack = pruneTrack({
+              ...track,
+              isFavorite: false,
+            });
+
+            if (nextTrack) {
+              nextTracks[fileId] = nextTrack;
+            }
+          }
+
+          for (const favorite of favorites) {
+            const existing =
+              nextTracks[favorite.fileId] ?? state.tracks[favorite.fileId];
+            nextTracks[favorite.fileId] = {
+              ...toLibraryMeta(existing, favorite),
+              isFavorite: true,
+            };
+          }
+
+          return {
+            tracks: nextTracks,
+            isCloudHydrated: true,
+            isCloudSyncing: false,
+          };
+        });
+      },
+
+      syncFavoritesFromCloud: async () => {
+        set({ isCloudSyncing: true });
+        try {
+          const data = await fetchCloudLibrarySync();
+          get().replaceFavoritesFromCloud(data.favorites);
+        } finally {
+          set({ isCloudSyncing: false });
+        }
+      },
+
+      clearCloudFavorites: () => {
+        set((state) => {
+          const tracks = Object.fromEntries(
+            Object.entries(state.tracks)
+              .map(([fileId, track]) => [
+                fileId,
+                pruneTrack({
+                  ...track,
+                  isFavorite: false,
+                }),
+              ])
+              .filter(([, track]) => Boolean(track)),
+          );
+
+          return {
+            tracks,
+            isCloudHydrated: false,
+            isCloudSyncing: false,
+          };
+        });
+      },
+
+      clearAll: () => {
+        set({
+          tracks: {},
+          isCloudHydrated: false,
+          isCloudSyncing: false,
+        });
       },
     }),
     {
       name: "drivebeats-library",
+      partialize: (state) => ({
+        tracks: state.tracks,
+      }),
     },
   ),
 );

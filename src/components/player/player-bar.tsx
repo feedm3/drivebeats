@@ -12,31 +12,68 @@ import { ProgressBar } from "./progress-bar";
 import { TrackInfo } from "./track-info";
 import { VolumeControl } from "./volume-control";
 
+function getMediaSession() {
+  if (!("mediaSession" in navigator)) return null;
+  return navigator.mediaSession;
+}
+
 function updateMediaSession(title: string, artist: string) {
-  if (!("mediaSession" in navigator)) return;
-  navigator.mediaSession.metadata = new MediaMetadata({
+  const mediaSession = getMediaSession();
+  if (!mediaSession) return;
+
+  mediaSession.metadata = new MediaMetadata({
     title,
     artist,
   });
 }
 
-function setupMediaSessionHandlers() {
-  if (!("mediaSession" in navigator)) return;
-  const ms = navigator.mediaSession;
+function updateMediaSessionPlaybackState(state: MediaSessionPlaybackState) {
+  const mediaSession = getMediaSession();
+  if (!mediaSession) return;
 
-  ms.setActionHandler("play", () => {
-    usePlayerStore.getState().audio?.play();
+  mediaSession.playbackState = state;
+}
+
+function updateMediaSessionPosition(audio: HTMLAudioElement) {
+  const mediaSession = getMediaSession();
+  if (!mediaSession || !("setPositionState" in mediaSession)) return;
+
+  const duration =
+    Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+  const position = Number.isFinite(audio.currentTime)
+    ? Math.min(duration || audio.currentTime, Math.max(0, audio.currentTime))
+    : 0;
+
+  try {
+    mediaSession.setPositionState({
+      duration,
+      playbackRate: audio.playbackRate || 1,
+      position,
+    });
+  } catch {
+    // Safari can reject position updates while metadata or duration is unsettled.
+  }
+}
+
+function setupMediaSessionHandlers(audio: HTMLAudioElement) {
+  const mediaSession = getMediaSession();
+  if (!mediaSession) return;
+
+  mediaSession.setActionHandler("play", () => {
+    void audio.play();
   });
-  ms.setActionHandler("pause", () => {
-    usePlayerStore.getState().audio?.pause();
+  mediaSession.setActionHandler("pause", () => {
+    audio.pause();
   });
-  ms.setActionHandler("previoustrack", () => {
+  mediaSession.setActionHandler("previoustrack", () => {
     void usePlayerStore.getState().previous();
   });
-  ms.setActionHandler("nexttrack", () => {
+  mediaSession.setActionHandler("nexttrack", () => {
     void usePlayerStore.getState().next();
   });
-  ms.setActionHandler("seekto", (details) => {
+  mediaSession.setActionHandler("seekbackward", null);
+  mediaSession.setActionHandler("seekforward", null);
+  mediaSession.setActionHandler("seekto", (details) => {
     if (details.seekTime != null) {
       usePlayerStore.getState().seek(details.seekTime);
     }
@@ -72,6 +109,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
     const onTimeUpdate = () => {
       const { currentTrack } = usePlayerStore.getState();
       usePlayerStore.getState().setCurrentTime(el.currentTime);
+      updateMediaSessionPosition(el);
 
       if (!currentTrack || recentTrackRef.current === currentTrack.id) return;
 
@@ -89,14 +127,31 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
         recentTrackRef.current = currentTrack.id;
       }
     };
-    const onDurationChange = () =>
+    const onDurationChange = () => {
       usePlayerStore.getState().setDuration(el.duration || 0);
+      updateMediaSessionPosition(el);
+    };
     const onLoadStart = () => {
       recentTrackRef.current = null;
+      updateMediaSessionPosition(el);
     };
-    const onPlay = () => usePlayerStore.getState().setIsPlaying(true);
-    const onPause = () => usePlayerStore.getState().setIsPlaying(false);
+    const onPlay = () => {
+      usePlayerStore.getState().setIsPlaying(true);
+      updateMediaSessionPlaybackState("playing");
+      updateMediaSessionPosition(el);
+    };
+    const onPlaying = () => {
+      setupMediaSessionHandlers(el);
+      updateMediaSessionPlaybackState("playing");
+      updateMediaSessionPosition(el);
+    };
+    const onPause = () => {
+      usePlayerStore.getState().setIsPlaying(false);
+      updateMediaSessionPlaybackState("paused");
+      updateMediaSessionPosition(el);
+    };
     const onEnded = async () => {
+      updateMediaSessionPlaybackState("paused");
       const { repeat, next } = usePlayerStore.getState();
       if (repeat === "one") {
         el.currentTime = 0;
@@ -127,17 +182,17 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
     el.addEventListener("durationchange", onDurationChange);
     el.addEventListener("loadstart", onLoadStart);
     el.addEventListener("play", onPlay);
+    el.addEventListener("playing", onPlaying);
     el.addEventListener("pause", onPause);
     el.addEventListener("ended", onEnded);
     el.addEventListener("error", onError);
-
-    setupMediaSessionHandlers();
 
     return () => {
       el.removeEventListener("timeupdate", onTimeUpdate);
       el.removeEventListener("durationchange", onDurationChange);
       el.removeEventListener("loadstart", onLoadStart);
       el.removeEventListener("play", onPlay);
+      el.removeEventListener("playing", onPlaying);
       el.removeEventListener("pause", onPause);
       el.removeEventListener("ended", onEnded);
       el.removeEventListener("error", onError);
@@ -148,6 +203,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   // Update Media Session metadata when track changes
   useEffect(() => {
     updateMediaSession(currentTrackTitle, currentTrackArtist);
+    updateMediaSessionPosition(usePlayerStore.getState().initAudio());
   }, [currentTrackTitle, currentTrackArtist]);
 
   // Wait for persisted player state before attempting a one-time restore.

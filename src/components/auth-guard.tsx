@@ -81,6 +81,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     }
 
     if (isOffline()) {
+      setOfflineAccessAllowed(true);
       setReady(true);
       return;
     }

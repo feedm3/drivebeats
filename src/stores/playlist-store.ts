@@ -12,6 +12,10 @@ import {
 } from "@/lib/cloud-library-api";
 import { resolveParentFolderName } from "@/lib/resolve-parent-folder";
 import type { Playlist, PlaylistTrack } from "@/types";
+import {
+  FAVORITES_COLLECTION_ID,
+  RECENTLY_PLAYED_COLLECTION_ID,
+} from "@/types";
 
 const PLAYLIST_SYNC_ERROR =
   "Could not sync playlists. Restored the last cloud state.";
@@ -28,6 +32,25 @@ function queuePlaylistMutation(playlistId: string, task: () => Promise<void>) {
   });
   playlistMutationQueues.set(playlistId, settled);
   return settled;
+}
+
+export function hasPendingPlaylistMutations() {
+  return playlistMutationQueues.size > 0;
+}
+
+export async function waitForPendingPlaylistMutations() {
+  if (playlistMutationQueues.size === 0) {
+    return;
+  }
+
+  await Promise.allSettled([...playlistMutationQueues.values()]);
+}
+
+function isBuiltInCollectionId(playlistId: string | null) {
+  return (
+    playlistId === FAVORITES_COLLECTION_ID ||
+    playlistId === RECENTLY_PLAYED_COLLECTION_ID
+  );
 }
 
 interface PlaylistState {
@@ -194,11 +217,11 @@ export const usePlaylistStore = create<PlaylistState>()(
         const activePlaylistId = get().activePlaylistId;
         set({
           playlists,
-          activePlaylistId: playlists.some(
-            (playlist) => playlist.id === activePlaylistId,
-          )
-            ? activePlaylistId
-            : null,
+          activePlaylistId:
+            isBuiltInCollectionId(activePlaylistId) ||
+            playlists.some((playlist) => playlist.id === activePlaylistId)
+              ? activePlaylistId
+              : null,
           isCloudHydrated: true,
           isCloudSyncing: false,
         });

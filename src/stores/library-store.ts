@@ -26,6 +26,18 @@ function queueFavoriteMutation(fileId: string, task: () => Promise<void>) {
   return settled;
 }
 
+export function hasPendingFavoriteMutations() {
+  return favoriteMutationQueues.size > 0;
+}
+
+export async function waitForPendingFavoriteMutations() {
+  if (favoriteMutationQueues.size === 0) {
+    return;
+  }
+
+  await Promise.allSettled([...favoriteMutationQueues.values()]);
+}
+
 export interface TrackLibraryMeta extends PlaylistTrack {
   isFavorite?: boolean;
   lastPlayedAt?: number;

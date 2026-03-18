@@ -8,13 +8,33 @@ import {
   isCloudLibraryEmpty,
 } from "@/lib/cloud-library-api";
 import { useAuthStore } from "@/stores/auth-store";
-import { getFavoriteTracks, useLibraryStore } from "@/stores/library-store";
-import { usePlaylistStore } from "@/stores/playlist-store";
+import {
+  getFavoriteTracks,
+  hasPendingFavoriteMutations,
+  useLibraryStore,
+  waitForPendingFavoriteMutations,
+} from "@/stores/library-store";
+import {
+  hasPendingPlaylistMutations,
+  usePlaylistStore,
+  waitForPendingPlaylistMutations,
+} from "@/stores/playlist-store";
 
 const CLOUD_BOOTSTRAP_KEY = "drivebeats-cloud-bootstrap-v1";
 
 function canUseNetworkSync() {
   return typeof navigator === "undefined" || navigator.onLine;
+}
+
+function hasPendingLocalMutations() {
+  return hasPendingPlaylistMutations() || hasPendingFavoriteMutations();
+}
+
+async function waitForPendingLocalMutations() {
+  await Promise.all([
+    waitForPendingPlaylistMutations(),
+    waitForPendingFavoriteMutations(),
+  ]);
 }
 
 export function CloudLibrarySync() {
@@ -35,29 +55,41 @@ export function CloudLibrarySync() {
 
       syncInFlightRef.current = (async () => {
         try {
-          const localPlaylists = usePlaylistStore.getState().playlists;
-          const localFavorites = getFavoriteTracks(
-            useLibraryStore.getState().tracks,
-          );
-          let payload = await fetchCloudLibrarySync();
+          let payload = null;
 
-          if (
-            typeof window !== "undefined" &&
-            !window.localStorage.getItem(CLOUD_BOOTSTRAP_KEY) &&
-            isCloudLibraryEmpty(payload) &&
-            (localPlaylists.length > 0 || localFavorites.length > 0)
-          ) {
-            await bootstrapCloudLibrarySync(
-              createCloudLibrarySnapshot(localPlaylists, localFavorites),
+          for (let attempt = 0; attempt < 3; attempt++) {
+            await waitForPendingLocalMutations();
+
+            const localPlaylists = usePlaylistStore.getState().playlists;
+            const localFavorites = getFavoriteTracks(
+              useLibraryStore.getState().tracks,
             );
-            payload = await fetchCloudLibrarySync();
+            let nextPayload = await fetchCloudLibrarySync();
+
+            if (
+              typeof window !== "undefined" &&
+              !window.localStorage.getItem(CLOUD_BOOTSTRAP_KEY) &&
+              isCloudLibraryEmpty(nextPayload) &&
+              (localPlaylists.length > 0 || localFavorites.length > 0)
+            ) {
+              await bootstrapCloudLibrarySync(
+                createCloudLibrarySnapshot(localPlaylists, localFavorites),
+              );
+              nextPayload = await fetchCloudLibrarySync();
+            }
+
+            payload = nextPayload;
+
+            if (!hasPendingLocalMutations()) {
+              break;
+            }
           }
 
           if (typeof window !== "undefined") {
             window.localStorage.setItem(CLOUD_BOOTSTRAP_KEY, "1");
           }
 
-          if (cancelled) {
+          if (cancelled || !payload || hasPendingLocalMutations()) {
             return;
           }
 

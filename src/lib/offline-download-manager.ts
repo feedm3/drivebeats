@@ -381,7 +381,11 @@ export async function stopCollectionDownload(
   await offlineDb.deleteCollection(collectionId);
 }
 
-export async function syncCollection(collectionId: string): Promise<void> {
+export async function syncCollection(
+  collectionId: string,
+  options: { revalidateMetadata?: boolean } = {},
+): Promise<void> {
+  const { revalidateMetadata = true } = options;
   const tracks = getCollectionTracks(collectionId);
   const fileIds = tracks.map((t) => t.fileId);
 
@@ -391,50 +395,52 @@ export async function syncCollection(collectionId: string): Promise<void> {
 
   const oldIds = new Set(existing.trackFileIds);
   const newIds = new Set(fileIds);
-  const staleTracks = await Promise.all(
-    tracks.map(async (track) => {
-      if (!oldIds.has(track.fileId)) {
-        return null;
-      }
+  const staleTracks = revalidateMetadata
+    ? await Promise.all(
+        tracks.map(async (track) => {
+          if (!oldIds.has(track.fileId)) {
+            return null;
+          }
 
-      const offlineTrack = await offlineDb.getTrack(track.fileId);
-      if (!offlineTrack) {
-        return null;
-      }
+          const offlineTrack = await offlineDb.getTrack(track.fileId);
+          if (!offlineTrack) {
+            return null;
+          }
 
-      try {
-        const liveMetadata = await fetchTrackMetadata(track.fileId);
-        if (
-          liveMetadata.modifiedTime &&
-          liveMetadata.modifiedTime !== offlineTrack.modifiedTime
-        ) {
-          return {
-            fileId: track.fileId,
-            modifiedTime: liveMetadata.modifiedTime,
-            size: liveMetadata.size,
-          };
-        }
-      } catch (error) {
-        console.warn(
-          `Failed to refresh metadata for offline track ${track.fileId}:`,
-          error,
-        );
-      }
+          try {
+            const liveMetadata = await fetchTrackMetadata(track.fileId);
+            if (
+              liveMetadata.modifiedTime &&
+              liveMetadata.modifiedTime !== offlineTrack.modifiedTime
+            ) {
+              return {
+                fileId: track.fileId,
+                modifiedTime: liveMetadata.modifiedTime,
+                size: liveMetadata.size,
+              };
+            }
+          } catch (error) {
+            console.warn(
+              `Failed to refresh metadata for offline track ${track.fileId}:`,
+              error,
+            );
+          }
 
-      if (
-        track.modifiedTime &&
-        track.modifiedTime !== offlineTrack.modifiedTime
-      ) {
-        return {
-          fileId: track.fileId,
-          modifiedTime: track.modifiedTime,
-          size: track.size,
-        };
-      }
+          if (
+            track.modifiedTime &&
+            track.modifiedTime !== offlineTrack.modifiedTime
+          ) {
+            return {
+              fileId: track.fileId,
+              modifiedTime: track.modifiedTime,
+              size: track.size,
+            };
+          }
 
-      return null;
-    }),
-  );
+          return null;
+        }),
+      )
+    : [];
 
   // Compute ref counts for removed tracks before mutating store
   const removedFileIds: string[] = [];
@@ -549,7 +555,7 @@ export function initOfflineSync(): void {
         getTrackSignature(prevPlaylist.tracks) !==
           getTrackSignature(playlist.tracks)
       ) {
-        void syncCollection(playlist.id);
+        void syncCollection(playlist.id, { revalidateMetadata: false });
       }
     }
   });
@@ -560,7 +566,9 @@ export function initOfflineSync(): void {
     const prevFavs = getFavoriteTracks(prev.tracks);
     const newFavs = getFavoriteTracks(state.tracks);
     if (getTrackSignature(prevFavs) !== getTrackSignature(newFavs)) {
-      void syncCollection(FAVORITES_COLLECTION_ID);
+      void syncCollection(FAVORITES_COLLECTION_ID, {
+        revalidateMetadata: false,
+      });
     }
   });
 

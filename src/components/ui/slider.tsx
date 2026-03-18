@@ -23,6 +23,14 @@ function Slider({
     [value, defaultValue, min, max],
   );
   const thumbKeyPrefix = React.useId();
+  const thumbKeys = React.useMemo(
+    () =>
+      Array.from(
+        { length: _values.length },
+        () => `${thumbKeyPrefix}-${crypto.randomUUID()}`,
+      ),
+    [thumbKeyPrefix, _values.length],
+  );
 
   return (
     <SliderPrimitive.Root
@@ -57,7 +65,7 @@ function Slider({
         {_values.map((_, thumbIndex) => (
           <SliderPrimitive.Thumb
             data-slot="slider-thumb"
-            key={`${thumbKeyPrefix}-${thumbIndex}`}
+            key={thumbKeys[thumbIndex]}
             className="block size-4 shrink-0 rounded-full border border-primary bg-primary shadow-sm opacity-0 group-hover:opacity-100 transition-[color,box-shadow,opacity] ring-ring/50 hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
           />
         ))}

@@ -44,7 +44,10 @@ export function TrackInfo({ onNavigateToTrack }: TrackInfoProps) {
           <circle cx="18" cy="16" r="3" />
         </svg>
       </span>
-      <div key={currentTrack.id} className="min-w-0 flex-1 animate-in fade-in duration-200">
+      <div
+        key={currentTrack.id}
+        className="min-w-0 flex-1 animate-in fade-in duration-200"
+      >
         {canNavigate ? (
           <button
             type="button"

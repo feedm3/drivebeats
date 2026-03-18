@@ -1,7 +1,7 @@
 "use client";
 
 import { FavoriteToggleButton } from "@/components/favorite-toggle-button";
-import { getTrackDisplayName } from "@/lib/audio";
+import { parseTrackMetadata } from "@/lib/track-metadata";
 import { usePlayerStore } from "@/stores/player-store";
 
 interface TrackInfoProps {
@@ -12,6 +12,10 @@ export function TrackInfo({ onNavigateToTrack }: TrackInfoProps) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const playingFolderStack = usePlayerStore((s) => s.playingFolderStack);
   const canNavigate = onNavigateToTrack && playingFolderStack.length > 0;
+  const { title, subtitle } = parseTrackMetadata(
+    currentTrack?.name ?? "",
+    currentTrack?.parentFolderName,
+  );
 
   if (!currentTrack) {
     return (
@@ -42,19 +46,26 @@ export function TrackInfo({ onNavigateToTrack }: TrackInfoProps) {
         </svg>
       </span>
       <div className="min-w-0 flex flex-1 items-center gap-1.5">
-        {canNavigate ? (
-          <button
-            type="button"
-            className="truncate text-left text-sm font-semibold hover:underline"
-            onClick={onNavigateToTrack}
-          >
-            {getTrackDisplayName(currentTrack.name)}
-          </button>
-        ) : (
-          <span className="truncate text-sm font-semibold">
-            {getTrackDisplayName(currentTrack.name)}
-          </span>
-        )}
+        <div className="min-w-0 flex-1">
+          {canNavigate ? (
+            <button
+              type="button"
+              className="block max-w-full truncate text-left text-sm font-semibold hover:underline"
+              onClick={onNavigateToTrack}
+            >
+              {title}
+            </button>
+          ) : (
+            <span className="block truncate text-sm font-semibold">
+              {title}
+            </span>
+          )}
+          {subtitle && (
+            <span className="block truncate text-xs text-muted-foreground">
+              {subtitle}
+            </span>
+          )}
+        </div>
         <FavoriteToggleButton
           fileId={currentTrack.id}
           fileName={currentTrack.name}

@@ -11,8 +11,8 @@ import {
 import { NowPlayingBars } from "@/components/now-playing-bars";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
-import { getTrackDisplayName } from "@/lib/audio";
 import { cn } from "@/lib/utils";
+import { parseTrackMetadata } from "@/lib/track-metadata";
 import type { OfflineTrackStatus } from "@/stores/offline-store";
 import type { PlaylistTrack } from "@/types";
 
@@ -47,12 +47,17 @@ export function PlaylistTrackItem({
   onRemove,
   removeLabel = "Remove from playlist",
 }: PlaylistTrackItemProps) {
+  const { title, subtitle: metadataSubtitle } = parseTrackMetadata(
+    track.fileName,
+    track.parentFolderName,
+  );
+
   return (
     <div
       data-track-index={index}
       data-active={isActive ? true : undefined}
       className={cn(
-        "group relative flex cursor-pointer items-center border-b py-4 transition-colors hover:bg-muted/50 data-[active]:bg-primary/6 last:border-b-0",
+        "group relative flex cursor-pointer items-center border-b py-2 transition-colors hover:bg-muted/50 data-[active]:bg-primary/6 last:border-b-0",
         isDragging && "opacity-30",
       )}
       tabIndex={0}
@@ -100,9 +105,12 @@ export function PlaylistTrackItem({
           )}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">
-            {getTrackDisplayName(track.fileName)}
-          </span>
+          <span className="block truncate text-sm font-medium">{title}</span>
+          {metadataSubtitle && (
+            <span className="block truncate text-xs text-muted-foreground">
+              {metadataSubtitle}
+            </span>
+          )}
         </span>
         {offlineStatus && (
           <span

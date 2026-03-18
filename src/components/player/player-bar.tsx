@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getTrackDisplayName } from "@/lib/audio";
+import { parseTrackMetadata } from "@/lib/track-metadata";
 import { useAuthStore } from "@/stores/auth-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { usePlayerStore } from "@/stores/player-store";
@@ -10,11 +10,11 @@ import { ProgressBar } from "./progress-bar";
 import { TrackInfo } from "./track-info";
 import { VolumeControl } from "./volume-control";
 
-function updateMediaSession(title: string) {
+function updateMediaSession(title: string, artist: string) {
   if (!("mediaSession" in navigator)) return;
   navigator.mediaSession.metadata = new MediaMetadata({
     title,
-    artist: "Google Drive",
+    artist,
   });
 }
 
@@ -56,9 +56,12 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   const [playerHydrated, setPlayerHydrated] = useState(() =>
     usePlayerStore.persist.hasHydrated(),
   );
-  const currentTrackTitle = currentTrack
-    ? getTrackDisplayName(currentTrack.name)
-    : "";
+  const trackMetadata = currentTrack
+    ? parseTrackMetadata(currentTrack.name, currentTrack.parentFolderName)
+    : null;
+  const currentTrackTitle = trackMetadata?.title ?? "";
+  const currentTrackArtist =
+    trackMetadata?.subtitle ?? (currentTrack ? "Google Drive" : "");
 
   // Audio element event listeners
   useEffect(() => {
@@ -142,8 +145,8 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
 
   // Update Media Session metadata when track changes
   useEffect(() => {
-    updateMediaSession(currentTrackTitle);
-  }, [currentTrackTitle]);
+    updateMediaSession(currentTrackTitle, currentTrackArtist);
+  }, [currentTrackTitle, currentTrackArtist]);
 
   // Wait for persisted player state before attempting a one-time restore.
   useEffect(() => {

@@ -4,13 +4,13 @@ import { useSearchParams } from "next/navigation";
 
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
   authentication_failed:
-    "Google sign-in could not be completed for this account. Try again with an approved test user.",
+    "Google sign-in could not be completed for this account. Please try again.",
   invalid_oauth_state: "Your Google sign-in session expired. Please try again.",
   missing_oauth_state: "Your Google sign-in session expired. Please try again.",
   missing_drive_scope:
     "Google sign-in completed, but Google Drive access was not granted. Sign in again and allow file access so the picker can work.",
   missing_refresh_token:
-    "Google did not return a reusable session token for this account. Try again with an approved test user.",
+    "Google did not return a reusable session token for this account. Please try again.",
   oauth_denied: "Google sign-in was cancelled before access was granted.",
   token_exchange_failed:
     "Google sign-in completed, but the app could not start a Drive session for this account.",

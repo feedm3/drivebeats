@@ -1,12 +1,21 @@
 import type { NextConfig } from "next";
 
+const isProduction = process.env.NODE_ENV === "production";
+const scriptSources = [
+  "'self'",
+  "'unsafe-inline'",
+  ...(!isProduction ? ["'unsafe-eval'"] : []),
+  "https://apis.google.com",
+  "https://va.vercel-scripts.com",
+];
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://va.vercel-scripts.com",
+  `script-src ${scriptSources.join(" ")}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.googleusercontent.com",
   "font-src 'self' data:",

@@ -163,11 +163,11 @@ export function FolderSearch({ value, onChange }: FolderSearchProps) {
 
       <div
         className={cn(
-          "absolute inset-0 -bottom-2 z-10 flex items-center bg-background sm:hidden transition-opacity duration-200 ease-out",
+          "absolute inset-0 z-10 flex items-center bg-background sm:hidden transition-opacity duration-200 ease-out",
           isMobileOpen ? "opacity-100" : "opacity-0 pointer-events-none",
         )}
       >
-        <div className="flex w-full items-center gap-2 rounded-full border border-border/70 bg-background/82 px-3 py-2 shadow-xs backdrop-blur-sm">
+        <div className="flex w-full items-center gap-2 rounded-full border border-border/70 bg-background/82 px-3 py-1.5 shadow-xs backdrop-blur-sm">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <label htmlFor="folder-search-mobile" className="sr-only">
             Search this folder

@@ -174,7 +174,7 @@ const FileListRow = memo(function FileListRow({
       <TableCell className="max-w-0">
         <div
           className={cn(
-            "flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left",
+            "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left",
             isActive && "text-primary",
           )}
         >

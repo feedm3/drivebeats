@@ -147,23 +147,25 @@ export async function reorderPlaylistTracks(params: {
 
   const sql = getSql();
   const values: unknown[] = [];
-  const clauses = params.fileIds.map((fileId, index) => {
+  const cases = params.fileIds.map((fileId, index) => {
     const offset = index * 2;
     values.push(fileId, index);
-    return `($${offset + 1}, $${offset + 2})`;
+    return `WHEN $${offset + 1} THEN $${offset + 2}::integer`;
   });
+  const playlistIdParam = values.length + 1;
+  const fileIdsParam = values.length + 2;
 
   await sql.query(
     `
-      UPDATE playlist_tracks pt
-      SET position = ordering.position,
+      UPDATE playlist_tracks
+      SET position = CASE file_id
+        ${cases.join("\n        ")}
+        ELSE position
+      END,
           updated_at = NOW()
-      FROM (
-        VALUES ${clauses.join(", ")}
-      ) AS ordering(file_id, position)
-      WHERE pt.playlist_id = $${values.length + 1}
-        AND pt.file_id = ordering.file_id
+      WHERE playlist_id = $${playlistIdParam}
+        AND file_id = ANY($${fileIdsParam}::text[])
     `,
-    [...values, params.playlistId],
+    [...values, params.playlistId, params.fileIds],
   );
 }

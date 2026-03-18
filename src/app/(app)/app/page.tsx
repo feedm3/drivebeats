@@ -9,7 +9,6 @@ import { PlayerBar } from "@/components/player/player-bar";
 import { PlaylistSection } from "@/components/playlist-section";
 import { PlaylistView } from "@/components/playlist-view";
 import { SplitView } from "@/components/split-view";
-import { useMediaQuery } from "@/hooks/use-media-query";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { cn, getHistoryStateWithFolderStack } from "@/lib/utils";
 import { useFolderTreeStore } from "@/stores/folder-tree-store";
@@ -30,7 +29,6 @@ import {
 type ActiveView = "files" | "playlist";
 
 function AppContent() {
-  const isDesktop = useMediaQuery("(min-width: 768px)");
   const playerBarPadding = usePlayerBarPadding();
 
   const [folderStack, setFolderStack] = useState<FolderEntry[]>(() => {
@@ -180,7 +178,7 @@ function AppContent() {
     />
   );
 
-  const mainContent =
+  const desktopMainContent =
     activeView === "playlist" && activeCollection ? (
       <PlaylistView collection={activeCollection} />
     ) : (
@@ -192,66 +190,72 @@ function AppContent() {
 
   return (
     <>
-      {isDesktop ? (
+      {/* Desktop */}
+      <div className="hidden h-full md:block">
         <div className="mx-auto h-full max-w-[1440px]">
-          <SplitView sidebar={sidebar}>{mainContent}</SplitView>
+          <SplitView sidebar={sidebar}>{desktopMainContent}</SplitView>
         </div>
-      ) : (
-        <div className="flex h-full flex-col">
-          <div className="flex shrink-0 border-b">
-            <button
-              type="button"
-              className={cn(
-                "flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors",
-                mobileTab === "files"
-                  ? "border-b-2 border-primary text-primary"
-                  : "text-muted-foreground",
-              )}
-              onClick={() => {
-                setMobileTab("files");
-                setMobilePlaylistId(null);
-              }}
-            >
-              <FolderOpen className="size-4" />
-              Files
-            </button>
-            <button
-              type="button"
-              className={cn(
-                "flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors",
-                mobileTab === "playlists"
-                  ? "border-b-2 border-primary text-primary"
-                  : "text-muted-foreground",
-              )}
-              onClick={() => {
-                setMobileTab("playlists");
-                setMobilePlaylistId(null);
-              }}
-            >
-              <ListMusic className="size-4" />
-              Playlists
-            </button>
-          </div>
-          <div className="min-h-0 flex-1">
-            {mobileTab === "files" ? (
-              <FileBrowser />
-            ) : mobileCollection ? (
-              <PlaylistView
-                collection={mobileCollection}
-                onBack={() => setMobilePlaylistId(null)}
-              />
-            ) : (
-              <div className="h-full overflow-y-auto px-2 pt-4">
-                <PlaylistSection
-                  activePlaylistId={mobilePlaylistId}
-                  onSelectPlaylist={setMobilePlaylistId}
-                />
-                <div className={playerBarPadding} />
-              </div>
+      </div>
+
+      {/* Mobile */}
+      <div className="flex h-full flex-col md:hidden">
+        <div className="flex shrink-0 border-b">
+          <button
+            type="button"
+            className={cn(
+              "flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors",
+              mobileTab === "files"
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted-foreground",
             )}
-          </div>
+            onClick={() => {
+              setMobileTab("files");
+              setMobilePlaylistId(null);
+            }}
+          >
+            <FolderOpen className="size-4" />
+            Files
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors",
+              mobileTab === "playlists"
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted-foreground",
+            )}
+            onClick={() => {
+              setMobileTab("playlists");
+              setMobilePlaylistId(null);
+            }}
+          >
+            <ListMusic className="size-4" />
+            Playlists
+          </button>
         </div>
-      )}
+        <div className="min-h-0 flex-1">
+          {mobileTab === "files" ? (
+            <FileBrowser
+              externalFolderStack={folderStack}
+              onFolderNavigate={handleFolderNavigate}
+            />
+          ) : mobileCollection ? (
+            <PlaylistView
+              collection={mobileCollection}
+              onBack={() => setMobilePlaylistId(null)}
+            />
+          ) : (
+            <div className="h-full overflow-y-auto px-2 pt-4">
+              <PlaylistSection
+                activePlaylistId={mobilePlaylistId}
+                onSelectPlaylist={setMobilePlaylistId}
+              />
+              <div className={playerBarPadding} />
+            </div>
+          )}
+        </div>
+      </div>
+
       <PlayerBar onNavigateToTrack={handleNavigateToTrack} />
     </>
   );

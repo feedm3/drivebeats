@@ -146,8 +146,8 @@ export function FolderTree({
       )}
 
       {/* Playlists header */}
-      <div className="shrink-0 px-2 pt-6 pb-2">
-        <div className="flex items-center gap-2 px-2">
+      <div className="shrink-0 px-4 pt-6 pb-2">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             className="group/hdr flex min-w-0 flex-1 items-center gap-1 text-xs font-semibold tracking-[0.16em] uppercase text-muted-foreground transition-colors hover:text-foreground"

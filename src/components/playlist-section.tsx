@@ -134,7 +134,7 @@ export const PlaylistSection = forwardRef<
     <div>
       {!collapsed && (
         <div className="pb-4">
-          <div className="px-2 pb-2 text-[11px] font-semibold tracking-[0.16em] uppercase text-muted-foreground">
+          <div className="px-2 pb-2 text-[11px] font-medium tracking-[0.16em] uppercase text-muted-foreground">
             Library
           </div>
           <div className="space-y-1">
@@ -160,7 +160,7 @@ export const PlaylistSection = forwardRef<
                   key={collection.id}
                   type="button"
                   className={cn(
-                    "group flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm transition-colors cursor-pointer",
+                    "group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors cursor-pointer",
                     isActive
                       ? "bg-accent text-accent-foreground"
                       : "hover:bg-accent/50",
@@ -194,19 +194,19 @@ export const PlaylistSection = forwardRef<
           </div>
 
           <div className="mt-5 flex items-center gap-2 px-2 pb-2">
-            <div className="min-w-0 flex-1 text-[11px] font-semibold tracking-[0.16em] uppercase text-muted-foreground">
+            <div className="min-w-0 flex-1 text-[11px] font-medium tracking-[0.16em] uppercase text-muted-foreground">
               Your playlists
             </div>
             <div className="flex min-w-6 shrink-0 justify-center">
               <IconTooltip label="Create playlist">
                 <Button
                   variant="ghost"
-                  size="icon-sm"
+                  size="icon-xs"
                   className="text-muted-foreground"
                   onClick={handleStartCreating}
                   aria-label="Create playlist"
                 >
-                  <Plus className="size-4" />
+                  <Plus className="size-3.5" />
                 </Button>
               </IconTooltip>
             </div>
@@ -253,7 +253,7 @@ export const PlaylistSection = forwardRef<
                   key={playlist.id}
                   type="button"
                   className={cn(
-                    "group flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm transition-colors cursor-pointer",
+                    "group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors cursor-pointer",
                     isActive
                       ? "bg-accent text-accent-foreground"
                       : "hover:bg-accent/50",

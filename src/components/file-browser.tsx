@@ -1,6 +1,6 @@
 "use client";
 
-import { RotateCw } from "lucide-react";
+import { Ellipsis, RotateCw } from "lucide-react";
 import {
   useCallback,
   useDeferredValue,
@@ -16,6 +16,11 @@ import { FileList } from "@/components/file-list";
 import { FolderSearch } from "@/components/folder-search";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { useFolderContents } from "@/hooks/use-folder-contents";
 import { getHistoryStateWithFolderStack } from "@/lib/utils";
@@ -139,6 +144,7 @@ export function FileBrowser({
   }, [currentFolderId, importedRootEntries, navigateToFolder]);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const onRefresh = useCallback(async () => {
     if (currentFolderIdRef.current === ROOT_FOLDER_ID) {
       setFiles(getImportedLibraryRootEntries(useImportedDriveStore.getState()));
@@ -199,14 +205,14 @@ export function FileBrowser({
 
   if (isLibraryRoot && !loading && libraryIsEmpty) {
     return (
-      <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-7">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-4 sm:pt-7">
+        <div className="flex items-center gap-2">
           <BreadcrumbNav
             folderStack={folderStack}
             onNavigate={onBreadcrumbNavigate}
           />
         </div>
-        <Separator className="my-3" />
+        <Separator className="my-2 sm:my-3" />
         <div className="flex min-h-0 flex-1 items-start">
           <div className="w-full">
             <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-[1.75rem] border border-dashed border-border/70 bg-muted/20 px-6 py-10 text-center">
@@ -228,13 +234,14 @@ export function FileBrowser({
   }
 
   return (
-    <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-7">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-4 sm:pt-7">
+      <div className="relative flex items-center gap-2">
         <BreadcrumbNav
           folderStack={folderStack}
           onNavigate={onBreadcrumbNavigate}
+          className="min-w-0 overflow-hidden"
         />
-        <div className="flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <FolderSearch value={searchQuery} onChange={setSearchQuery} />
           <IconTooltip
             label={refreshing ? "Refreshing folder" : "Refresh folder"}
@@ -242,7 +249,7 @@ export function FileBrowser({
             <Button
               variant="ghost"
               size="icon"
-              className="text-muted-foreground size-8"
+              className="hidden text-muted-foreground size-8 sm:inline-flex"
               onClick={onRefresh}
               disabled={refreshing}
               aria-label={refreshing ? "Refreshing folder" : "Refresh folder"}
@@ -252,9 +259,39 @@ export function FileBrowser({
               />
             </Button>
           </IconTooltip>
+          <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground sm:hidden"
+                  aria-label="More options"
+                />
+              }
+            >
+              <Ellipsis className="size-4" />
+            </PopoverTrigger>
+            <PopoverContent side="bottom" align="end" className="w-44">
+              <button
+                type="button"
+                className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50"
+                disabled={refreshing}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onRefresh();
+                }}
+              >
+                <RotateCw
+                  className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
+                />
+                Refresh folder
+              </button>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
-      <Separator className="my-3" />
+      <Separator className="my-2 sm:my-3" />
       <FileList
         files={files}
         loading={loading}

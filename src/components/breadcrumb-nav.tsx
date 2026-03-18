@@ -13,11 +13,16 @@ import type { FolderEntry } from "@/types";
 interface BreadcrumbNavProps {
   folderStack: FolderEntry[];
   onNavigate: (index: number) => void;
+  className?: string;
 }
 
-export function BreadcrumbNav({ folderStack, onNavigate }: BreadcrumbNavProps) {
+export function BreadcrumbNav({
+  folderStack,
+  onNavigate,
+  className,
+}: BreadcrumbNavProps) {
   return (
-    <Breadcrumb aria-label="Folder navigation">
+    <Breadcrumb aria-label="Folder navigation" className={className}>
       <BreadcrumbList>
         {folderStack.map((folder, i) => (
           <Fragment key={folder.id}>

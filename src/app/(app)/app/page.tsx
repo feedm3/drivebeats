@@ -202,7 +202,7 @@ function AppContent() {
             <button
               type="button"
               className={cn(
-                "flex flex-1 items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors",
+                "flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors",
                 mobileTab === "files"
                   ? "border-b-2 border-primary text-primary"
                   : "text-muted-foreground",
@@ -218,7 +218,7 @@ function AppContent() {
             <button
               type="button"
               className={cn(
-                "flex flex-1 items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors",
+                "flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors",
                 mobileTab === "playlists"
                   ? "border-b-2 border-primary text-primary"
                   : "text-muted-foreground",

@@ -148,7 +148,7 @@ export function FolderSearch({ value, onChange }: FolderSearchProps) {
           <Button
             type="button"
             variant="ghost"
-            size="icon-xs"
+            size="icon-sm"
             className={cn(
               "rounded-full text-muted-foreground transition-all hover:text-foreground",
               isMobileOpen && "opacity-0 pointer-events-none w-0 px-0",
@@ -156,18 +156,18 @@ export function FolderSearch({ value, onChange }: FolderSearchProps) {
             onClick={() => setIsMobileOpen(true)}
             aria-label="Open search"
           >
-            <Search className="size-3.5" />
+            <Search className="size-4" />
           </Button>
         </IconTooltip>
       </div>
 
       <div
         className={cn(
-          "min-w-0 flex-1 sm:hidden overflow-hidden transition-all duration-200 ease-out",
-          isMobileOpen ? "max-h-16 opacity-100" : "max-h-0 opacity-0",
+          "absolute inset-0 -bottom-2 z-10 flex items-center bg-background sm:hidden transition-opacity duration-200 ease-out",
+          isMobileOpen ? "opacity-100" : "opacity-0 pointer-events-none",
         )}
       >
-        <div className="flex items-center gap-2 rounded-full border border-border/70 bg-background/82 px-3 py-1.5 shadow-xs backdrop-blur-sm">
+        <div className="flex w-full items-center gap-2 rounded-full border border-border/70 bg-background/82 px-3 py-2 shadow-xs backdrop-blur-sm">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <label htmlFor="folder-search-mobile" className="sr-only">
             Search this folder
@@ -206,7 +206,7 @@ export function FolderSearch({ value, onChange }: FolderSearchProps) {
             <Button
               type="button"
               variant="ghost"
-              size="icon-xs"
+              size="icon-sm"
               className="rounded-full text-muted-foreground hover:text-foreground"
               onClick={() => {
                 if (value) {
@@ -218,7 +218,7 @@ export function FolderSearch({ value, onChange }: FolderSearchProps) {
               }}
               aria-label={hasQuery ? "Clear search" : "Close search"}
             >
-              <X className="size-3.5" />
+              <X className="size-4" />
             </Button>
           </IconTooltip>
         </div>

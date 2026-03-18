@@ -148,11 +148,6 @@
     100% { transform: scale(1); }
   }
 
-  @keyframes active-glow {
-    0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 0%, transparent); }
-    50% { box-shadow: 0 0 8px 2px color-mix(in oklab, var(--primary) 15%, transparent); }
-  }
-
   @keyframes toggle-bounce {
     0% { transform: scale(1); }
     40% { transform: scale(1.2); }
@@ -164,11 +159,23 @@
     animation: heart-pop 300ms ease-out;
   }
 
-  .animate-active-glow {
-    animation: active-glow 2s ease-in-out infinite;
-  }
-
   .animate-toggle-bounce {
     animation: toggle-bounce 250ms ease-out;
   }
+
+}
+
+.progress-smooth [data-slot="slider-range"] {
+  transition: all 200ms linear;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, var(--accent) 25%, color-mix(in oklab, var(--accent) 60%, var(--background)) 50%, var(--accent) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }

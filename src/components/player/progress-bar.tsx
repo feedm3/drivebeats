@@ -24,7 +24,7 @@ export function ProgressBar() {
         max={duration || 100}
         step={0.1}
         onValueChange={(v) => seek(Array.isArray(v) ? v[0] : v)}
-        className="group flex-1"
+        className="group flex-1 progress-smooth"
       />
       <span className="w-10 text-right tabular-nums text-xs text-muted-foreground">
         {formatTime(duration)}

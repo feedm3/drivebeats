@@ -175,7 +175,7 @@ const FileListRow = memo(function FileListRow({
         <div
           className={cn(
             "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-all",
-            isActive && "text-primary animate-active-glow",
+            isActive && "text-primary",
           )}
         >
           <span

@@ -162,7 +162,7 @@ export function FolderTreeNode({
         </span>
       </div>
       {isExpanded && children && children.length > 0 && (
-        <div>
+        <div className="animate-in fade-in duration-150">
           {children.map((child) => (
             <FolderTreeNode
               key={child.id}

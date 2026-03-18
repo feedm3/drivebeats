@@ -20,12 +20,18 @@ export function NowPlayingBars({
               values="10;4;8;10"
               dur="0.9s"
               repeatCount="indefinite"
+              calcMode="spline"
+              keyTimes="0;0.33;0.67;1"
+              keySplines="0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1"
             />
             <animate
               attributeName="y"
               values="6;12;8;6"
               dur="0.9s"
               repeatCount="indefinite"
+              calcMode="spline"
+              keyTimes="0;0.33;0.67;1"
+              keySplines="0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1"
             />
           </>
         )}
@@ -38,12 +44,18 @@ export function NowPlayingBars({
               values="14;6;10;14"
               dur="0.7s"
               repeatCount="indefinite"
+              calcMode="spline"
+              keyTimes="0;0.33;0.67;1"
+              keySplines="0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1"
             />
             <animate
               attributeName="y"
               values="2;10;6;2"
               dur="0.7s"
               repeatCount="indefinite"
+              calcMode="spline"
+              keyTimes="0;0.33;0.67;1"
+              keySplines="0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1"
             />
           </>
         )}
@@ -56,12 +68,18 @@ export function NowPlayingBars({
               values="12;8;4;12"
               dur="1.1s"
               repeatCount="indefinite"
+              calcMode="spline"
+              keyTimes="0;0.33;0.67;1"
+              keySplines="0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1"
             />
             <animate
               attributeName="y"
               values="4;8;12;4"
               dur="1.1s"
               repeatCount="indefinite"
+              calcMode="spline"
+              keyTimes="0;0.33;0.67;1"
+              keySplines="0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1"
             />
           </>
         )}

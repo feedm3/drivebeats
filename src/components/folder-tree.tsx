@@ -113,7 +113,7 @@ export function FolderTree({
 
       {/* Folders content */}
       {!foldersCollapsed && (
-        <div className="px-2 pb-4">
+        <div className="animate-in fade-in slide-in-from-left-2 duration-200 px-2 pb-4">
           {rootFolders.length === 0 ? (
             <div className="space-y-3 px-2 py-4 text-sm text-muted-foreground">
               <p>

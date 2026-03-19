@@ -11,22 +11,13 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { logoutAndRedirect } from "@/lib/clear-local-data";
 import { deleteAllCloudLibraryData } from "@/lib/cloud-library-api";
 import * as offlineDb from "@/lib/offline-db";
 import { removeAllDownloads } from "@/lib/offline-download-manager";
 import { formatBytes } from "@/lib/utils";
-import { useAuthStore } from "@/stores/auth-store";
-import { useFolderCacheStore } from "@/stores/folder-cache-store";
-import { useImportedDriveStore } from "@/stores/imported-drive-store";
 import { getFavoriteTracks, useLibraryStore } from "@/stores/library-store";
-import { usePlayerStore } from "@/stores/player-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
-
-const APP_STORAGE_KEYS = [
-  "sidebar-width",
-  "sidebar-folders-collapsed",
-  "sidebar-playlists-collapsed",
-];
 
 type View = "main" | "confirm-downloads" | "confirm-cloud" | "confirm-account";
 
@@ -117,52 +108,8 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
   const handleDeleteAccount = useCallback(async () => {
     setDeletingAccount(true);
     try {
-      toast.dismiss();
-
       await deleteAllCloudLibraryData();
-
-      usePlayerStore.getState().resetPlayback();
-      usePlayerStore.getState().clearCache();
-      usePlayerStore.setState({
-        currentTrack: null,
-        playingFolderStack: [],
-        playingPlaylistId: null,
-        playlist: [],
-        currentIndex: -1,
-        isPlaying: false,
-        duration: 0,
-        currentTime: 0,
-        volume: 0.7,
-        isMuted: false,
-        shuffle: false,
-        repeat: "off",
-        isLoading: false,
-      });
-      usePlayerStore.persist.clearStorage();
-
-      useLibraryStore.getState().clearAll();
-      useLibraryStore.persist.clearStorage();
-
-      usePlaylistStore.getState().clearCloudState();
-      usePlaylistStore.persist.clearStorage();
-
-      try {
-        await removeAllDownloads();
-      } catch {
-        // best-effort
-      }
-
-      useFolderCacheStore.getState().clear();
-      useImportedDriveStore.getState().clear();
-      useImportedDriveStore.persist.clearStorage();
-
-      for (const key of APP_STORAGE_KEYS) {
-        window.localStorage.removeItem(key);
-      }
-
-      useAuthStore.getState().setLoggingOut(true);
-      await useAuthStore.getState().logout();
-      window.location.href = "/";
+      await logoutAndRedirect();
     } catch (error) {
       console.error("Delete account failed:", error);
       toast.error("Could not delete account. Please try again.");

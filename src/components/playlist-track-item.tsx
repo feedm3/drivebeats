@@ -60,7 +60,7 @@ export function PlaylistTrackItem({
       data-track-index={index}
       data-active={isActive ? true : undefined}
       className={cn(
-        "group relative flex cursor-pointer items-center border-b py-2 transition-colors hover:bg-muted/50 data-[active]:bg-primary/6 last:border-b-0",
+        "group relative flex cursor-pointer items-center py-2 transition-colors hover:bg-muted/50 data-[active]:bg-primary/6",
         isDragging && "opacity-30",
       )}
     >

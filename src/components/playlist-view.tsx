@@ -529,42 +529,52 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                   ? libraryTracks[track.fileId]?.lastPlayedAt
                   : undefined;
                 return (
-                  <PlaylistTrackItem
+                  <div
                     key={track.fileId}
-                    track={track}
-                    index={index}
-                    isActive={
-                      isPlayingThisPlaylist && activeTrackId === track.fileId
-                    }
-                    isCurrentlyPlaying={
-                      isPlayingThisPlaylist && currentTrack?.id === track.fileId
-                    }
-                    isPlaying={isPlaying}
-                    subtitle={
-                      lastPlayedAt
-                        ? formatRelativeDate(lastPlayedAt)
-                        : undefined
-                    }
-                    isDragging={drag.fromIndex === index}
-                    dropIndicator={
-                      drag.overIndex === index ? drag.position : null
-                    }
-                    isReorderable={isEditablePlaylist}
-                    offlineStatus={
-                      isOfflineEnabled
-                        ? offlineTrackStatus[track.fileId]
-                        : undefined
-                    }
-                    onPlay={() =>
-                      isPlayingThisPlaylist && currentTrack?.id === track.fileId
-                        ? togglePlay()
-                        : playFromPlaylist(index)
-                    }
-                    onRemove={() =>
-                      handleRemoveTrack(track.fileId, track.fileName)
-                    }
-                    removeLabel={getCollectionRemoveLabel(collection.id)}
-                  />
+                    className="border-b last:border-b-0"
+                    style={{
+                      contentVisibility: "auto",
+                      containIntrinsicSize: "auto 52px",
+                    }}
+                  >
+                    <PlaylistTrackItem
+                      track={track}
+                      index={index}
+                      isActive={
+                        isPlayingThisPlaylist && activeTrackId === track.fileId
+                      }
+                      isCurrentlyPlaying={
+                        isPlayingThisPlaylist &&
+                        currentTrack?.id === track.fileId
+                      }
+                      isPlaying={isPlaying}
+                      subtitle={
+                        lastPlayedAt
+                          ? formatRelativeDate(lastPlayedAt)
+                          : undefined
+                      }
+                      isDragging={drag.fromIndex === index}
+                      dropIndicator={
+                        drag.overIndex === index ? drag.position : null
+                      }
+                      isReorderable={isEditablePlaylist}
+                      offlineStatus={
+                        isOfflineEnabled
+                          ? offlineTrackStatus[track.fileId]
+                          : undefined
+                      }
+                      onPlay={() =>
+                        isPlayingThisPlaylist &&
+                        currentTrack?.id === track.fileId
+                          ? togglePlay()
+                          : playFromPlaylist(index)
+                      }
+                      onRemove={() =>
+                        handleRemoveTrack(track.fileId, track.fileName)
+                      }
+                      removeLabel={getCollectionRemoveLabel(collection.id)}
+                    />
+                  </div>
                 );
               })}
             </div>

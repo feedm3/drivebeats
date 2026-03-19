@@ -23,6 +23,49 @@ interface Id3MetadataState {
 
 const extractionInFlight = new Set<string>();
 
+const BATCH_DELAY_MS = 2_000;
+const MAX_BATCH_SIZE = 50;
+
+interface PendingUpload {
+  fileId: string;
+  modifiedTime?: string;
+  title?: string;
+  artist?: string;
+  album?: string;
+}
+
+const pendingUploads: PendingUpload[] = [];
+let batchTimerId: ReturnType<typeof setTimeout> | null = null;
+
+function flushMetadataBatch() {
+  batchTimerId = null;
+  if (pendingUploads.length === 0) return;
+
+  const batch = pendingUploads.splice(0, MAX_BATCH_SIZE);
+  import("@/lib/cloud-library-api")
+    .then(({ saveCloudTrackMetadata }) => saveCloudTrackMetadata(batch))
+    .catch(() => {
+      // Non-fatal: metadata will be re-extracted next play
+    });
+
+  // If there are leftovers, schedule another flush
+  if (pendingUploads.length > 0) {
+    batchTimerId = setTimeout(flushMetadataBatch, BATCH_DELAY_MS);
+  }
+}
+
+function enqueueMetadataUpload(entry: PendingUpload) {
+  pendingUploads.push(entry);
+  if (pendingUploads.length >= MAX_BATCH_SIZE) {
+    if (batchTimerId !== null) {
+      clearTimeout(batchTimerId);
+    }
+    flushMetadataBatch();
+  } else if (batchTimerId === null) {
+    batchTimerId = setTimeout(flushMetadataBatch, BATCH_DELAY_MS);
+  }
+}
+
 export const useId3MetadataStore = create<Id3MetadataState>()(
   persist(
     (set, get) => ({
@@ -85,21 +128,13 @@ export const useId3MetadataStore = create<Id3MetadataState>()(
             // Only upload to cloud if this track belongs to a synced collection
             if (!isSynced) return;
 
-            import("@/lib/cloud-library-api")
-              .then(({ saveCloudTrackMetadata }) =>
-                saveCloudTrackMetadata([
-                  {
-                    fileId,
-                    modifiedTime,
-                    title: metadata.title,
-                    artist: metadata.artist,
-                    album: metadata.album,
-                  },
-                ]),
-              )
-              .catch(() => {
-                // Non-fatal: metadata will be re-extracted next play
-              });
+            enqueueMetadataUpload({
+              fileId,
+              modifiedTime,
+              title: metadata.title,
+              artist: metadata.artist,
+              album: metadata.album,
+            });
           })
           .catch(() => {
             // Extraction failed — silently skip

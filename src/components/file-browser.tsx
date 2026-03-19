@@ -23,17 +23,16 @@ import {
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { useFolderContents } from "@/hooks/use-folder-contents";
-import { getHistoryStateWithFolderStack } from "@/lib/utils";
 import {
   getImportedLibraryRootEntries,
   useImportedDriveStore,
 } from "@/stores/imported-drive-store";
 import type { DriveFile, FolderEntry } from "@/types";
-import { INITIAL_STACK, ROOT_FOLDER_ID } from "@/types";
+import { ROOT_FOLDER_ID } from "@/types";
 
 interface FileBrowserProps {
-  externalFolderStack?: FolderEntry[];
-  onFolderNavigate?: (folderStack: FolderEntry[]) => void;
+  externalFolderStack: FolderEntry[];
+  onFolderNavigate: (folderStack: FolderEntry[]) => void;
 }
 
 export function FileBrowser({
@@ -60,46 +59,14 @@ export function FileBrowser({
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [internalFolderStack, setInternalFolderStack] =
-    useState<FolderEntry[]>(INITIAL_STACK);
 
-  const isControlled = externalFolderStack !== undefined;
-  const folderStack = isControlled ? externalFolderStack : internalFolderStack;
+  const folderStack = externalFolderStack;
   const currentFolderId = folderStack[folderStack.length - 1].id;
   const folderStackRef = useRef(folderStack);
   const currentFolderIdRef = useRef(currentFolderId);
   const isMountedRef = useRef(true);
   const navigationRequestRef = useRef(0);
   const deferredSearchQuery = useDeferredValue(searchQuery);
-
-  // Seed initial history state & listen for back/forward
-  useEffect(() => {
-    if (isControlled) return;
-
-    const historyFolderStack = window.history.state?.folderStack;
-    if (Array.isArray(historyFolderStack) && historyFolderStack.length > 0) {
-      setInternalFolderStack(historyFolderStack);
-    } else {
-      window.history.replaceState(
-        getHistoryStateWithFolderStack(INITIAL_STACK, null),
-        "",
-      );
-    }
-
-    const onPopState = (e: PopStateEvent) => {
-      setSearchQuery("");
-      if (
-        Array.isArray(e.state?.folderStack) &&
-        e.state.folderStack.length > 0
-      ) {
-        setInternalFolderStack(e.state.folderStack);
-      } else {
-        setInternalFolderStack(INITIAL_STACK);
-      }
-    };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, [isControlled]);
 
   useEffect(() => {
     folderStackRef.current = folderStack;
@@ -170,18 +137,9 @@ export function FileBrowser({
     (newStack: FolderEntry[]) => {
       folderStackRef.current = newStack;
       setSearchQuery("");
-
-      if (isControlled && onFolderNavigate) {
-        onFolderNavigate(newStack);
-      } else {
-        setInternalFolderStack(newStack);
-        window.history.pushState(
-          getHistoryStateWithFolderStack(newStack, null),
-          "",
-        );
-      }
+      onFolderNavigate(newStack);
     },
-    [isControlled, onFolderNavigate],
+    [onFolderNavigate],
   );
 
   const onFolderClick = useCallback(

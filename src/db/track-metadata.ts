@@ -43,31 +43,41 @@ export async function batchUpsertTrackMetadata(
 
   const sql = getSql();
 
-  for (const record of records) {
-    await sql.query(
-      `
-        INSERT INTO track_metadata (
-          user_google_id, file_id, file_modified_time,
-          id3_title, id3_artist, id3_album, extracted_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, NOW())
-        ON CONFLICT (user_google_id, file_id) DO UPDATE
-        SET file_modified_time = EXCLUDED.file_modified_time,
-            id3_title = EXCLUDED.id3_title,
-            id3_artist = EXCLUDED.id3_artist,
-            id3_album = EXCLUDED.id3_album,
-            extracted_at = NOW()
-      `,
-      [
-        googleUserId,
-        record.fileId,
-        record.fileModifiedTime ?? null,
-        record.title ?? null,
-        record.artist ?? null,
-        record.album ?? null,
-      ],
+  const values: unknown[] = [];
+  const rows: string[] = [];
+
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i];
+    const offset = i * 6;
+    rows.push(
+      `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, NOW())`,
+    );
+    values.push(
+      googleUserId,
+      record.fileId,
+      record.fileModifiedTime ?? null,
+      record.title ?? null,
+      record.artist ?? null,
+      record.album ?? null,
     );
   }
+
+  await sql.query(
+    `
+      INSERT INTO track_metadata (
+        user_google_id, file_id, file_modified_time,
+        id3_title, id3_artist, id3_album, extracted_at
+      )
+      VALUES ${rows.join(", ")}
+      ON CONFLICT (user_google_id, file_id) DO UPDATE
+      SET file_modified_time = EXCLUDED.file_modified_time,
+          id3_title = EXCLUDED.id3_title,
+          id3_artist = EXCLUDED.id3_artist,
+          id3_album = EXCLUDED.id3_album,
+          extracted_at = NOW()
+    `,
+    values,
+  );
 }
 
 export async function pruneOrphanedTrackMetadata(googleUserId: string) {

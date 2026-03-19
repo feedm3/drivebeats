@@ -35,39 +35,55 @@ export function useFolderContents() {
 
       try {
         const query = getSupportedAudioQuery(folderId);
-        const params = new URLSearchParams({
-          q: query,
-          fields: "files(id,name,mimeType,size,modifiedTime,parents)",
-          orderBy: "folder,name",
-          pageSize: "1000",
-          supportsAllDrives: "true",
-          includeItemsFromAllDrives: "true",
-        });
-        const res = await listGoogleDriveFiles(token, params);
-        if (res.ok) {
+        const allFiles: DriveFile[] = [];
+        let pageToken: string | undefined;
+
+        do {
+          const params = new URLSearchParams({
+            q: query,
+            fields:
+              "nextPageToken,files(id,name,mimeType,size,modifiedTime,parents)",
+            orderBy: "folder,name",
+            pageSize: "1000",
+            supportsAllDrives: "true",
+            includeItemsFromAllDrives: "true",
+          });
+          if (pageToken) {
+            params.set("pageToken", pageToken);
+          }
+
+          const res = await listGoogleDriveFiles(token, params);
+          if (!res.ok) {
+            if (res.status === 401) {
+              if (!useAuthStore.getState().isLoggingOut) {
+                toast.error("Session expired. Please sign in again.");
+              }
+              useAuthStore.getState().logout();
+            } else if (res.status === 403) {
+              if (!useAuthStore.getState().isLoggingOut) {
+                toast.error(
+                  "Access denied. Check your Google Drive permissions.",
+                );
+              }
+            } else if (res.status === 429) {
+              if (!useAuthStore.getState().isLoggingOut) {
+                toast.error("Too many requests. Please wait a moment.");
+              }
+            } else {
+              if (!useAuthStore.getState().isLoggingOut) {
+                toast.error("Failed to load files. Please try again.");
+              }
+            }
+            return null;
+          }
+
           const data = (await res.json()) as GoogleDriveFilesListResponse;
-          const files = data.files ?? [];
-          useFolderCacheStore.getState().setFiles(folderId, files);
-          return files;
-        }
-        if (res.status === 401) {
-          if (!useAuthStore.getState().isLoggingOut) {
-            toast.error("Session expired. Please sign in again.");
-          }
-          useAuthStore.getState().logout();
-        } else if (res.status === 403) {
-          if (!useAuthStore.getState().isLoggingOut) {
-            toast.error("Access denied. Check your Google Drive permissions.");
-          }
-        } else if (res.status === 429) {
-          if (!useAuthStore.getState().isLoggingOut) {
-            toast.error("Too many requests. Please wait a moment.");
-          }
-        } else {
-          if (!useAuthStore.getState().isLoggingOut) {
-            toast.error("Failed to load files. Please try again.");
-          }
-        }
+          allFiles.push(...(data.files ?? []));
+          pageToken = data.nextPageToken;
+        } while (pageToken);
+
+        useFolderCacheStore.getState().setFiles(folderId, allFiles);
+        return allFiles;
       } catch {
         if (!useAuthStore.getState().isLoggingOut) {
           toast.error("Network error. Check your connection.");

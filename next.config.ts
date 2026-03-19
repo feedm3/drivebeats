@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const isProduction = process.env.NODE_ENV === "production";
 const scriptSources = [
   "'self'",
+  // Next.js injects inline scripts for hydration/bootstrapping.
+  // Removing 'unsafe-inline' requires nonce-based CSP via middleware.
   "'unsafe-inline'",
   ...(!isProduction ? ["'unsafe-eval'"] : []),
   "https://apis.google.com",

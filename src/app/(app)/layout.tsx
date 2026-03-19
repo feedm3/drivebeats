@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getServerAuthSession } from "@/lib/server-auth";
 
@@ -16,5 +17,9 @@ export default async function AppLayout({
 }) {
   const session = await getServerAuthSession();
 
-  return <AppShell initialUser={session?.user ?? null}>{children}</AppShell>;
+  if (!session) {
+    redirect("/");
+  }
+
+  return <AppShell initialUser={session.user ?? null}>{children}</AppShell>;
 }

@@ -47,6 +47,7 @@ export interface GoogleDriveFileMetadataResponse {
 
 export interface GoogleDriveFilesListResponse {
   files?: DriveFile[];
+  nextPageToken?: string;
 }
 
 interface GoogleOAuthTokenRequest {

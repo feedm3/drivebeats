@@ -25,7 +25,6 @@ export function AddToPlaylistPopover({
   file,
   className,
 }: AddToPlaylistPopoverProps) {
-  const playlists = usePlaylistStore((s) => s.playlists);
   const addTracks = usePlaylistStore((s) => s.addTracks);
   const createPlaylist = usePlaylistStore((s) => s.createPlaylist);
   const getCachedFiles = useFolderCacheStore((s) => s.getFiles);
@@ -34,6 +33,9 @@ export function AddToPlaylistPopover({
   const [newName, setNewName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
+  const [playlistsSnapshot, setPlaylistsSnapshot] = useState(
+    () => usePlaylistStore.getState().playlists,
+  );
 
   const isFolder = file.mimeType === FOLDER_MIME;
 
@@ -91,7 +93,10 @@ export function AddToPlaylistPopover({
         if (!nextOpen) {
           setCreating(false);
           setNewName("");
+          return;
         }
+
+        setPlaylistsSnapshot(usePlaylistStore.getState().playlists);
       }}
     >
       <IconTooltip label="Add to playlist" side="top" align="end">
@@ -111,61 +116,63 @@ export function AddToPlaylistPopover({
           <Plus className="size-3.5" />
         </PopoverTrigger>
       </IconTooltip>
-      <PopoverContent side="left" align="start" className="w-52">
-        <div className="max-h-60 overflow-y-auto">
-          {playlists.map((p) => (
+      {open ? (
+        <PopoverContent side="left" align="start" className="w-52">
+          <div className="max-h-60 overflow-y-auto">
+            {playlistsSnapshot.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleAdd(p.id, p.name);
+                }}
+              >
+                <ListMusic className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">{p.name}</span>
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
+                  {p.tracks.length}
+                </span>
+              </button>
+            ))}
+          </div>
+          {creating ? (
+            <div className="border-t px-2 py-1.5">
+              <input
+                ref={inputRef}
+                type="text"
+                className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring/50"
+                placeholder="Playlist name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") void handleCreateAndAdd();
+                  if (e.key === "Escape") {
+                    setCreating(false);
+                    setNewName("");
+                  }
+                }}
+              />
+            </div>
+          ) : (
             <button
-              key={p.id}
               type="button"
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+              className="flex w-full items-center gap-2 border-t px-2 py-1.5 text-sm hover:bg-accent"
               onClick={(e) => {
                 e.stopPropagation();
-                void handleAdd(p.id, p.name);
+                setCreating(true);
+                setTimeout(() => inputRef.current?.focus(), 0);
               }}
             >
-              <ListMusic className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate">{p.name}</span>
-              <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
-                {p.tracks.length}
-              </span>
+              <Plus className="size-3.5 shrink-0 text-muted-foreground" />
+              New playlist
             </button>
-          ))}
-        </div>
-        {creating ? (
-          <div className="border-t px-2 py-1.5">
-            <input
-              ref={inputRef}
-              type="text"
-              className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring/50"
-              placeholder="Playlist name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === "Enter") void handleCreateAndAdd();
-                if (e.key === "Escape") {
-                  setCreating(false);
-                  setNewName("");
-                }
-              }}
-            />
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 border-t px-2 py-1.5 text-sm hover:bg-accent"
-            onClick={(e) => {
-              e.stopPropagation();
-              setCreating(true);
-              setTimeout(() => inputRef.current?.focus(), 0);
-            }}
-          >
-            <Plus className="size-3.5 shrink-0 text-muted-foreground" />
-            New playlist
-          </button>
-        )}
-      </PopoverContent>
+          )}
+        </PopoverContent>
+      ) : null}
     </Popover>
   );
 }

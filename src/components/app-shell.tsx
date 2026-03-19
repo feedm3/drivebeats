@@ -2,20 +2,28 @@
 
 import { useEffect } from "react";
 import { AppHeader } from "@/components/app-header";
+import { AuthBootstrap } from "@/components/auth-bootstrap";
 import { CloudLibrarySync } from "@/components/cloud-library-sync";
 import { GooglePickerCloseButton } from "@/components/google-picker-close-button";
 import { GooglePickerScripts } from "@/components/google-picker-scripts";
 import { OfflineStatusBanner } from "@/components/offline-status-banner";
 import { Providers } from "@/components/providers";
+import type { AuthUser } from "@/lib/auth-session";
 import { initOfflineSync } from "@/lib/offline-download-manager";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+interface AppShellProps {
+  children: React.ReactNode;
+  initialUser: AuthUser | null;
+}
+
+export function AppShell({ children, initialUser }: AppShellProps) {
   useEffect(() => {
     initOfflineSync();
   }, []);
 
   return (
     <Providers>
+      <AuthBootstrap initialUser={initialUser} />
       <CloudLibrarySync />
       <GooglePickerScripts />
       <GooglePickerCloseButton />

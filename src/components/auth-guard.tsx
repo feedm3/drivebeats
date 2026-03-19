@@ -41,18 +41,28 @@ function isOffline() {
   return typeof navigator !== "undefined" && !navigator.onLine;
 }
 
-export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+interface AuthGuardProps {
+  children: React.ReactNode;
+  hasServerSession?: boolean;
+}
+
+export function AuthGuard({
+  children,
+  hasServerSession = false,
+}: AuthGuardProps) {
+  const hasLiveSession = useAuthStore(
+    (state) => state.authStatus === "authenticated" && !!state.user,
+  );
   const refreshAccessToken = useAuthStore((state) => state.refreshAccessToken);
   const [offlineStoreHydrated, setOfflineStoreHydrated] = useState(() =>
     typeof window === "undefined"
       ? false
       : (useOfflineStore.persist?.hasHydrated?.() ?? false),
   );
-  const [{ ready, offlineAccessAllowed }, setAccessState] = useState({
-    ready: false,
+  const [{ ready, offlineAccessAllowed }, setAccessState] = useState(() => ({
+    ready: hasServerSession,
     offlineAccessAllowed: false,
-  });
+  }));
 
   useEffect(() => {
     if (offlineStoreHydrated) {
@@ -78,16 +88,16 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [offlineStoreHydrated]);
 
   useEffect(() => {
+    if (hasServerSession || hasLiveSession) {
+      setAccessState({ ready: true, offlineAccessAllowed: false });
+      return;
+    }
+
     if (!offlineStoreHydrated) {
       return;
     }
 
     let cancelled = false;
-
-    if (isAuthenticated()) {
-      setAccessState({ ready: true, offlineAccessAllowed: false });
-      return;
-    }
 
     if (canUseOfflineMode()) {
       setAccessState({ ready: true, offlineAccessAllowed: true });
@@ -100,7 +110,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (ok || isAuthenticated()) {
+      if (ok || hasLiveSession) {
         setAccessState({ ready: true, offlineAccessAllowed: false });
         return;
       }
@@ -114,13 +124,18 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, offlineStoreHydrated, refreshAccessToken]);
+  }, [
+    hasLiveSession,
+    hasServerSession,
+    offlineStoreHydrated,
+    refreshAccessToken,
+  ]);
 
   if (!ready) {
     return <AppLoadingShell />;
   }
 
-  if (!isAuthenticated() && !offlineAccessAllowed) {
+  if (!(hasServerSession || hasLiveSession) && !offlineAccessAllowed) {
     window.location.href = "/";
     return null;
   }

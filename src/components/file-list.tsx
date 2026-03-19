@@ -1,7 +1,7 @@
 "use client";
 
 import { Folder, Music4, Search } from "lucide-react";
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AddToPlaylistPopover } from "@/components/add-to-playlist-popover";
 import { FavoriteToggleButton } from "@/components/favorite-toggle-button";
 import {
@@ -40,6 +40,8 @@ interface FileListProps {
 }
 
 type NameSortDirection = "asc" | "desc";
+const INITIAL_VISIBLE_FILE_COUNT = 200;
+const VISIBLE_FILE_BATCH_SIZE = 200;
 const rowActionClassName =
   "opacity-100 transition-none md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100";
 
@@ -237,6 +239,8 @@ export function FileList({
   const playerBarPadding = usePlayerBarPadding();
   const [nameSortDirection, setNameSortDirection] =
     useState<NameSortDirection>("asc");
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_FILE_COUNT);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const activeTrackId = pendingTrackId ?? currentTrackId;
   const playingFolderStack = usePlayerStore(
     (state) => state.playingFolderStack,
@@ -257,7 +261,59 @@ export function FileList({
     () => filteredFiles.filter((file) => !isFolder(file)),
     [filteredFiles],
   );
+  const resetVisibleCountKey = useMemo(
+    () =>
+      [
+        files.length,
+        files[0]?.id ?? "",
+        files[files.length - 1]?.id ?? "",
+        nameSortDirection,
+        searchQuery,
+      ].join("|"),
+    [files, nameSortDirection, searchQuery],
+  );
+  const visibleFiles = useMemo(
+    () => filteredFiles.slice(0, visibleCount),
+    [filteredFiles, visibleCount],
+  );
   const hasActiveSearch = searchQuery.trim().length > 0;
+
+  useEffect(() => {
+    if (resetVisibleCountKey.length === 0) {
+      return;
+    }
+
+    setVisibleCount(INITIAL_VISIBLE_FILE_COUNT);
+  }, [resetVisibleCountKey]);
+
+  useEffect(() => {
+    if (visibleCount >= filteredFiles.length) {
+      return;
+    }
+
+    const node = loadMoreRef.current;
+    if (!node) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) {
+          return;
+        }
+
+        setVisibleCount((current) =>
+          Math.min(current + VISIBLE_FILE_BATCH_SIZE, filteredFiles.length),
+        );
+      },
+      {
+        rootMargin: "320px 0px",
+      },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [filteredFiles.length, visibleCount]);
 
   if (loading) {
     return (
@@ -350,7 +406,7 @@ export function FileList({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredFiles.map((file) => {
+              {visibleFiles.map((file) => {
                 const isActive = activeTrackId === file.id;
                 const isCurrentlyPlaying = currentTrackId === file.id;
                 const isPlayingAncestor = Boolean(
@@ -380,6 +436,14 @@ export function FileList({
               })}
             </TableBody>
           </Table>
+          {visibleFiles.length < filteredFiles.length ? (
+            <div
+              ref={loadMoreRef}
+              className="flex h-14 items-center justify-center px-4 text-xs text-muted-foreground"
+            >
+              Showing {visibleFiles.length} of {filteredFiles.length} items
+            </div>
+          ) : null}
         </div>
       </div>
     </ScrollArea>

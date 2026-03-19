@@ -92,8 +92,8 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const recentTrackRef = useRef<string | null>(null);
   const restoreAttemptedRef = useRef(false);
-  const [playerHydrated, setPlayerHydrated] = useState(() =>
-    usePlayerStore.persist.hasHydrated(),
+  const [playerHydrated, setPlayerHydrated] = useState(
+    () => usePlayerStore.persist?.hasHydrated?.() ?? false,
   );
   const trackMetadata = currentTrack
     ? parseTrackMetadata(currentTrack.name, currentTrack.parentFolderName)
@@ -209,6 +209,11 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   // Wait for persisted player state before attempting a one-time restore.
   useEffect(() => {
     if (playerHydrated) return;
+
+    if (!usePlayerStore.persist?.onFinishHydration) {
+      setPlayerHydrated(true);
+      return;
+    }
 
     const unsubscribe = usePlayerStore.persist.onFinishHydration(() => {
       setPlayerHydrated(true);

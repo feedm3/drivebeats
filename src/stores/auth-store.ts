@@ -15,9 +15,11 @@ interface AuthState {
   user: AuthUser | null;
   authStatus: AuthStatus;
   isLoggingOut: boolean;
+  hydrateServerSession: (user: AuthUser | null) => void;
   setTokens: (accessToken: string, expiresAt: number) => void;
   setLoggingOut: (isLoggingOut: boolean) => void;
   clearTokens: () => void;
+  hasSession: () => boolean;
   isAuthenticated: () => boolean;
   isTokenExpired: () => boolean;
   refreshAccessToken: () => Promise<boolean>;
@@ -31,6 +33,30 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   authStatus: "unknown",
   isLoggingOut: false,
+
+  hydrateServerSession: (user) => {
+    if (!user) {
+      return;
+    }
+
+    set((state) => {
+      if (
+        state.authStatus === "authenticated" &&
+        state.user?.id === user.id &&
+        state.user.email === user.email &&
+        state.user.name === user.name &&
+        state.user.picture === user.picture
+      ) {
+        return state;
+      }
+
+      return {
+        user,
+        authStatus: "authenticated",
+        isLoggingOut: false,
+      };
+    });
+  },
 
   setTokens: (accessToken, expiresAt) => {
     lastRefreshFailureAt = 0;
@@ -55,12 +81,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
   },
 
+  hasSession: () => {
+    return get().authStatus === "authenticated" && !!get().user;
+  },
+
   isAuthenticated: () => {
-    return (
-      get().authStatus === "authenticated" &&
-      !!get().accessToken &&
-      !get().isTokenExpired()
-    );
+    return !!get().accessToken && !get().isTokenExpired();
   },
 
   isTokenExpired: () => {

@@ -14,9 +14,17 @@ let activePickerSession: {
   picker: GooglePickerInstance;
 } | null = null;
 const pickerSessionListeners = new Set<() => void>();
+let pickerScriptRequested = false;
+const pickerScriptRequestListeners = new Set<() => void>();
 
 function emitPickerSessionChange() {
   for (const listener of pickerSessionListeners) {
+    listener();
+  }
+}
+
+function emitPickerScriptRequestChange() {
+  for (const listener of pickerScriptRequestListeners) {
     listener();
   }
 }
@@ -57,6 +65,8 @@ function getGapiReadyPromise() {
 }
 
 export async function ensureGooglePickerLoaded() {
+  requestGooglePickerScript();
+
   if (!pickerLoadPromise) {
     pickerLoadPromise = getGapiReadyPromise()
       .then(
@@ -75,6 +85,26 @@ export async function ensureGooglePickerLoaded() {
   }
 
   return pickerLoadPromise;
+}
+
+export function requestGooglePickerScript() {
+  if (pickerScriptRequested) {
+    return;
+  }
+
+  pickerScriptRequested = true;
+  emitPickerScriptRequestChange();
+}
+
+export function subscribeToGooglePickerScriptRequest(listener: () => void) {
+  pickerScriptRequestListeners.add(listener);
+  return () => {
+    pickerScriptRequestListeners.delete(listener);
+  };
+}
+
+export function hasRequestedGooglePickerScript() {
+  return pickerScriptRequested;
 }
 
 export function getGooglePickerConfig() {

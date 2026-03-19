@@ -1,9 +1,17 @@
 "use client";
 
-import { Download, Heart, History, ListMusic, Plus } from "lucide-react";
+import {
+  Download,
+  Heart,
+  History,
+  ListMusic,
+  Plus,
+  TriangleAlert,
+} from "lucide-react";
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -14,6 +22,14 @@ import { NowPlayingBars } from "@/components/now-playing-bars";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { createPlaylistTrack } from "@/lib/audio";
+import {
+  hasReachedPlaylistCountLimit,
+  isPlaylistFull,
+  MAX_PLAYLISTS_PER_USER,
+  MAX_TRACKS_PER_PLAYLIST,
+  PLAYLIST_COUNT_LIMIT_ERROR,
+} from "@/lib/playlist-limits";
+import { notifyPlaylistTrackAddResult } from "@/lib/playlist-notifications";
 import { cn } from "@/lib/utils";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import {
@@ -68,13 +84,29 @@ export const PlaylistSection = forwardRef<
   const [creating, setCreating] = useState(false);
   const [createName, setCreateName] = useState("");
   const createInputRef = useRef<HTMLInputElement>(null);
+  const playlistsRef = useRef(playlists);
 
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const playlistCountLimitReached = hasReachedPlaylistCountLimit(
+    playlists.length,
+  );
+  const hasFullPlaylist = playlists.some((playlist) =>
+    isPlaylistFull(playlist.tracks.length),
+  );
+
+  useEffect(() => {
+    playlistsRef.current = playlists;
+  }, [playlists]);
 
   const handleStartCreating = useCallback(() => {
+    if (playlistCountLimitReached) {
+      toast.warning(PLAYLIST_COUNT_LIMIT_ERROR);
+      return;
+    }
+
     setCreating(true);
     setTimeout(() => createInputRef.current?.focus(), 0);
-  }, []);
+  }, [playlistCountLimitReached]);
 
   useImperativeHandle(ref, () => ({
     startCreating: handleStartCreating,
@@ -86,7 +118,12 @@ export const PlaylistSection = forwardRef<
       setCreating(false);
       return;
     }
-    await createPlaylist(name);
+
+    const playlistId = await createPlaylist(name);
+    if (!playlistId) {
+      return;
+    }
+
     setCreateName("");
     setCreating(false);
   }, [createName, createPlaylist]);
@@ -101,10 +138,11 @@ export const PlaylistSection = forwardRef<
         const data = JSON.parse(raw);
         if (data.type === "tracks") {
           const tracks: PlaylistTrack[] = data.tracks;
-          await addTracks(playlistId, tracks);
-          toast.success(
-            `Added ${tracks.length} track${tracks.length > 1 ? "s" : ""}`,
+          const playlist = playlistsRef.current.find(
+            (item) => item.id === playlistId,
           );
+          const result = await addTracks(playlistId, tracks);
+          notifyPlaylistTrackAddResult(playlist?.name ?? "playlist", result);
         } else if (data.type === "folder") {
           const cached = getCachedFiles(data.folderId);
           if (cached) {
@@ -112,9 +150,13 @@ export const PlaylistSection = forwardRef<
               .filter((f) => f.mimeType !== FOLDER_MIME)
               .map(createPlaylistTrack);
             if (tracks.length > 0) {
-              await addTracks(playlistId, tracks);
-              toast.success(
-                `Added ${tracks.length} track${tracks.length > 1 ? "s" : ""}`,
+              const playlist = playlistsRef.current.find(
+                (item) => item.id === playlistId,
+              );
+              const result = await addTracks(playlistId, tracks);
+              notifyPlaylistTrackAddResult(
+                playlist?.name ?? "playlist",
+                result,
               );
             } else {
               toast.info("No audio files found in folder");
@@ -205,12 +247,33 @@ export const PlaylistSection = forwardRef<
                   className="text-muted-foreground"
                   onClick={handleStartCreating}
                   aria-label="Create playlist"
+                  disabled={playlistCountLimitReached}
                 >
                   <Plus className="size-3.5" />
                 </Button>
               </IconTooltip>
             </div>
           </div>
+
+          {playlistCountLimitReached && (
+            <div className="mx-2 mb-2 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+              <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                Playlist limit reached: {playlists.length}/
+                {MAX_PLAYLISTS_PER_USER}. Delete one to create another.
+              </span>
+            </div>
+          )}
+
+          {hasFullPlaylist && (
+            <div className="mx-2 mb-2 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+              <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                One or more playlists have reached the {MAX_TRACKS_PER_PLAYLIST}
+                -song limit.
+              </span>
+            </div>
+          )}
 
           {creating && (
             <div className="px-2 py-1">
@@ -287,10 +350,20 @@ export const PlaylistSection = forwardRef<
                   <span className="min-w-0 flex-1 truncate">
                     {playlist.name}
                   </span>
+                  {isPlaylistFull(playlist.tracks.length) && (
+                    <TriangleAlert className="size-3 shrink-0 text-amber-600 dark:text-amber-300" />
+                  )}
                   {isOfflineEnabled && (
                     <Download className="size-3 shrink-0 text-primary/60" />
                   )}
-                  <span className="shrink-0 min-w-6 text-center text-xs text-muted-foreground tabular-nums">
+                  <span
+                    className={cn(
+                      "shrink-0 min-w-6 text-center text-xs tabular-nums",
+                      isPlaylistFull(playlist.tracks.length)
+                        ? "text-amber-700 dark:text-amber-300"
+                        : "text-muted-foreground",
+                    )}
+                  >
                     {playlist.tracks.length}
                   </span>
                 </button>

@@ -2,6 +2,7 @@
 
 import type {
   AddPlaylistTracksInput,
+  AddPlaylistTracksResult,
   CloudLibrarySyncPayload,
   CreatePlaylistInput,
   FavoriteTrackInput,
@@ -11,16 +12,32 @@ import type { Playlist, PlaylistTrack } from "@/types";
 
 const CLOUD_API_TIMEOUT_MS = 10_000;
 
+class CloudApiError extends Error {
+  code?: string;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "CloudApiError";
+    this.code = code;
+  }
+}
+
 async function readError(response: Response) {
   const data = (await response.json().catch(() => null)) as {
     error?: string;
+    code?: string;
   } | null;
 
   if (data?.error) {
-    return data.error;
+    return {
+      message: data.error,
+      code: data.code,
+    };
   }
 
-  return `${response.status} ${response.statusText}`.trim();
+  return {
+    message: `${response.status} ${response.statusText}`.trim(),
+  };
 }
 
 async function request(
@@ -55,7 +72,8 @@ async function request(
   }
 
   if (!response.ok) {
-    throw new Error(await readError(response));
+    const { message, code } = await readError(response);
+    throw new CloudApiError(message, code);
   }
 
   return response;
@@ -97,10 +115,12 @@ export async function addCloudPlaylistTracks(
   playlistId: string,
   input: AddPlaylistTracksInput,
 ) {
-  await request(`/api/playlists/${playlistId}/tracks`, {
+  const response = await request(`/api/playlists/${playlistId}/tracks`, {
     method: "POST",
     body: JSON.stringify(input),
   });
+
+  return (await response.json()) as AddPlaylistTracksResult;
 }
 
 export async function reorderCloudPlaylistTracks(

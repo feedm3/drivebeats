@@ -9,6 +9,7 @@ import {
   Pencil,
   Play,
   Trash2,
+  TriangleAlert,
 } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { PlaylistTrackItem } from "@/components/playlist-track-item";
@@ -34,6 +35,7 @@ import {
   startCollectionDownload,
   stopCollectionDownload,
 } from "@/lib/offline-download-manager";
+import { isPlaylistFull, MAX_TRACKS_PER_PLAYLIST } from "@/lib/playlist-limits";
 import { cn, formatRelativeDate } from "@/lib/utils";
 import { useLibraryStore } from "@/stores/library-store";
 import { useOfflineStore } from "@/stores/offline-store";
@@ -258,6 +260,8 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const isEditablePlaylist =
     collection.id !== FAVORITES_COLLECTION_ID &&
     collection.id !== RECENTLY_PLAYED_COLLECTION_ID;
+  const isFullEditablePlaylist =
+    isEditablePlaylist && isPlaylistFull(collection.tracks.length);
 
   const handleReorder = useCallback(
     (from: number, to: number) => {
@@ -487,6 +491,15 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
             </span>
           </div>
         )}
+
+      {isFullEditablePlaylist && (
+        <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+          <span>
+            This playlist has reached the {MAX_TRACKS_PER_PLAYLIST}-song limit.
+          </span>
+        </div>
+      )}
 
       {collection.tracks.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createPlaylistRecord } from "@/lib/cloud-library-service";
 import { parseCreatePlaylistInput } from "@/lib/cloud-library-validation";
+import { getPlaylistLimitError } from "@/lib/playlist-limits";
 import { getServerAuthSession } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
@@ -26,7 +27,19 @@ export async function POST(request: Request) {
     );
   }
 
-  await createPlaylistRecord(session.user, payload);
+  try {
+    await createPlaylistRecord(session.user, payload);
+  } catch (error) {
+    const limitError = getPlaylistLimitError(error);
+    if (limitError) {
+      return NextResponse.json(
+        { error: limitError.message, code: limitError.code },
+        { status: 409, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
+    throw error;
+  }
 
   return NextResponse.json(
     { ok: true },

@@ -1,6 +1,6 @@
 "use client";
 
-import { ListMusic, Plus } from "lucide-react";
+import { ListMusic, Plus, TriangleAlert } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
@@ -10,6 +10,18 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { createPlaylistTrack } from "@/lib/audio";
+import {
+  hasReachedPlaylistCountLimit,
+  isPlaylistFull,
+  MAX_PLAYLISTS_PER_USER,
+  MAX_TRACKS_PER_PLAYLIST,
+  PLAYLIST_COUNT_LIMIT_ERROR,
+} from "@/lib/playlist-limits";
+import {
+  notifyPlaylistCreatedWithTracks,
+  notifyPlaylistTrackAddResult,
+  shouldClosePlaylistPicker,
+} from "@/lib/playlist-notifications";
 import { cn } from "@/lib/utils";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
@@ -38,6 +50,12 @@ export function AddToPlaylistPopover({
   );
 
   const isFolder = file.mimeType === FOLDER_MIME;
+  const playlistCountLimitReached = hasReachedPlaylistCountLimit(
+    playlistsSnapshot.length,
+  );
+  const hasFullPlaylist = playlistsSnapshot.some((playlist) =>
+    isPlaylistFull(playlist.tracks.length),
+  );
 
   function getTracksForFile() {
     if (!isFolder) {
@@ -61,13 +79,14 @@ export function AddToPlaylistPopover({
   async function handleAdd(playlistId: string, playlistName: string) {
     const tracks = getTracksForFile();
     if (!tracks) return;
-    await addTracks(playlistId, tracks);
-    toast.success(
-      `Added ${tracks.length} track${tracks.length > 1 ? "s" : ""} to ${playlistName}`,
-    );
-    setOpen(false);
-    setCreating(false);
-    setNewName("");
+    const result = await addTracks(playlistId, tracks);
+    notifyPlaylistTrackAddResult(playlistName, result);
+
+    if (shouldClosePlaylistPicker(result)) {
+      setOpen(false);
+      setCreating(false);
+      setNewName("");
+    }
   }
 
   async function handleCreateAndAdd() {
@@ -76,10 +95,13 @@ export function AddToPlaylistPopover({
     const tracks = getTracksForFile();
     if (!tracks) return;
     const id = await createPlaylist(name);
-    await addTracks(id, tracks);
-    toast.success(
-      `Created "${name}" with ${tracks.length} track${tracks.length > 1 ? "s" : ""}`,
-    );
+    if (!id) {
+      return;
+    }
+
+    const result = await addTracks(id, tracks);
+    notifyPlaylistCreatedWithTracks(name, result);
+
     setOpen(false);
     setCreating(false);
     setNewName("");
@@ -123,20 +145,44 @@ export function AddToPlaylistPopover({
               <button
                 key={p.id}
                 type="button"
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleAdd(p.id, p.name);
                 }}
+                disabled={isPlaylistFull(p.tracks.length)}
               >
                 <ListMusic className="size-3.5 shrink-0 text-muted-foreground" />
                 <span className="truncate">{p.name}</span>
-                <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
+                {isPlaylistFull(p.tracks.length) && (
+                  <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                    Full
+                  </span>
+                )}
+                <span
+                  className={cn(
+                    "ml-auto shrink-0 text-xs tabular-nums",
+                    isPlaylistFull(p.tracks.length)
+                      ? "text-amber-700 dark:text-amber-300"
+                      : "text-muted-foreground",
+                  )}
+                >
                   {p.tracks.length}
                 </span>
               </button>
             ))}
           </div>
+          {hasFullPlaylist && (
+            <div className="border-t px-2 py-2 text-xs text-amber-800 dark:text-amber-200">
+              <div className="flex items-start gap-2">
+                <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+                <span>
+                  Full playlists cannot take more than {MAX_TRACKS_PER_PLAYLIST}{" "}
+                  songs.
+                </span>
+              </div>
+            </div>
+          )}
           {creating ? (
             <div className="border-t px-2 py-1.5">
               <input
@@ -160,15 +206,22 @@ export function AddToPlaylistPopover({
           ) : (
             <button
               type="button"
-              className="flex w-full items-center gap-2 border-t px-2 py-1.5 text-sm hover:bg-accent"
+              className="flex w-full items-center gap-2 border-t px-2 py-1.5 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
               onClick={(e) => {
                 e.stopPropagation();
+                if (playlistCountLimitReached) {
+                  toast.warning(PLAYLIST_COUNT_LIMIT_ERROR);
+                  return;
+                }
                 setCreating(true);
                 setTimeout(() => inputRef.current?.focus(), 0);
               }}
+              disabled={playlistCountLimitReached}
             >
               <Plus className="size-3.5 shrink-0 text-muted-foreground" />
-              New playlist
+              {playlistCountLimitReached
+                ? `Playlist limit reached (${MAX_PLAYLISTS_PER_USER})`
+                : "New playlist"}
             </button>
           )}
         </PopoverContent>

@@ -1,8 +1,8 @@
 "use client";
 
 import { Monitor, Moon, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { useTheme } from "@/components/theme-provider";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 
 const themes = ["system", "light", "dark"] as const;

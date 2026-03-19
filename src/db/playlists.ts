@@ -5,6 +5,21 @@ export interface DbPlaylistRecord {
   name: string;
 }
 
+export async function countPlaylistsByUser(googleUserId: string) {
+  const sql = getSql();
+
+  const rows = (await sql.query(
+    `
+      SELECT COUNT(*)::integer AS playlist_count
+      FROM playlists
+      WHERE user_google_id = $1
+    `,
+    [googleUserId],
+  )) as { playlist_count: number }[];
+
+  return rows[0]?.playlist_count ?? 0;
+}
+
 export async function listPlaylistsByUser(googleUserId: string) {
   const sql = getSql();
 

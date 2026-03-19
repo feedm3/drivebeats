@@ -9,7 +9,7 @@ import type { Playlist, PlaylistTrack } from "@/types";
 
 export const MAX_BOOTSTRAP_PLAYLISTS = 1_000;
 export const MAX_BOOTSTRAP_FAVORITES = 10_000;
-export const MAX_TRACKS_PER_PLAYLIST = 10_000;
+export const MAX_TRACKS_PER_PLAYLIST_INPUT = 10_000;
 export const MAX_TRACKS_PER_MUTATION = 1_000;
 export const MAX_REORDER_FILE_IDS = 10_000;
 export const MAX_GOOGLE_ID_LENGTH = 512;
@@ -71,7 +71,7 @@ export function isValidPlaylist(value: unknown): value is Playlist {
     isNonEmptyString(playlist.id, MAX_GOOGLE_ID_LENGTH) &&
     isNonEmptyString(playlist.name, MAX_TEXT_NAME_LENGTH) &&
     Array.isArray(playlist.tracks) &&
-    playlist.tracks.length <= MAX_TRACKS_PER_PLAYLIST &&
+    playlist.tracks.length <= MAX_TRACKS_PER_PLAYLIST_INPUT &&
     playlist.tracks.every(isValidPlaylistTrack)
   );
 }

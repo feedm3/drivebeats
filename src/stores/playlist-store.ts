@@ -10,6 +10,15 @@ import {
   renameCloudPlaylist,
   reorderCloudPlaylistTracks,
 } from "@/lib/cloud-library-api";
+import type { AddPlaylistTracksResult } from "@/lib/cloud-library-shared";
+import {
+  getPlaylistLimitError,
+  getRemainingPlaylistTrackSlots,
+  hasReachedPlaylistCountLimit,
+  MAX_TRACKS_PER_PLAYLIST,
+  PLAYLIST_COUNT_LIMIT_ERROR,
+  PLAYLIST_TRACK_LIMIT_CODE,
+} from "@/lib/playlist-limits";
 import { resolveParentFolderName } from "@/lib/resolve-parent-folder";
 import type { Playlist, PlaylistTrack } from "@/types";
 import {
@@ -22,7 +31,7 @@ const PLAYLIST_SYNC_ERROR =
 
 const playlistMutationQueues = new Map<string, Promise<void>>();
 
-function queuePlaylistMutation(playlistId: string, task: () => Promise<void>) {
+function queuePlaylistMutation<T>(playlistId: string, task: () => Promise<T>) {
   const previous = playlistMutationQueues.get(playlistId) ?? Promise.resolve();
   const next = previous.catch(() => undefined).then(task);
   const settled = next.finally(() => {
@@ -30,7 +39,13 @@ function queuePlaylistMutation(playlistId: string, task: () => Promise<void>) {
       playlistMutationQueues.delete(playlistId);
     }
   });
-  playlistMutationQueues.set(playlistId, settled);
+  playlistMutationQueues.set(
+    playlistId,
+    settled.then(
+      () => undefined,
+      () => undefined,
+    ),
+  );
   return settled;
 }
 
@@ -58,10 +73,13 @@ interface PlaylistState {
   activePlaylistId: string | null;
   isCloudHydrated: boolean;
   isCloudSyncing: boolean;
-  createPlaylist: (name: string) => Promise<string>;
+  createPlaylist: (name: string) => Promise<string | null>;
   renamePlaylist: (id: string, name: string) => Promise<void>;
   deletePlaylist: (id: string) => Promise<void>;
-  addTracks: (playlistId: string, tracks: PlaylistTrack[]) => Promise<void>;
+  addTracks: (
+    playlistId: string,
+    tracks: PlaylistTrack[],
+  ) => Promise<AddPlaylistTracksResult>;
   removeTrack: (playlistId: string, fileId: string) => Promise<void>;
   reorderTracks: (
     playlistId: string,
@@ -83,6 +101,11 @@ export const usePlaylistStore = create<PlaylistState>()(
       isCloudSyncing: false,
 
       createPlaylist: async (name) => {
+        if (hasReachedPlaylistCountLimit(get().playlists.length)) {
+          toast.warning(PLAYLIST_COUNT_LIMIT_ERROR);
+          return null;
+        }
+
         const id = crypto.randomUUID();
         const playlist: Playlist = { id, name, tracks: [] };
         set({ playlists: [...get().playlists, playlist] });
@@ -94,8 +117,14 @@ export const usePlaylistStore = create<PlaylistState>()(
         } catch (error) {
           console.error("Create playlist sync failed:", error);
           await get().syncFromCloud();
+          const limitError = getPlaylistLimitError(error);
+          if (limitError) {
+            toast.warning(limitError.message);
+            return null;
+          }
+
           toast.error(PLAYLIST_SYNC_ERROR);
-          throw error;
+          return null;
         }
 
         return id;
@@ -135,31 +164,89 @@ export const usePlaylistStore = create<PlaylistState>()(
       },
 
       addTracks: async (playlistId, tracks) => {
+        const playlist = get().playlists.find((item) => item.id === playlistId);
+        if (!playlist) {
+          return {
+            addedCount: 0,
+            duplicateCount: 0,
+            skippedCount: tracks.length,
+            reachedTrackLimit: false,
+          };
+        }
+
         const normalizedTracks = tracks.map((t) => ({
           ...t,
           parentFolderName:
             t.parentFolderName ?? resolveParentFolderName(t.parents?.[0]),
         }));
+        const existingIds = new Set(playlist.tracks.map((t) => t.fileId));
+        const uniqueTracks = normalizedTracks.filter(
+          (track) => !existingIds.has(track.fileId),
+        );
+        const remainingSlots = getRemainingPlaylistTrackSlots(
+          playlist.tracks.length,
+        );
+        const tracksToAdd = uniqueTracks.slice(0, remainingSlots);
+        const optimisticResult: AddPlaylistTracksResult = {
+          addedCount: tracksToAdd.length,
+          duplicateCount: normalizedTracks.length - uniqueTracks.length,
+          skippedCount: uniqueTracks.length - tracksToAdd.length,
+          reachedTrackLimit:
+            playlist.tracks.length + tracksToAdd.length >=
+            MAX_TRACKS_PER_PLAYLIST,
+        };
+
+        if (tracksToAdd.length === 0) {
+          return {
+            addedCount: 0,
+            duplicateCount: normalizedTracks.length - uniqueTracks.length,
+            skippedCount: uniqueTracks.length,
+            reachedTrackLimit:
+              playlist.tracks.length >= MAX_TRACKS_PER_PLAYLIST,
+          };
+        }
 
         set({
           playlists: get().playlists.map((p) => {
             if (p.id !== playlistId) return p;
-            const existingIds = new Set(p.tracks.map((t) => t.fileId));
-            const newTracks = normalizedTracks.filter(
-              (t) => !existingIds.has(t.fileId),
-            );
-            return { ...p, tracks: [...p.tracks, ...newTracks] };
+            return { ...p, tracks: [...p.tracks, ...tracksToAdd] };
           }),
         });
 
         try {
-          await queuePlaylistMutation(playlistId, () =>
+          const result = await queuePlaylistMutation(playlistId, () =>
             addCloudPlaylistTracks(playlistId, { tracks: normalizedTracks }),
           );
+          if (
+            result.addedCount !== optimisticResult.addedCount ||
+            result.duplicateCount !== optimisticResult.duplicateCount ||
+            result.skippedCount !== optimisticResult.skippedCount
+          ) {
+            await get().syncFromCloud();
+          }
+
+          return result;
         } catch (error) {
           console.error("Add tracks sync failed:", error);
           await get().syncFromCloud();
+          const limitError = getPlaylistLimitError(error);
+          if (limitError) {
+            toast.warning(limitError.message);
+            return {
+              addedCount: 0,
+              duplicateCount: normalizedTracks.length - uniqueTracks.length,
+              skippedCount: uniqueTracks.length,
+              reachedTrackLimit: limitError.code === PLAYLIST_TRACK_LIMIT_CODE,
+            };
+          }
+
           toast.error(PLAYLIST_SYNC_ERROR);
+          return {
+            addedCount: 0,
+            duplicateCount: normalizedTracks.length - uniqueTracks.length,
+            skippedCount: uniqueTracks.length,
+            reachedTrackLimit: false,
+          };
         }
       },
 

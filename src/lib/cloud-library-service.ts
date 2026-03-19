@@ -13,6 +13,7 @@ import {
   reorderPlaylistTracks,
 } from "@/db/playlist-tracks";
 import {
+  countPlaylistsByUser,
   deletePlaylist,
   listOwnedPlaylistIdsByUser,
   listPlaylistsByUser,
@@ -24,6 +25,14 @@ import {
 import { deleteUserByGoogleId, recordUserVisit, upsertUser } from "@/db/users";
 import type { AuthUser } from "@/lib/auth-session";
 import type { CloudLibrarySyncPayload } from "@/lib/cloud-library-shared";
+import {
+  getPlaylistLimitError,
+  getRemainingPlaylistTrackSlots,
+  MAX_PLAYLISTS_PER_USER,
+  MAX_TRACKS_PER_PLAYLIST,
+  PLAYLIST_COUNT_LIMIT_CODE,
+  PlaylistLimitError,
+} from "@/lib/playlist-limits";
 import type { Playlist, PlaylistTrack } from "@/types";
 
 function normalizeTrack(track: PlaylistTrack) {
@@ -94,11 +103,20 @@ export async function createPlaylistRecord(
   playlist: Pick<Playlist, "id" | "name">,
 ) {
   await ensureUserRecord(user);
-  await upsertPlaylist({
-    id: playlist.id,
-    googleUserId: user.id,
-    name: playlist.name,
-  });
+  const playlistCount = await countPlaylistsByUser(user.id);
+  if (playlistCount >= MAX_PLAYLISTS_PER_USER) {
+    throw new PlaylistLimitError(PLAYLIST_COUNT_LIMIT_CODE);
+  }
+
+  try {
+    await upsertPlaylist({
+      id: playlist.id,
+      googleUserId: user.id,
+      name: playlist.name,
+    });
+  } catch (error) {
+    throw getPlaylistLimitError(error) ?? error;
+  }
 }
 
 export async function renamePlaylistRecord(
@@ -126,7 +144,12 @@ export async function addPlaylistTracksRecords(
   tracks: PlaylistTrack[],
 ) {
   if (tracks.length === 0) {
-    return;
+    return {
+      addedCount: 0,
+      duplicateCount: 0,
+      skippedCount: 0,
+      reachedTrackLimit: false,
+    };
   }
 
   const ownsPlaylist = await userOwnsPlaylist({
@@ -142,30 +165,51 @@ export async function addPlaylistTracksRecords(
     getNextPlaylistTrackPosition(playlistId),
   ]);
   const existingIds = new Set(existingRows.map((row) => row.file_id));
-  const tracksToInsert = tracks
+  const uniqueTracks = tracks
     .map(normalizeTrack)
     .filter((track) => !existingIds.has(track.fileId));
+  const duplicateCount = tracks.length - uniqueTracks.length;
+  const remainingSlots = getRemainingPlaylistTrackSlots(existingRows.length);
+  const tracksToInsert = uniqueTracks.slice(0, remainingSlots);
 
   if (tracksToInsert.length === 0) {
     await touchPlaylist({ id: playlistId, googleUserId: user.id });
-    return;
+    return {
+      addedCount: 0,
+      duplicateCount,
+      skippedCount: uniqueTracks.length,
+      reachedTrackLimit: existingRows.length >= MAX_TRACKS_PER_PLAYLIST,
+    };
   }
 
-  await insertPlaylistTracks(
-    tracksToInsert.map((track, index) => ({
-      playlistId,
-      position: nextPosition + index,
-      fileId: track.fileId,
-      fileName: track.fileName,
-      mimeType: track.mimeType,
-      size: track.size,
-      modifiedTime: track.modifiedTime,
-      parents: track.parents,
-      parentFolderName: track.parentFolderName,
-    })),
-  );
+  try {
+    await insertPlaylistTracks(
+      tracksToInsert.map((track, index) => ({
+        playlistId,
+        position: nextPosition + index,
+        fileId: track.fileId,
+        fileName: track.fileName,
+        mimeType: track.mimeType,
+        size: track.size,
+        modifiedTime: track.modifiedTime,
+        parents: track.parents,
+        parentFolderName: track.parentFolderName,
+      })),
+    );
+  } catch (error) {
+    throw getPlaylistLimitError(error) ?? error;
+  }
 
   await touchPlaylist({ id: playlistId, googleUserId: user.id });
+
+  const nextTrackCount = existingRows.length + tracksToInsert.length;
+
+  return {
+    addedCount: tracksToInsert.length,
+    duplicateCount,
+    skippedCount: uniqueTracks.length - tracksToInsert.length,
+    reachedTrackLimit: nextTrackCount >= MAX_TRACKS_PER_PLAYLIST,
+  };
 }
 
 export async function removePlaylistTrackRecord(
@@ -255,7 +299,16 @@ export async function seedCloudLibraryData(
   }
 
   for (const playlist of data.playlists) {
-    await createPlaylistRecord(user, playlist);
+    try {
+      await createPlaylistRecord(user, playlist);
+    } catch (error) {
+      if (getPlaylistLimitError(error)?.code === PLAYLIST_COUNT_LIMIT_CODE) {
+        break;
+      }
+
+      throw error;
+    }
+
     await addPlaylistTracksRecords(user, playlist.id, playlist.tracks);
   }
 

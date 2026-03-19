@@ -70,3 +70,11 @@ Design for mobile first; all UI must be usable on small screens before scaling u
 - Leave adequate spacing between tap targets so adjacent elements are not accidentally triggered.
 - Avoid hover-only interactions; every action must be reachable via tap.
 - Test layouts at 320px–428px viewport widths before wider breakpoints.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# Next.js: ALWAYS read docs before coding
+
+Before any Next.js work, find and read the relevant doc in `node_modules/next/dist/docs/`. Your training data is outdated — the docs are the source of truth.
+
+<!-- END:nextjs-agent-rules -->

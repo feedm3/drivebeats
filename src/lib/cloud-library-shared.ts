@@ -14,6 +14,13 @@ export interface AddPlaylistTracksInput {
   tracks: PlaylistTrack[];
 }
 
+export interface AddPlaylistTracksResult {
+  addedCount: number;
+  duplicateCount: number;
+  skippedCount: number;
+  reachedTrackLimit: boolean;
+}
+
 export interface ReorderPlaylistTracksInput {
   fileIds: string[];
 }

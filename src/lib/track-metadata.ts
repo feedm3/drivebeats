@@ -1,4 +1,4 @@
-interface TrackMetadata {
+export interface TrackMetadata {
   title: string;
   subtitle?: string;
 }
@@ -9,6 +9,21 @@ function humanize(s: string): string {
     .replace(/_/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+export function resolveTrackMetadata(
+  fileName: string,
+  parentFolderName?: string,
+  id3?: { title?: string; artist?: string },
+): TrackMetadata {
+  if (id3?.title) {
+    return {
+      title: id3.title,
+      subtitle: id3.artist,
+    };
+  }
+
+  return parseTrackMetadata(fileName, parentFolderName);
 }
 
 export function parseTrackMetadata(

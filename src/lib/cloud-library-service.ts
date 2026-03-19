@@ -22,6 +22,11 @@ import {
   upsertPlaylist,
   userOwnsPlaylist,
 } from "@/db/playlists";
+import {
+  batchUpsertTrackMetadata,
+  listTrackMetadataByFileIds,
+  pruneOrphanedTrackMetadata,
+} from "@/db/track-metadata";
 import { deleteUserByGoogleId, recordUserVisit, upsertUser } from "@/db/users";
 import type { AuthUser } from "@/lib/auth-session";
 import type { CloudLibrarySyncPayload } from "@/lib/cloud-library-shared";
@@ -86,6 +91,43 @@ export async function getCloudLibrarySyncPayload(
     tracksByPlaylistId.set(row.playlist_id, tracks);
   }
 
+  // Collect all synced file IDs for metadata lookup
+  const allFileIds = new Set<string>();
+  for (const row of playlistTrackRows) {
+    allFileIds.add(row.file_id);
+  }
+  for (const row of favoriteRows) {
+    allFileIds.add(row.file_id);
+  }
+
+  const metadataRows = await listTrackMetadataByFileIds(user.id, [
+    ...allFileIds,
+  ]);
+  const trackMetadata: Record<
+    string,
+    {
+      title?: string;
+      artist?: string;
+      album?: string;
+      modifiedTime?: string;
+    }
+  > = {};
+  for (const row of metadataRows) {
+    const entry: {
+      title?: string;
+      artist?: string;
+      album?: string;
+      modifiedTime?: string;
+    } = {};
+    if (row.id3_title) entry.title = row.id3_title;
+    if (row.id3_artist) entry.artist = row.id3_artist;
+    if (row.id3_album) entry.album = row.id3_album;
+    if (row.file_modified_time) entry.modifiedTime = row.file_modified_time;
+    if (entry.title || entry.artist || entry.album) {
+      trackMetadata[row.file_id] = entry;
+    }
+  }
+
   return {
     playlists: playlists.map(
       (playlist): Playlist => ({
@@ -95,6 +137,8 @@ export async function getCloudLibrarySyncPayload(
       }),
     ),
     favorites: favoriteRows.map(rowToTrack),
+    trackMetadata:
+      Object.keys(trackMetadata).length > 0 ? trackMetadata : undefined,
   };
 }
 
@@ -136,6 +180,7 @@ export async function deletePlaylistRecord(user: AuthUser, playlistId: string) {
     id: playlistId,
     googleUserId: user.id,
   });
+  await pruneOrphanedTrackMetadata(user.id);
 }
 
 export async function addPlaylistTracksRecords(
@@ -227,6 +272,7 @@ export async function removePlaylistTrackRecord(
 
   await deletePlaylistTrack({ playlistId, fileId });
   await touchPlaylist({ id: playlistId, googleUserId: user.id });
+  await pruneOrphanedTrackMetadata(user.id);
 }
 
 export async function reorderPlaylistTracksRecords(
@@ -281,6 +327,7 @@ export async function setFavoriteTrackRecord(
       googleUserId: user.id,
       fileId: normalized.fileId,
     });
+    await pruneOrphanedTrackMetadata(user.id);
   }
 }
 
@@ -317,4 +364,18 @@ export async function seedCloudLibraryData(
   }
 
   await deleteAllNonFavoriteTracks(user.id);
+
+  // Seed any ID3 metadata sent with the bootstrap payload
+  if (data.trackMetadata && Object.keys(data.trackMetadata).length > 0) {
+    const metadataRecords = Object.entries(data.trackMetadata).map(
+      ([fileId, meta]) => ({
+        fileId,
+        fileModifiedTime: meta.modifiedTime,
+        title: meta.title,
+        artist: meta.artist,
+        album: meta.album,
+      }),
+    );
+    await batchUpsertTrackMetadata(user.id, metadataRecords);
+  }
 }

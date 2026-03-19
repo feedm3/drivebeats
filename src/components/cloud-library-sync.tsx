@@ -8,6 +8,7 @@ import {
   isCloudLibraryEmpty,
 } from "@/lib/cloud-library-api";
 import { useAuthStore } from "@/stores/auth-store";
+import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import {
   getFavoriteTracks,
   hasPendingFavoriteMutations,
@@ -72,8 +73,17 @@ export function CloudLibrarySync() {
               isCloudLibraryEmpty(nextPayload) &&
               (localPlaylists.length > 0 || localFavorites.length > 0)
             ) {
+              const localId3Cache = useId3MetadataStore.getState().cache;
+              const localMetadata =
+                Object.keys(localId3Cache).length > 0
+                  ? localId3Cache
+                  : undefined;
               await bootstrapCloudLibrarySync(
-                createCloudLibrarySnapshot(localPlaylists, localFavorites),
+                createCloudLibrarySnapshot(
+                  localPlaylists,
+                  localFavorites,
+                  localMetadata,
+                ),
               );
               nextPayload = await fetchCloudLibrarySync();
             }
@@ -99,6 +109,7 @@ export function CloudLibrarySync() {
           useLibraryStore
             .getState()
             .replaceFavoritesFromCloud(payload.favorites);
+          useId3MetadataStore.getState().hydrateFromSync(payload.trackMetadata);
         } catch (error) {
           console.error("Cloud library sync failed:", error);
         } finally {

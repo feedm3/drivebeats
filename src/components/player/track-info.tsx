@@ -1,6 +1,7 @@
 "use client";
 
-import { parseTrackMetadata } from "@/lib/track-metadata";
+import { resolveTrackMetadata } from "@/lib/track-metadata";
+import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { usePlayerStore } from "@/stores/player-store";
 
 interface TrackInfoProps {
@@ -11,9 +12,13 @@ export function TrackInfo({ onNavigateToTrack }: TrackInfoProps) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const playingFolderStack = usePlayerStore((s) => s.playingFolderStack);
   const canNavigate = onNavigateToTrack && playingFolderStack.length > 0;
-  const { title, subtitle } = parseTrackMetadata(
+  const id3 = useId3MetadataStore((s) =>
+    currentTrack ? s.cache[currentTrack.id] : undefined,
+  );
+  const { title, subtitle } = resolveTrackMetadata(
     currentTrack?.name ?? "",
     currentTrack?.parentFolderName,
+    id3,
   );
 
   if (!currentTrack) {

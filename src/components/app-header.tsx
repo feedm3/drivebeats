@@ -24,6 +24,7 @@ import { removeAllDownloads } from "@/lib/offline-download-manager";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
+import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { usePlayerStore } from "@/stores/player-store";
@@ -143,6 +144,9 @@ export function AppHeader() {
 
     usePlaylistStore.getState().clearCloudState();
     usePlaylistStore.persist.clearStorage();
+
+    useId3MetadataStore.getState().clearAll();
+    useId3MetadataStore.persist.clearStorage();
 
     try {
       await removeAllDownloads();

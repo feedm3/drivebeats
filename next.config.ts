@@ -26,6 +26,13 @@ const contentSecurityPolicy = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    resolveAlias: {
+      // jsmediatags bundles a ReactNativeFileReader that requires react-native-fs.
+      // We only use the browser Blob reader, so stub this out.
+      "react-native-fs": "./src/lib/empty-module.js",
+    },
+  },
   async headers() {
     return [
       {

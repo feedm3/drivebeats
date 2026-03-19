@@ -94,9 +94,39 @@ export function parseBootstrapPayload(
     return null;
   }
 
+  // Validate trackMetadata if present (optional map of fileId → id3 fields)
+  let trackMetadata: CloudLibrarySyncPayload["trackMetadata"];
+  if (body.trackMetadata && typeof body.trackMetadata === "object") {
+    const raw = body.trackMetadata as Record<string, unknown>;
+    const validated: NonNullable<CloudLibrarySyncPayload["trackMetadata"]> = {};
+    for (const [fileId, value] of Object.entries(raw)) {
+      if (!isNonEmptyString(fileId, MAX_GOOGLE_ID_LENGTH)) continue;
+      if (!value || typeof value !== "object") continue;
+      const meta = value as Record<string, unknown>;
+      if (
+        !isOptionalString(meta.title, MAX_TEXT_NAME_LENGTH) ||
+        !isOptionalString(meta.artist, MAX_TEXT_NAME_LENGTH) ||
+        !isOptionalString(meta.album, MAX_TEXT_NAME_LENGTH) ||
+        !isOptionalString(meta.modifiedTime, MAX_MODIFIED_TIME_LENGTH)
+      ) {
+        continue;
+      }
+      validated[fileId] = {
+        title: meta.title as string | undefined,
+        artist: meta.artist as string | undefined,
+        album: meta.album as string | undefined,
+        modifiedTime: meta.modifiedTime as string | undefined,
+      };
+    }
+    if (Object.keys(validated).length > 0) {
+      trackMetadata = validated;
+    }
+  }
+
   return {
     playlists: body.playlists,
     favorites: body.favorites,
+    trackMetadata,
   } satisfies CloudLibrarySyncPayload;
 }
 

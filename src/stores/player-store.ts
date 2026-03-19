@@ -5,6 +5,8 @@ import * as offlineDb from "@/lib/offline-db";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
+import { useLibraryStore } from "@/stores/library-store";
+import { usePlaylistStore } from "@/stores/playlist-store";
 import type { DriveFile, FolderEntry } from "@/types";
 import { FOLDER_MIME, INITIAL_STACK } from "@/types";
 
@@ -13,6 +15,20 @@ type RepeatMode = "off" | "one" | "all";
 const MAX_CACHE_SIZE = 20;
 
 let fetchAbortController: AbortController | null = null;
+
+/**
+ * Check if a track belongs to any synced collection (playlist or favorites).
+ */
+function isTrackSynced(fileId: string): boolean {
+  const playlists = usePlaylistStore.getState().playlists;
+  const inPlaylist = playlists.some((p) =>
+    p.tracks.some((t) => t.fileId === fileId),
+  );
+  if (inPlaylist) return true;
+
+  const tracks = useLibraryStore.getState().tracks;
+  return Boolean(tracks[fileId]?.isFavorite);
+}
 
 /**
  * Try to derive a folder stack for a track by looking up its parent folder
@@ -156,6 +172,19 @@ export const usePlayerStore = create<PlayerState>()(
         const controller = new AbortController();
         fetchAbortController = controller;
 
+        const triggerId3Extraction = (blob: Blob) => {
+          const track =
+            get().currentTrack ?? get().playlist.find((t) => t.id === fileId);
+          const isSynced = isTrackSynced(fileId);
+          import("@/stores/id3-metadata-store").then(
+            ({ useId3MetadataStore }) => {
+              useId3MetadataStore
+                .getState()
+                .requestMetadata(fileId, blob, track?.modifiedTime, isSynced);
+            },
+          );
+        };
+
         const audio = get().initAudio();
         const { blobCache } = get();
         const cached = blobCache.get(fileId);
@@ -197,6 +226,7 @@ export const usePlayerStore = create<PlayerState>()(
               }
             }
             blobCache.set(fileId, blobUrl);
+            triggerId3Extraction(offlineRecord.blob);
             await applySource(blobUrl);
             set({ isLoading: false });
             return true;
@@ -235,6 +265,7 @@ export const usePlayerStore = create<PlayerState>()(
           if (!res.ok) throw new Error(`Drive API returned ${res.status}`);
 
           const blob = await res.blob();
+          triggerId3Extraction(blob);
           const blobUrl = URL.createObjectURL(blob);
 
           // LRU eviction: remove oldest entry if cache is full

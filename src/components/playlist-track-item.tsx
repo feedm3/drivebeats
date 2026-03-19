@@ -11,8 +11,9 @@ import {
 import { NowPlayingBars } from "@/components/now-playing-bars";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
-import { parseTrackMetadata } from "@/lib/track-metadata";
+import { resolveTrackMetadata } from "@/lib/track-metadata";
 import { cn } from "@/lib/utils";
+import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import type { OfflineTrackStatus } from "@/stores/offline-store";
 import type { PlaylistTrack } from "@/types";
 
@@ -47,9 +48,11 @@ export function PlaylistTrackItem({
   onRemove,
   removeLabel = "Remove from playlist",
 }: PlaylistTrackItemProps) {
-  const { title, subtitle: metadataSubtitle } = parseTrackMetadata(
+  const id3 = useId3MetadataStore((s) => s.cache[track.fileId]);
+  const { title, subtitle: metadataSubtitle } = resolveTrackMetadata(
     track.fileName,
     track.parentFolderName,
+    id3,
   );
 
   return (

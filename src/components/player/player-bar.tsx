@@ -18,13 +18,14 @@ function getMediaSession() {
   return navigator.mediaSession;
 }
 
-function updateMediaSession(title: string, artist: string) {
+function updateMediaSession(title: string, artist: string, album?: string) {
   const mediaSession = getMediaSession();
   if (!mediaSession) return;
 
   mediaSession.metadata = new MediaMetadata({
     title,
     artist,
+    album: album || "",
   });
 }
 
@@ -72,8 +73,19 @@ function setupMediaSessionHandlers(audio: HTMLAudioElement) {
   mediaSession.setActionHandler("nexttrack", () => {
     void usePlayerStore.getState().next();
   });
-  mediaSession.setActionHandler("seekbackward", null);
-  mediaSession.setActionHandler("seekforward", null);
+  mediaSession.setActionHandler("seekbackward", (details) => {
+    const offset = details.seekOffset ?? 10;
+    usePlayerStore
+      .getState()
+      .seek(Math.max(0, audio.currentTime - offset));
+  });
+  mediaSession.setActionHandler("seekforward", (details) => {
+    const offset = details.seekOffset ?? 10;
+    const duration = Number.isFinite(audio.duration) ? audio.duration : Infinity;
+    usePlayerStore
+      .getState()
+      .seek(Math.min(duration, audio.currentTime + offset));
+  });
   mediaSession.setActionHandler("seekto", (details) => {
     if (details.seekTime != null) {
       usePlayerStore.getState().seek(details.seekTime);
@@ -210,9 +222,9 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
 
   // Update Media Session metadata when track changes
   useEffect(() => {
-    updateMediaSession(currentTrackTitle, currentTrackArtist);
+    updateMediaSession(currentTrackTitle, currentTrackArtist, id3?.album);
     updateMediaSessionPosition(usePlayerStore.getState().initAudio());
-  }, [currentTrackTitle, currentTrackArtist]);
+  }, [currentTrackTitle, currentTrackArtist, id3?.album]);
 
   // Wait for persisted player state before attempting a one-time restore.
   useEffect(() => {

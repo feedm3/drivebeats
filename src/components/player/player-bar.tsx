@@ -73,19 +73,6 @@ function setupMediaSessionHandlers(audio: HTMLAudioElement) {
   mediaSession.setActionHandler("nexttrack", () => {
     void usePlayerStore.getState().next();
   });
-  mediaSession.setActionHandler("seekbackward", (details) => {
-    const offset = details.seekOffset ?? 10;
-    usePlayerStore
-      .getState()
-      .seek(Math.max(0, audio.currentTime - offset));
-  });
-  mediaSession.setActionHandler("seekforward", (details) => {
-    const offset = details.seekOffset ?? 10;
-    const duration = Number.isFinite(audio.duration) ? audio.duration : Infinity;
-    usePlayerStore
-      .getState()
-      .seek(Math.min(duration, audio.currentTime + offset));
-  });
   mediaSession.setActionHandler("seekto", (details) => {
     if (details.seekTime != null) {
       usePlayerStore.getState().seek(details.seekTime);

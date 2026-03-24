@@ -15,6 +15,7 @@ type RepeatMode = "off" | "one" | "all";
 const MAX_CACHE_SIZE = 20;
 
 let fetchAbortController: AbortController | null = null;
+let prefetchAbortController: AbortController | null = null;
 
 /**
  * Check if a track belongs to any synced collection (playlist or favorites).
@@ -108,6 +109,9 @@ interface PlayerState {
   isLoading: boolean;
   audio: HTMLAudioElement | null;
   blobCache: Map<string, string>;
+  shuffleHistory: string[];
+  nextShuffleFileId: string | null;
+  prefetchingFileId: string | null;
   initAudio: () => HTMLAudioElement;
   loadTrack: (
     fileId: string,
@@ -135,6 +139,7 @@ interface PlayerState {
   restoreTrack: () => Promise<void>;
   resetPlayback: () => void;
   clearCache: () => void;
+  prefetchNextTrack: () => void;
 }
 
 export const usePlayerStore = create<PlayerState>()(
@@ -156,6 +161,9 @@ export const usePlayerStore = create<PlayerState>()(
       isLoading: false,
       audio: null,
       blobCache: new Map(),
+      shuffleHistory: [],
+      nextShuffleFileId: null,
+      prefetchingFileId: null,
 
       initAudio: () => {
         const existing = get().audio;
@@ -303,6 +311,12 @@ export const usePlayerStore = create<PlayerState>()(
         get().initAudio();
         const index = playlist.findIndex((f) => f.id === track.id);
 
+        // Clear shuffle state when switching to a different playlist/folder
+        const playlistChanged = get().playlist !== playlist;
+        const extraState = playlistChanged
+          ? { shuffleHistory: [], nextShuffleFileId: null }
+          : {};
+
         // Mark the target row active immediately, but keep currentTrack
         // pointing at the playing song until audio actually starts.
         set({
@@ -313,6 +327,7 @@ export const usePlayerStore = create<PlayerState>()(
             ? deriveFolderStack(track)
             : folderStack,
           playingPlaylistId: playlistId ?? null,
+          ...extraState,
         });
 
         try {
@@ -325,6 +340,7 @@ export const usePlayerStore = create<PlayerState>()(
               duration: 0,
             });
           });
+          queueMicrotask(() => get().prefetchNextTrack());
         } catch {
           // Loading failed — clear pending so the old track stays active.
           set({ pendingTrackId: null });
@@ -343,12 +359,36 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       next: async () => {
-        const { playlist, currentIndex, shuffle, repeat } = get();
+        const {
+          playlist,
+          currentIndex,
+          currentTrack,
+          shuffle,
+          repeat,
+          nextShuffleFileId,
+        } = get();
         if (playlist.length === 0) return;
 
         let nextIndex: number;
         if (shuffle) {
-          nextIndex = Math.floor(Math.random() * playlist.length);
+          // Use pre-picked shuffle track if available and still in playlist
+          const prePickedIndex =
+            nextShuffleFileId !== null
+              ? playlist.findIndex((t) => t.id === nextShuffleFileId)
+              : -1;
+          nextIndex =
+            prePickedIndex >= 0
+              ? prePickedIndex
+              : Math.floor(Math.random() * playlist.length);
+          // Push current track to shuffle history before navigating
+          if (currentTrack) {
+            set((s) => ({
+              shuffleHistory: [...s.shuffleHistory, currentTrack.id],
+              nextShuffleFileId: null,
+            }));
+          } else {
+            set({ nextShuffleFileId: null });
+          }
         } else {
           nextIndex = currentIndex + 1;
           if (nextIndex >= playlist.length) {
@@ -369,12 +409,32 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       previous: async () => {
-        const { audio, playlist, currentIndex } = get();
+        const { audio, playlist, currentIndex, shuffle, shuffleHistory } =
+          get();
         if (playlist.length === 0) return;
 
         if (audio && audio.currentTime > 3) {
           audio.currentTime = 0;
           return;
+        }
+
+        // In shuffle mode, rewind through play history
+        if (shuffle && shuffleHistory.length > 0) {
+          const prevId = shuffleHistory[shuffleHistory.length - 1];
+          set((s) => ({
+            shuffleHistory: s.shuffleHistory.slice(0, -1),
+            nextShuffleFileId: null,
+          }));
+          const prevTrack = playlist.find((t) => t.id === prevId);
+          if (prevTrack) {
+            await get().playTrack(
+              prevTrack,
+              playlist,
+              get().playingFolderStack,
+              get().playingPlaylistId ?? undefined,
+            );
+            return;
+          }
         }
 
         const prevIndex =
@@ -415,14 +475,23 @@ export const usePlayerStore = create<PlayerState>()(
         }
       },
 
-      toggleShuffle: () => set((s) => ({ shuffle: !s.shuffle })),
+      toggleShuffle: () => {
+        set((s) => ({
+          shuffle: !s.shuffle,
+          shuffleHistory: [],
+          nextShuffleFileId: null,
+        }));
+        queueMicrotask(() => get().prefetchNextTrack());
+      },
 
-      cycleRepeat: () =>
+      cycleRepeat: () => {
         set((s) => {
           const modes: RepeatMode[] = ["off", "one", "all"];
           const idx = modes.indexOf(s.repeat);
           return { repeat: modes[(idx + 1) % 3] };
-        }),
+        });
+        queueMicrotask(() => get().prefetchNextTrack());
+      },
 
       setCurrentTime: (t) => set({ currentTime: t }),
       setDuration: (d) => set({ duration: d }),
@@ -438,6 +507,8 @@ export const usePlayerStore = create<PlayerState>()(
       resetPlayback: () => {
         fetchAbortController?.abort();
         fetchAbortController = null;
+        prefetchAbortController?.abort();
+        prefetchAbortController = null;
 
         const { audio } = get();
         if (audio) {
@@ -457,7 +528,148 @@ export const usePlayerStore = create<PlayerState>()(
           duration: 0,
           currentTime: 0,
           isLoading: false,
+          shuffleHistory: [],
+          nextShuffleFileId: null,
+          prefetchingFileId: null,
         });
+      },
+
+      prefetchNextTrack: () => {
+        const {
+          playlist,
+          currentIndex,
+          shuffle,
+          repeat,
+          blobCache,
+          prefetchingFileId,
+        } = get();
+        if (playlist.length <= 1) return;
+
+        // Determine which track to prefetch
+        let nextFileId: string;
+        if (shuffle) {
+          let prePickedId = get().nextShuffleFileId;
+          if (!prePickedId) {
+            // Pick a random track, excluding current if possible
+            let idx = Math.floor(Math.random() * (playlist.length - 1));
+            if (idx >= currentIndex) idx++;
+            prePickedId = playlist[idx].id;
+            set({ nextShuffleFileId: prePickedId });
+          }
+          nextFileId = prePickedId;
+        } else {
+          const nextIndex = currentIndex + 1;
+          if (nextIndex >= playlist.length) {
+            if (repeat === "all") {
+              nextFileId = playlist[0].id;
+            } else {
+              return; // No next track to prefetch
+            }
+          } else {
+            nextFileId = playlist[nextIndex].id;
+          }
+        }
+
+        // Skip if already cached or already prefetching this track
+        if (blobCache.has(nextFileId) || prefetchingFileId === nextFileId)
+          return;
+
+        prefetchAbortController?.abort();
+        const controller = new AbortController();
+        prefetchAbortController = controller;
+        set({ prefetchingFileId: nextFileId });
+
+        // Fire-and-forget prefetch
+        (async () => {
+          try {
+            // Check IndexedDB first
+            try {
+              const offlineRecord = await offlineDb.getTrack(nextFileId);
+              if (offlineRecord && !controller.signal.aborted) {
+                const blobUrl = URL.createObjectURL(offlineRecord.blob);
+                const { blobCache } = get();
+                if (blobCache.size >= MAX_CACHE_SIZE) {
+                  const oldest = blobCache.keys().next();
+                  if (!oldest.done) {
+                    const oldUrl = blobCache.get(oldest.value);
+                    if (oldUrl) URL.revokeObjectURL(oldUrl);
+                    blobCache.delete(oldest.value);
+                  }
+                }
+                blobCache.set(nextFileId, blobUrl);
+                return;
+              }
+            } catch {
+              // IndexedDB unavailable, fall through
+            }
+
+            if (controller.signal.aborted) return;
+
+            // Fetch from Google Drive
+            const authStore = useAuthStore.getState();
+            let accessToken = await authStore.getValidAccessToken();
+            if (!accessToken) return;
+
+            let res = await downloadGoogleDriveFileMedia(
+              nextFileId,
+              accessToken,
+              controller.signal,
+            );
+            if (res.status === 401) {
+              const refreshed = await useAuthStore
+                .getState()
+                .refreshAccessToken();
+              accessToken = refreshed
+                ? useAuthStore.getState().accessToken
+                : null;
+              if (!accessToken) return;
+              res = await downloadGoogleDriveFileMedia(
+                nextFileId,
+                accessToken,
+                controller.signal,
+              );
+            }
+            if (!res.ok) return;
+
+            const blob = await res.blob();
+            if (controller.signal.aborted) return;
+
+            const blobUrl = URL.createObjectURL(blob);
+
+            const { blobCache } = get();
+            if (blobCache.size >= MAX_CACHE_SIZE) {
+              const oldest = blobCache.keys().next();
+              if (!oldest.done) {
+                const oldUrl = blobCache.get(oldest.value);
+                if (oldUrl) URL.revokeObjectURL(oldUrl);
+                blobCache.delete(oldest.value);
+              }
+            }
+            blobCache.set(nextFileId, blobUrl);
+
+            // Trigger ID3 extraction for prefetched track
+            const track = playlist.find((t) => t.id === nextFileId);
+            const isSynced = isTrackSynced(nextFileId);
+            import("@/stores/id3-metadata-store").then(
+              ({ useId3MetadataStore }) => {
+                useId3MetadataStore
+                  .getState()
+                  .requestMetadata(
+                    nextFileId,
+                    blob,
+                    track?.modifiedTime,
+                    isSynced,
+                  );
+              },
+            );
+          } catch {
+            // Prefetch failures are non-critical
+          } finally {
+            if (get().prefetchingFileId === nextFileId) {
+              set({ prefetchingFileId: null });
+            }
+          }
+        })();
       },
 
       clearCache: () => {

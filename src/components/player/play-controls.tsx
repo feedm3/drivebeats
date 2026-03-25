@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
-import { usePlayerStore } from "@/stores/player-store";
+import { hasNextTrack, usePlayerStore } from "@/stores/player-store";
 
 const toggleControlClass =
   "size-8 aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:hover:bg-primary/20 aria-pressed:hover:text-primary dark:aria-pressed:hover:bg-primary/25";
@@ -21,8 +21,12 @@ export function PlayControls() {
   const playlistLength = usePlayerStore((s) => s.playlist.length);
   const currentIndex = usePlayerStore((s) => s.currentIndex);
 
-  const isLastTrack = currentIndex >= playlistLength - 1;
-  const hasNextTrack = !isLastTrack || shuffle || repeat !== "off";
+  const hasNext = hasNextTrack({
+    currentIndex,
+    playlist: { length: playlistLength },
+    shuffle,
+    repeat,
+  });
 
   return (
     <div className="flex items-center justify-center gap-2">
@@ -85,7 +89,7 @@ export function PlayControls() {
           className="size-8"
           aria-label="Next track"
           onClick={() => void next()}
-          disabled={!hasNextTrack}
+          disabled={!hasNext}
         >
           <NextIcon />
         </Button>

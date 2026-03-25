@@ -12,6 +12,16 @@ import { FOLDER_MIME, INITIAL_STACK } from "@/types";
 
 type RepeatMode = "off" | "one" | "all";
 
+export function hasNextTrack(state: {
+  currentIndex: number;
+  playlist: { length: number };
+  shuffle: boolean;
+  repeat: RepeatMode;
+}) {
+  const isLastTrack = state.currentIndex >= state.playlist.length - 1;
+  return !isLastTrack || state.shuffle || state.repeat === "all";
+}
+
 const MAX_CACHE_SIZE = 20;
 const PLAY_ATTEMPT_TIMEOUT_MS = 1500;
 

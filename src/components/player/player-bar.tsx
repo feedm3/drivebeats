@@ -7,7 +7,7 @@ import { resolveTrackMetadata } from "@/lib/track-metadata";
 import { useAuthStore } from "@/stores/auth-store";
 import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { useLibraryStore } from "@/stores/library-store";
-import { usePlayerStore } from "@/stores/player-store";
+import { hasNextTrack, usePlayerStore } from "@/stores/player-store";
 import { PlayControls } from "./play-controls";
 import { ProgressBar } from "./progress-bar";
 import { TrackInfo } from "./track-info";
@@ -77,14 +77,23 @@ function setupMediaSessionHandlers() {
   mediaSession.setActionHandler("previoustrack", () => {
     void usePlayerStore.getState().previous();
   });
-  mediaSession.setActionHandler("nexttrack", () => {
-    void usePlayerStore.getState().next();
-  });
   mediaSession.setActionHandler("seekto", (details) => {
     if (details.seekTime != null) {
       usePlayerStore.getState().seek(details.seekTime);
     }
   });
+}
+
+function syncMediaSessionNextAction() {
+  const mediaSession = getMediaSession();
+  if (!mediaSession) return;
+
+  const hasNext = hasNextTrack(usePlayerStore.getState());
+
+  mediaSession.setActionHandler(
+    "nexttrack",
+    hasNext ? () => void usePlayerStore.getState().next() : null,
+  );
 }
 
 function shouldSuppressErrorToast() {
@@ -123,6 +132,18 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
     // Register Media Session handlers immediately so CarPlay/lock-screen
     // controls work even before the first track plays (e.g. after PWA restart).
     setupMediaSessionHandlers();
+    syncMediaSessionNextAction();
+
+    const unsubNextAction = usePlayerStore.subscribe((state, prev) => {
+      if (
+        state.currentIndex !== prev.currentIndex ||
+        state.playlist.length !== prev.playlist.length ||
+        state.shuffle !== prev.shuffle ||
+        state.repeat !== prev.repeat
+      ) {
+        syncMediaSessionNextAction();
+      }
+    });
 
     const onTimeUpdate = () => {
       const { currentTrack } = usePlayerStore.getState();
@@ -245,6 +266,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("focus", onPageShow);
+      unsubNextAction();
       usePlayerStore.getState().clearCache();
     };
   }, []);

@@ -13,9 +13,118 @@ import { FOLDER_MIME, INITIAL_STACK } from "@/types";
 type RepeatMode = "off" | "one" | "all";
 
 const MAX_CACHE_SIZE = 20;
+const PLAY_ATTEMPT_TIMEOUT_MS = 1500;
 
 let fetchAbortController: AbortController | null = null;
 let prefetchAbortController: AbortController | null = null;
+
+function isIosStandalonePwa() {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return false;
+  }
+
+  const standalone =
+    window.matchMedia?.("(display-mode: standalone)").matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  const userAgent = navigator.userAgent;
+  const isiOS =
+    /iPad|iPhone|iPod/.test(userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  return Boolean(standalone) && isiOS;
+}
+
+function waitForMediaEvent(
+  audio: HTMLAudioElement,
+  eventName: keyof HTMLMediaElementEventMap,
+  timeoutMs: number,
+) {
+  return new Promise<boolean>((resolve) => {
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
+      resolve(false);
+    }, timeoutMs);
+
+    const onEvent = () => {
+      cleanup();
+      resolve(true);
+    };
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId);
+      audio.removeEventListener(eventName, onEvent);
+    };
+
+    audio.addEventListener(eventName, onEvent, { once: true });
+  });
+}
+
+async function attemptAudioPlay(audio: HTMLAudioElement) {
+  const playPromise = audio
+    .play()
+    .then(() => true)
+    .catch(() => false);
+  const startedPlayingPromise = waitForMediaEvent(
+    audio,
+    "playing",
+    PLAY_ATTEMPT_TIMEOUT_MS,
+  );
+
+  const didStart = await Promise.race([
+    playPromise,
+    startedPlayingPromise,
+    new Promise<false>((resolve) => {
+      window.setTimeout(() => resolve(false), PLAY_ATTEMPT_TIMEOUT_MS);
+    }),
+  ]);
+
+  return didStart;
+}
+
+async function reloadCurrentSourceAndPlay(audio: HTMLAudioElement) {
+  const source = audio.currentSrc || audio.src;
+  if (!source) return false;
+
+  const resumeTime = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+  const restorePlaybackPosition = () => {
+    if (resumeTime <= 0) return;
+
+    const maxTime =
+      Number.isFinite(audio.duration) && audio.duration > 0
+        ? Math.max(0, audio.duration - 0.25)
+        : resumeTime;
+
+    try {
+      audio.currentTime = Math.min(resumeTime, maxTime);
+    } catch {
+      // Safari can reject seeks until metadata has loaded again.
+    }
+  };
+
+  audio.pause();
+  audio.src = source;
+  audio.load();
+
+  const metadataLoaded = await waitForMediaEvent(
+    audio,
+    "loadedmetadata",
+    PLAY_ATTEMPT_TIMEOUT_MS,
+  );
+
+  if (!metadataLoaded) {
+    return false;
+  }
+
+  restorePlaybackPosition();
+  const played = await attemptAudioPlay(audio);
+  if (!played) {
+    return false;
+  }
+
+  // Re-apply the seek once playback restarts in case Safari ignored it earlier.
+  restorePlaybackPosition();
+  return true;
+}
 
 /**
  * Check if a track belongs to any synced collection (playlist or favorites).
@@ -113,6 +222,10 @@ interface PlayerState {
   nextShuffleFileId: string | null;
   prefetchingFileId: string | null;
   initAudio: () => HTMLAudioElement;
+  play: (options?: {
+    recoverFromBackgroundPause?: boolean;
+  }) => Promise<boolean>;
+  pause: () => void;
   loadTrack: (
     fileId: string,
     autoplay?: boolean,
@@ -172,6 +285,44 @@ export const usePlayerStore = create<PlayerState>()(
         audio.volume = get().isMuted ? 0 : get().volume;
         set({ audio });
         return audio;
+      },
+
+      play: async (options) => {
+        const { audio, currentTrack } = get();
+        if (!audio) return false;
+
+        if (!audio.src) {
+          if (!currentTrack) return false;
+          return get().loadTrack(currentTrack.id, true);
+        }
+
+        const shouldRecoverFromBackgroundPause =
+          options?.recoverFromBackgroundPause &&
+          document.visibilityState !== "visible" &&
+          isIosStandalonePwa();
+
+        if (shouldRecoverFromBackgroundPause) {
+          const recovered = await reloadCurrentSourceAndPlay(audio);
+          set({ isPlaying: recovered && !audio.paused });
+          return recovered;
+        }
+
+        const played = await attemptAudioPlay(audio);
+        if (!played && isIosStandalonePwa()) {
+          const recovered = await reloadCurrentSourceAndPlay(audio);
+          set({ isPlaying: recovered && !audio.paused });
+          return recovered;
+        }
+
+        set({ isPlaying: played && !audio.paused });
+        return played;
+      },
+
+      pause: () => {
+        const { audio } = get();
+        if (!audio) return;
+        audio.pause();
+        set({ isPlaying: false });
       },
 
       loadTrack: async (fileId, autoplay = true, beforeApply) => {
@@ -347,12 +498,12 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       togglePlay: () => {
-        const { audio, isPlaying } = get();
+        const { audio } = get();
         if (!audio) return;
-        if (isPlaying) {
-          audio.pause();
+        if (audio.paused || audio.ended) {
+          void get().play();
         } else {
-          void audio.play();
+          get().pause();
         }
       },
 
@@ -510,7 +661,7 @@ export const usePlayerStore = create<PlayerState>()(
 
         const { audio } = get();
         if (audio) {
-          audio.pause();
+          get().pause();
           audio.removeAttribute("src");
           audio.load();
         }

@@ -549,7 +549,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
           <div className={cn(playerBarPadding)}>
             <div
               ref={listRef}
-              className="rounded-2xl border border-border/60 bg-background/80 shadow-xs overflow-hidden touch-none"
+              className="rounded-2xl border border-border/60 bg-background/80 shadow-xs overflow-hidden"
               onPointerDown={onPointerDown}
             >
               <div className="flex h-11 items-center border-b px-4">

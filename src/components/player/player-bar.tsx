@@ -57,15 +57,22 @@ function updateMediaSessionPosition(audio: HTMLAudioElement) {
   }
 }
 
-function setupMediaSessionHandlers(audio: HTMLAudioElement) {
+function setupMediaSessionHandlers() {
   const mediaSession = getMediaSession();
   if (!mediaSession) return;
 
   mediaSession.setActionHandler("play", () => {
-    void audio.play();
+    void usePlayerStore
+      .getState()
+      .play({ recoverFromBackgroundPause: true })
+      .then((played) => {
+        if (!played) {
+          updateMediaSessionPlaybackState("paused");
+        }
+      });
   });
   mediaSession.setActionHandler("pause", () => {
-    audio.pause();
+    usePlayerStore.getState().pause();
   });
   mediaSession.setActionHandler("previoustrack", () => {
     void usePlayerStore.getState().previous();
@@ -115,7 +122,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
 
     // Register Media Session handlers immediately so CarPlay/lock-screen
     // controls work even before the first track plays (e.g. after PWA restart).
-    setupMediaSessionHandlers(el);
+    setupMediaSessionHandlers();
 
     const onTimeUpdate = () => {
       const { currentTrack } = usePlayerStore.getState();
@@ -152,7 +159,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       updateMediaSessionPosition(el);
     };
     const onPlaying = () => {
-      setupMediaSessionHandlers(el);
+      setupMediaSessionHandlers();
       updateMediaSessionPlaybackState("playing");
       updateMediaSessionPosition(el);
     };
@@ -166,7 +173,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       const { repeat, next } = usePlayerStore.getState();
       if (repeat === "one") {
         el.currentTime = 0;
-        el.play();
+        void usePlayerStore.getState().play();
         return;
       }
       await next();
@@ -203,6 +210,17 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       }
     };
 
+    const onPageShow = () => {
+      const { isPlaying } = usePlayerStore.getState();
+      if (el.paused && isPlaying) {
+        usePlayerStore.getState().setIsPlaying(false);
+        updateMediaSessionPlaybackState("paused");
+      } else if (!el.paused && !isPlaying) {
+        usePlayerStore.getState().setIsPlaying(true);
+        updateMediaSessionPlaybackState("playing");
+      }
+    };
+
     el.addEventListener("timeupdate", onTimeUpdate);
     el.addEventListener("durationchange", onDurationChange);
     el.addEventListener("loadstart", onLoadStart);
@@ -212,6 +230,8 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
     el.addEventListener("ended", onEnded);
     el.addEventListener("error", onError);
     document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("focus", onPageShow);
 
     return () => {
       el.removeEventListener("timeupdate", onTimeUpdate);
@@ -223,6 +243,8 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       el.removeEventListener("ended", onEnded);
       el.removeEventListener("error", onError);
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("focus", onPageShow);
       usePlayerStore.getState().clearCache();
     };
   }, []);

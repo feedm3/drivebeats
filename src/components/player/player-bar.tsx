@@ -185,6 +185,20 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       );
     };
 
+    // Sync store with actual audio state when the page becomes visible again.
+    // iOS suspends JS in background pages, so pause/play events can be lost.
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      const { isPlaying } = usePlayerStore.getState();
+      if (el.paused && isPlaying) {
+        usePlayerStore.getState().setIsPlaying(false);
+        updateMediaSessionPlaybackState("paused");
+      } else if (!el.paused && !isPlaying) {
+        usePlayerStore.getState().setIsPlaying(true);
+        updateMediaSessionPlaybackState("playing");
+      }
+    };
+
     el.addEventListener("timeupdate", onTimeUpdate);
     el.addEventListener("durationchange", onDurationChange);
     el.addEventListener("loadstart", onLoadStart);
@@ -193,6 +207,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
     el.addEventListener("pause", onPause);
     el.addEventListener("ended", onEnded);
     el.addEventListener("error", onError);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       el.removeEventListener("timeupdate", onTimeUpdate);
@@ -203,6 +218,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       el.removeEventListener("pause", onPause);
       el.removeEventListener("ended", onEnded);
       el.removeEventListener("error", onError);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       usePlayerStore.getState().clearCache();
     };
   }, []);

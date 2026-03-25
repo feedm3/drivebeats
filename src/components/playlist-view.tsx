@@ -240,6 +240,14 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
     isOfflineEnabled &&
     offlineCollection.downloadedCount > 0 &&
     offlineCollection.downloadedCount === offlineCollection.totalCount;
+  const failedCount = isOfflineEnabled
+    ? offlineCollection.trackFileIds.filter(
+        (id) => offlineTrackStatus[id] === "failed",
+      ).length
+    : 0;
+  const downloadProgress = offlineCollection?.totalCount
+    ? offlineCollection.downloadedCount / offlineCollection.totalCount
+    : 0;
   const [offlineToggling, setOfflineToggling] = useState(false);
   const offlineTogglingRef = useRef(false);
   const [removeDownloadsOpen, setRemoveDownloadsOpen] = useState(false);
@@ -405,6 +413,103 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {collection.id !== RECENTLY_PLAYED_COLLECTION_ID && (
+            <div className="flex items-center gap-1">
+              <IconTooltip
+                label={
+                  failedCount > 0
+                    ? `${offlineCollection.downloadedCount}/${offlineCollection.totalCount} downloaded · ${failedCount} failed`
+                    : allDownloaded
+                      ? "Remove downloads"
+                      : isOfflineEnabled
+                        ? `${offlineCollection.downloadedCount}/${offlineCollection.totalCount} downloaded`
+                        : "Available offline"
+                }
+              >
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className={cn(
+                    "relative text-muted-foreground",
+                    allDownloaded && "text-emerald-500",
+                  )}
+                  onClick={handleOfflineToggle}
+                  disabled={offlineToggling || collection.tracks.length === 0}
+                  aria-label={
+                    allDownloaded
+                      ? "Remove downloads"
+                      : failedCount > 0
+                        ? `${offlineCollection.downloadedCount} of ${offlineCollection.totalCount} downloaded, ${failedCount} failed`
+                        : isOfflineEnabled
+                          ? `${offlineCollection.downloadedCount} of ${offlineCollection.totalCount} downloaded, stop download`
+                          : "Download for offline"
+                  }
+                >
+                  {isOfflineEnabled &&
+                    !allDownloaded &&
+                    !offlineToggling &&
+                    offlineCollection.totalCount > 0 && (
+                      <svg
+                        aria-hidden="true"
+                        className="absolute inset-0 size-full -rotate-90"
+                        viewBox="0 0 32 32"
+                      >
+                        <circle
+                          cx="16"
+                          cy="16"
+                          r="13"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeOpacity="0.15"
+                        />
+                        <circle
+                          cx="16"
+                          cy="16"
+                          r="13"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeDasharray={2 * Math.PI * 13}
+                          strokeDashoffset={
+                            2 * Math.PI * 13 * (1 - downloadProgress)
+                          }
+                          strokeLinecap="round"
+                          className="text-primary transition-[stroke-dashoffset] duration-300"
+                        />
+                      </svg>
+                    )}
+                  {offlineToggling ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Download className="size-4" />
+                  )}
+                  {allDownloaded && (
+                    <Check className="absolute top-0.5 right-0.5 size-2.5 text-emerald-500" />
+                  )}
+                  {failedCount > 0 && !allDownloaded && (
+                    <span className="absolute top-0 right-0.5 text-[9px] font-bold leading-none text-amber-500">
+                      !
+                    </span>
+                  )}
+                </Button>
+              </IconTooltip>
+              {isOfflineEnabled && !allDownloaded && (
+                <span
+                  className={cn(
+                    "text-xs tabular-nums",
+                    failedCount > 0
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {offlineCollection.downloadedCount}/
+                  {offlineCollection.totalCount}
+                  {failedCount > 0 && "!"}
+                </span>
+              )}
+            </div>
+          )}
           <Button
             size="sm"
             onClick={handlePlayAll}
@@ -413,39 +518,6 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
             <Play className="size-3.5" />
             Play All
           </Button>
-          {collection.id !== RECENTLY_PLAYED_COLLECTION_ID && (
-            <IconTooltip
-              label={
-                isOfflineEnabled
-                  ? offlineCollection.downloadedCount ===
-                    offlineCollection.totalCount
-                    ? "Remove downloads"
-                    : `${offlineCollection.downloadedCount}/${offlineCollection.totalCount} downloaded`
-                  : "Available offline"
-              }
-            >
-              <Button
-                variant={isOfflineEnabled ? "secondary" : "ghost"}
-                size="icon-sm"
-                className="text-muted-foreground"
-                onClick={handleOfflineToggle}
-                disabled={offlineToggling || collection.tracks.length === 0}
-                aria-label={
-                  isOfflineEnabled ? "Remove downloads" : "Available offline"
-                }
-              >
-                {offlineToggling ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : allDownloaded ? (
-                  <Trash2 className="size-4 text-primary" />
-                ) : (
-                  <Download
-                    className={cn("size-4", isOfflineEnabled && "text-primary")}
-                  />
-                )}
-              </Button>
-            </IconTooltip>
-          )}
           {collection.id === RECENTLY_PLAYED_COLLECTION_ID && (
             <>
               <div className="h-4 w-px bg-border/60" />
@@ -509,45 +581,6 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
       </div>
 
       <Separator className="my-3" />
-
-      {isOfflineEnabled &&
-        (() => {
-          const { downloadedCount, totalCount, trackFileIds } =
-            offlineCollection;
-          const failedCount = trackFileIds.filter(
-            (id) => offlineTrackStatus[id] === "failed",
-          ).length;
-
-          if (downloadedCount === totalCount) {
-            return (
-              <div className="mb-2 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
-                <Check className="size-3" />
-                <span>All songs available offline</span>
-              </div>
-            );
-          }
-
-          if (failedCount > 0) {
-            return (
-              <div className="mb-2 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
-                <TriangleAlert className="size-3" />
-                <span>
-                  {downloadedCount}/{totalCount} downloaded &middot;{" "}
-                  {failedCount} failed
-                </span>
-              </div>
-            );
-          }
-
-          return (
-            <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="size-3 animate-spin" />
-              <span>
-                {downloadedCount}/{totalCount} downloaded
-              </span>
-            </div>
-          );
-        })()}
 
       {isFullEditablePlaylist && (
         <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">

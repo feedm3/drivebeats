@@ -236,11 +236,20 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   );
   const offlineTrackStatus = useOfflineStore((s) => s.trackStatus);
   const isOfflineEnabled = !!offlineCollection?.enabled;
+  const allDownloaded =
+    isOfflineEnabled &&
+    offlineCollection.downloadedCount > 0 &&
+    offlineCollection.downloadedCount === offlineCollection.totalCount;
   const [offlineToggling, setOfflineToggling] = useState(false);
   const offlineTogglingRef = useRef(false);
+  const [removeDownloadsOpen, setRemoveDownloadsOpen] = useState(false);
 
   const handleOfflineToggle = useCallback(async () => {
     if (offlineTogglingRef.current) return;
+    if (allDownloaded) {
+      setRemoveDownloadsOpen(true);
+      return;
+    }
     offlineTogglingRef.current = true;
     setOfflineToggling(true);
     try {
@@ -253,7 +262,20 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
       offlineTogglingRef.current = false;
       setOfflineToggling(false);
     }
-  }, [collection.id, isOfflineEnabled]);
+  }, [collection.id, isOfflineEnabled, allDownloaded]);
+
+  const handleRemoveDownloads = useCallback(async () => {
+    if (offlineTogglingRef.current) return;
+    offlineTogglingRef.current = true;
+    setOfflineToggling(true);
+    setRemoveDownloadsOpen(false);
+    try {
+      await stopCollectionDownload(collection.id);
+    } finally {
+      offlineTogglingRef.current = false;
+      setOfflineToggling(false);
+    }
+  }, [collection.id]);
 
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -414,6 +436,8 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
               >
                 {offlineToggling ? (
                   <Loader2 className="size-4 animate-spin" />
+                ) : allDownloaded ? (
+                  <Trash2 className="size-4 text-primary" />
                 ) : (
                   <Download
                     className={cn("size-4", isOfflineEnabled && "text-primary")}
@@ -631,6 +655,28 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
             </DialogClose>
             <Button variant="destructive" size="sm" onClick={handleDelete}>
               Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={removeDownloadsOpen} onOpenChange={setRemoveDownloadsOpen}>
+        <DialogContent>
+          <DialogTitle>Remove downloads</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete all downloaded files from this
+            playlist?
+          </DialogDescription>
+          <div className="mt-4 flex justify-end gap-2">
+            <DialogClose render={<Button variant="outline" size="sm" />}>
+              Cancel
+            </DialogClose>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleRemoveDownloads}
+            >
+              Remove
             </Button>
           </div>
         </DialogContent>

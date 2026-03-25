@@ -113,6 +113,10 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   useEffect(() => {
     const el = usePlayerStore.getState().initAudio();
 
+    // Register Media Session handlers immediately so CarPlay/lock-screen
+    // controls work even before the first track plays (e.g. after PWA restart).
+    setupMediaSessionHandlers(el);
+
     const onTimeUpdate = () => {
       const { currentTrack } = usePlayerStore.getState();
       usePlayerStore.getState().setCurrentTime(el.currentTime);

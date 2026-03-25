@@ -370,7 +370,16 @@ export async function stopCollectionDownload(
     return refCount <= 0;
   });
 
-  // Mark tracks as cancelled so in-flight/queued workers skip them
+  // Abort in-flight downloads so workers exit immediately
+  abortController?.abort();
+  abortController = null;
+
+  // Wait for active workers to finish (they exit fast due to abort signal)
+  if (queuePromise) {
+    await queuePromise.catch(() => {});
+  }
+
+  // Mark tracks as cancelled so any residual workers skip them
   for (const fileId of fileIdsToRemove) {
     cancelledFileIds.add(fileId);
   }
@@ -379,6 +388,25 @@ export async function stopCollectionDownload(
 
   await Promise.all(fileIdsToRemove.map((id) => offlineDb.deleteTrack(id)));
   await offlineDb.deleteCollection(collectionId);
+
+  // Restart downloads for surviving collections whose tracks were interrupted
+  const updated = useOfflineStore.getState();
+  if (Object.keys(updated.collections).length > 0) {
+    const interrupted = Object.entries(updated.trackStatus).filter(
+      ([, s]) => s === "downloading",
+    );
+    if (interrupted.length > 0) {
+      useOfflineStore.setState((state) => ({
+        trackStatus: {
+          ...state.trackStatus,
+          ...Object.fromEntries(
+            interrupted.map(([id]) => [id, "queued" as const]),
+          ),
+        },
+      }));
+    }
+    void processQueue();
+  }
 }
 
 export async function syncCollection(

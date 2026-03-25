@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  Check,
   Download,
   Ellipsis,
   ListMusic,
@@ -236,8 +237,11 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const offlineTrackStatus = useOfflineStore((s) => s.trackStatus);
   const isOfflineEnabled = !!offlineCollection?.enabled;
   const [offlineToggling, setOfflineToggling] = useState(false);
+  const offlineTogglingRef = useRef(false);
 
   const handleOfflineToggle = useCallback(async () => {
+    if (offlineTogglingRef.current) return;
+    offlineTogglingRef.current = true;
     setOfflineToggling(true);
     try {
       if (isOfflineEnabled) {
@@ -246,6 +250,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
         await startCollectionDownload(collection.id);
       }
     } finally {
+      offlineTogglingRef.current = false;
       setOfflineToggling(false);
     }
   }, [collection.id, isOfflineEnabled]);
@@ -482,15 +487,43 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
       <Separator className="my-3" />
 
       {isOfflineEnabled &&
-        offlineCollection.downloadedCount < offlineCollection.totalCount && (
-          <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="size-3 animate-spin" />
-            <span>
-              {offlineCollection.downloadedCount}/{offlineCollection.totalCount}{" "}
-              downloaded
-            </span>
-          </div>
-        )}
+        (() => {
+          const { downloadedCount, totalCount, trackFileIds } =
+            offlineCollection;
+          const failedCount = trackFileIds.filter(
+            (id) => offlineTrackStatus[id] === "failed",
+          ).length;
+
+          if (downloadedCount === totalCount) {
+            return (
+              <div className="mb-2 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+                <Check className="size-3" />
+                <span>All songs available offline</span>
+              </div>
+            );
+          }
+
+          if (failedCount > 0) {
+            return (
+              <div className="mb-2 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+                <TriangleAlert className="size-3" />
+                <span>
+                  {downloadedCount}/{totalCount} downloaded &middot;{" "}
+                  {failedCount} failed
+                </span>
+              </div>
+            );
+          }
+
+          return (
+            <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" />
+              <span>
+                {downloadedCount}/{totalCount} downloaded
+              </span>
+            </div>
+          );
+        })()}
 
       {isFullEditablePlaylist && (
         <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">

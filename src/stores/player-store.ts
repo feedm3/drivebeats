@@ -198,7 +198,6 @@ export const usePlayerStore = create<PlayerState>()(
         const cached = blobCache.get(fileId);
 
         const applySource = async (source: string) => {
-          audio.pause();
           beforeApply?.();
           audio.src = source;
           audio.currentTime = 0;
@@ -353,9 +352,8 @@ export const usePlayerStore = create<PlayerState>()(
         if (isPlaying) {
           audio.pause();
         } else {
-          audio.play();
+          void audio.play();
         }
-        set({ isPlaying: !isPlaying });
       },
 
       next: async () => {

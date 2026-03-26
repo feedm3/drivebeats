@@ -60,7 +60,7 @@ export function PlaylistTrackItem({
       data-track-index={index}
       data-active={isActive ? true : undefined}
       className={cn(
-        "group relative flex cursor-pointer items-center py-2 transition-colors hover:bg-muted/50 data-[active]:bg-primary/6",
+        "group relative flex w-full min-w-0 cursor-pointer items-center py-2 transition-colors hover:bg-muted/50 data-[active]:bg-primary/6",
         isDragging && "opacity-30",
       )}
     >
@@ -85,7 +85,7 @@ export function PlaylistTrackItem({
       )}
       <button
         type="button"
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-left"
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 overflow-hidden rounded-lg px-2 py-2 text-left"
         aria-label={`Play ${track.fileName}`}
         onClick={onPlay}
       >
@@ -151,7 +151,7 @@ export function PlaylistTrackItem({
         )}
       </button>
       {subtitle && (
-        <span className="shrink-0 px-2 text-xs tabular-nums text-muted-foreground">
+        <span className="max-w-28 shrink-0 truncate px-2 text-xs tabular-nums text-muted-foreground">
           {subtitle}
         </span>
       )}

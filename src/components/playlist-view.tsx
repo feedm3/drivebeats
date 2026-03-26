@@ -377,8 +377,8 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const isRecentlyPlayed = collection.id === RECENTLY_PLAYED_COLLECTION_ID;
 
   return (
-    <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-7">
-      <div className="flex items-center gap-3">
+    <div className="mx-auto flex h-full min-w-0 flex-col overflow-hidden px-4 pt-7">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
         {onBack && (
           <IconTooltip label="Back to playlists">
             <Button
@@ -412,7 +412,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
             </h1>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1">
           {collection.id !== RECENTLY_PLAYED_COLLECTION_ID && (
             <div className="flex items-center gap-1">
               <IconTooltip
@@ -602,14 +602,14 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
           </span>
         </div>
       ) : (
-        <ScrollArea className="min-h-0 flex-1">
-          <div className={cn(playerBarPadding)}>
+        <ScrollArea className="min-h-0 flex-1 overflow-x-hidden">
+          <div className={cn("min-w-0", playerBarPadding)}>
             <div
               ref={listRef}
-              className="rounded-2xl border border-border/60 bg-background/80 shadow-xs overflow-hidden"
+              className="min-w-0 overflow-hidden rounded-2xl border border-border/60 bg-background/80 shadow-xs"
               onPointerDown={onPointerDown}
             >
-              <div className="flex h-11 items-center border-b px-4">
+              <div className="flex min-w-0 h-11 items-center border-b px-4">
                 <span className="text-xs font-semibold tracking-[0.16em] uppercase text-muted-foreground">
                   Name
                 </span>

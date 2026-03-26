@@ -232,9 +232,7 @@ interface PlayerState {
   nextShuffleFileId: string | null;
   prefetchingFileId: string | null;
   initAudio: () => HTMLAudioElement;
-  play: (options?: {
-    recoverFromBackgroundPause?: boolean;
-  }) => Promise<boolean>;
+  play: () => Promise<boolean>;
   pause: () => void;
   loadTrack: (
     fileId: string,
@@ -297,7 +295,7 @@ export const usePlayerStore = create<PlayerState>()(
         return audio;
       },
 
-      play: async (options) => {
+      play: async () => {
         const { audio, currentTrack } = get();
         if (!audio) return false;
 
@@ -306,19 +304,12 @@ export const usePlayerStore = create<PlayerState>()(
           return get().loadTrack(currentTrack.id, true);
         }
 
-        const shouldRecoverFromBackgroundPause =
-          options?.recoverFromBackgroundPause &&
-          document.visibilityState !== "visible" &&
-          isIosStandalonePwa();
-
-        if (shouldRecoverFromBackgroundPause) {
-          const recovered = await reloadCurrentSourceAndPlay(audio);
-          set({ isPlaying: recovered && !audio.paused });
-          return recovered;
-        }
-
         const played = await attemptAudioPlay(audio);
-        if (!played && isIosStandalonePwa()) {
+        if (
+          !played &&
+          isIosStandalonePwa() &&
+          document.visibilityState === "visible"
+        ) {
           const recovered = await reloadCurrentSourceAndPlay(audio);
           set({ isPlaying: recovered && !audio.paused });
           return recovered;

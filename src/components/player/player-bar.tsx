@@ -64,7 +64,7 @@ function setupMediaSessionHandlers() {
   mediaSession.setActionHandler("play", () => {
     void usePlayerStore
       .getState()
-      .play({ recoverFromBackgroundPause: true })
+      .play()
       .then((played) => {
         if (!played) {
           updateMediaSessionPlaybackState("paused");

@@ -2,6 +2,13 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { downloadGoogleDriveFileMedia } from "@/lib/google-api";
 import * as offlineDb from "@/lib/offline-db";
+import {
+  cacheSessionMedia,
+  deleteSessionMedia,
+  getOfflineTrackUrl,
+  isBlobUrl,
+  isSessionMediaUrl,
+} from "@/lib/offline-media";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
@@ -27,6 +34,39 @@ const PLAY_ATTEMPT_TIMEOUT_MS = 1500;
 
 let fetchAbortController: AbortController | null = null;
 let prefetchAbortController: AbortController | null = null;
+
+function revokeCachedSource(source?: string) {
+  if (source && isBlobUrl(source)) {
+    URL.revokeObjectURL(source);
+    return;
+  }
+
+  if (source && isSessionMediaUrl(source)) {
+    void deleteSessionMedia(source);
+  }
+}
+
+function setCachedSource(
+  cache: Map<string, string>,
+  fileId: string,
+  source: string,
+) {
+  const existingSource = cache.get(fileId);
+  if (existingSource && existingSource !== source) {
+    revokeCachedSource(existingSource);
+  }
+
+  if (cache.size >= MAX_CACHE_SIZE) {
+    const oldestEntry = cache.keys().next();
+    if (!oldestEntry.done) {
+      const oldestSource = cache.get(oldestEntry.value);
+      revokeCachedSource(oldestSource);
+      cache.delete(oldestEntry.value);
+    }
+  }
+
+  cache.set(fileId, source);
+}
 
 function isIosStandalonePwa() {
   if (typeof window === "undefined" || typeof navigator === "undefined") {
@@ -371,22 +411,14 @@ export const usePlayerStore = create<PlayerState>()(
           return true;
         }
 
-        // Check IndexedDB for offline-cached blob
+        // Check IndexedDB for offline-cached media first.
         try {
           const offlineRecord = await offlineDb.getTrack(fileId);
           if (offlineRecord && !controller.signal.aborted) {
-            const blobUrl = URL.createObjectURL(offlineRecord.blob);
-            if (blobCache.size >= MAX_CACHE_SIZE) {
-              const oldestEntry = blobCache.keys().next();
-              if (!oldestEntry.done) {
-                const oldestUrl = blobCache.get(oldestEntry.value);
-                if (oldestUrl) URL.revokeObjectURL(oldestUrl);
-                blobCache.delete(oldestEntry.value);
-              }
-            }
-            blobCache.set(fileId, blobUrl);
+            const offlineUrl = getOfflineTrackUrl(fileId);
+            setCachedSource(blobCache, fileId, offlineUrl);
             triggerId3Extraction(offlineRecord.blob);
-            await applySource(blobUrl);
+            await applySource(offlineUrl);
             set({ isLoading: false });
             return true;
           }
@@ -425,26 +457,16 @@ export const usePlayerStore = create<PlayerState>()(
 
           const blob = await res.blob();
           triggerId3Extraction(blob);
-          const blobUrl = URL.createObjectURL(blob);
+          const cachedSource =
+            (await cacheSessionMedia(fileId, blob, blob.type)) ??
+            URL.createObjectURL(blob);
 
-          // LRU eviction: remove oldest entry if cache is full
-          if (blobCache.size >= MAX_CACHE_SIZE) {
-            const oldestEntry = blobCache.keys().next();
-            if (!oldestEntry.done) {
-              const oldestKey = oldestEntry.value;
-              const oldestUrl = blobCache.get(oldestKey);
-              if (oldestUrl) {
-                URL.revokeObjectURL(oldestUrl);
-              }
-              blobCache.delete(oldestKey);
-            }
-          }
-          blobCache.set(fileId, blobUrl);
+          setCachedSource(blobCache, fileId, cachedSource);
 
           // If a newer fetch started while we were downloading, don't touch audio
           if (controller.signal.aborted) return false;
 
-          await applySource(blobUrl);
+          await applySource(cachedSource);
           set({ isLoading: false });
           return true;
         } catch (e) {
@@ -736,17 +758,9 @@ export const usePlayerStore = create<PlayerState>()(
             try {
               const offlineRecord = await offlineDb.getTrack(nextFileId);
               if (offlineRecord && !controller.signal.aborted) {
-                const blobUrl = URL.createObjectURL(offlineRecord.blob);
+                const offlineUrl = getOfflineTrackUrl(nextFileId);
                 const { blobCache } = get();
-                if (blobCache.size >= MAX_CACHE_SIZE) {
-                  const oldest = blobCache.keys().next();
-                  if (!oldest.done) {
-                    const oldUrl = blobCache.get(oldest.value);
-                    if (oldUrl) URL.revokeObjectURL(oldUrl);
-                    blobCache.delete(oldest.value);
-                  }
-                }
-                blobCache.set(nextFileId, blobUrl);
+                setCachedSource(blobCache, nextFileId, offlineUrl);
                 return;
               }
             } catch {
@@ -784,18 +798,12 @@ export const usePlayerStore = create<PlayerState>()(
             const blob = await res.blob();
             if (controller.signal.aborted) return;
 
-            const blobUrl = URL.createObjectURL(blob);
+            const cachedSource =
+              (await cacheSessionMedia(nextFileId, blob, blob.type)) ??
+              URL.createObjectURL(blob);
 
             const { blobCache } = get();
-            if (blobCache.size >= MAX_CACHE_SIZE) {
-              const oldest = blobCache.keys().next();
-              if (!oldest.done) {
-                const oldUrl = blobCache.get(oldest.value);
-                if (oldUrl) URL.revokeObjectURL(oldUrl);
-                blobCache.delete(oldest.value);
-              }
-            }
-            blobCache.set(nextFileId, blobUrl);
+            setCachedSource(blobCache, nextFileId, cachedSource);
 
             // Trigger ID3 extraction for prefetched track
             const track = playlist.find((t) => t.id === nextFileId);
@@ -824,8 +832,8 @@ export const usePlayerStore = create<PlayerState>()(
 
       clearCache: () => {
         const { blobCache } = get();
-        for (const url of blobCache.values()) {
-          URL.revokeObjectURL(url);
+        for (const source of blobCache.values()) {
+          revokeCachedSource(source);
         }
         blobCache.clear();
       },

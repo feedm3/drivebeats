@@ -200,8 +200,13 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       await next();
     };
     const onError = async () => {
-      const { currentTrack, fetchAndPlay } = usePlayerStore.getState();
+      const { currentTrack, fetchAndPlay, blobCache } =
+        usePlayerStore.getState();
       if (!currentTrack) return;
+
+      // Evict the broken cached source so the retry goes through the full
+      // IndexedDB → Drive fetch flow instead of reusing the same failing URL.
+      blobCache.delete(currentTrack.id);
 
       try {
         await fetchAndPlay(currentTrack.id);

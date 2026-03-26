@@ -1,6 +1,6 @@
 "use client";
 
-import { ListMusic, Plus, TriangleAlert } from "lucide-react";
+import { Check, ListMusic, Plus, TriangleAlert } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
@@ -38,6 +38,7 @@ export function AddToPlaylistPopover({
   className,
 }: AddToPlaylistPopoverProps) {
   const addTracks = usePlaylistStore((s) => s.addTracks);
+  const removeTrack = usePlaylistStore((s) => s.removeTrack);
   const createPlaylist = usePlaylistStore((s) => s.createPlaylist);
   const getCachedFiles = useFolderCacheStore((s) => s.getFiles);
 
@@ -55,6 +56,13 @@ export function AddToPlaylistPopover({
   );
   const hasFullPlaylist = playlistsSnapshot.some((playlist) =>
     isPlaylistFull(playlist.tracks.length),
+  );
+  const containedPlaylistIds = new Set(
+    isFolder
+      ? []
+      : playlistsSnapshot
+          .filter((p) => p.tracks.some((t) => t.fileId === file.id))
+          .map((p) => p.id),
   );
 
   function getTracksForFile() {
@@ -80,6 +88,7 @@ export function AddToPlaylistPopover({
     const tracks = getTracksForFile();
     if (!tracks) return;
     const result = await addTracks(playlistId, tracks);
+    setPlaylistsSnapshot(usePlaylistStore.getState().playlists);
     notifyPlaylistTrackAddResult(playlistName, result);
 
     if (shouldClosePlaylistPicker(result)) {
@@ -87,6 +96,12 @@ export function AddToPlaylistPopover({
       setCreating(false);
       setNewName("");
     }
+  }
+
+  async function handleRemove(playlistId: string, playlistName: string) {
+    await removeTrack(playlistId, file.id);
+    setPlaylistsSnapshot(usePlaylistStore.getState().playlists);
+    toast.success(`Removed from ${playlistName}`);
   }
 
   async function handleCreateAndAdd() {
@@ -141,36 +156,54 @@ export function AddToPlaylistPopover({
       {open ? (
         <PopoverContent side="left" align="start" className="w-52">
           <div className="max-h-60 overflow-y-auto">
-            {playlistsSnapshot.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleAdd(p.id, p.name);
-                }}
-                disabled={isPlaylistFull(p.tracks.length)}
-              >
-                <ListMusic className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate">{p.name}</span>
-                {isPlaylistFull(p.tracks.length) && (
-                  <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-                    Full
-                  </span>
-                )}
-                <span
-                  className={cn(
-                    "ml-auto shrink-0 text-xs tabular-nums",
-                    isPlaylistFull(p.tracks.length)
-                      ? "text-amber-700 dark:text-amber-300"
-                      : "text-muted-foreground",
-                  )}
+            {playlistsSnapshot.map((p) => {
+              const isInPlaylist = !isFolder && containedPlaylistIds.has(p.id);
+              const isFull = isPlaylistFull(p.tracks.length);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+                  aria-pressed={isInPlaylist}
+                  aria-label={
+                    isInPlaylist
+                      ? `Remove ${file.name} from ${p.name}`
+                      : `Add ${file.name} to ${p.name}`
+                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isInPlaylist) {
+                      void handleRemove(p.id, p.name);
+                    } else {
+                      void handleAdd(p.id, p.name);
+                    }
+                  }}
+                  disabled={isFull && !isInPlaylist}
                 >
-                  {p.tracks.length}
-                </span>
-              </button>
-            ))}
+                  {isInPlaylist ? (
+                    <Check className="size-3.5 shrink-0 text-primary" />
+                  ) : (
+                    <ListMusic className="size-3.5 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="truncate">{p.name}</span>
+                  {isFull && !isInPlaylist && (
+                    <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                      Full
+                    </span>
+                  )}
+                  <span
+                    className={cn(
+                      "ml-auto shrink-0 text-xs tabular-nums",
+                      isFull && !isInPlaylist
+                        ? "text-amber-700 dark:text-amber-300"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {p.tracks.length}
+                  </span>
+                </button>
+              );
+            })}
           </div>
           {hasFullPlaylist && (
             <div className="border-t px-2 py-2 text-xs text-amber-800 dark:text-amber-200">

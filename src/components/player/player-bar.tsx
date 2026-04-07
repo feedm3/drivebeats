@@ -96,6 +96,11 @@ function syncMediaSessionNextAction() {
   );
 }
 
+function syncMediaSessionControls() {
+  setupMediaSessionHandlers();
+  syncMediaSessionNextAction();
+}
+
 function shouldSuppressErrorToast() {
   return useAuthStore.getState().isLoggingOut;
 }
@@ -131,8 +136,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
 
     // Register Media Session handlers immediately so CarPlay/lock-screen
     // controls work even before the first track plays (e.g. after PWA restart).
-    setupMediaSessionHandlers();
-    syncMediaSessionNextAction();
+    syncMediaSessionControls();
 
     const unsubNextAction = usePlayerStore.subscribe((state, prev) => {
       if (
@@ -180,7 +184,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       updateMediaSessionPosition(el);
     };
     const onPlaying = () => {
-      setupMediaSessionHandlers();
+      syncMediaSessionControls();
       updateMediaSessionPlaybackState("playing");
       updateMediaSessionPosition(el);
     };
@@ -223,9 +227,11 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
     };
 
     // Sync store with actual audio state when the page becomes visible again.
-    // iOS suspends JS in background pages, so pause/play events can be lost.
+    // iOS can also drop lock-screen action availability while the PWA is
+    // backgrounded, so refresh handlers whenever the page resumes.
     const onVisibilityChange = () => {
       if (document.visibilityState !== "visible") return;
+      syncMediaSessionControls();
       const { isPlaying } = usePlayerStore.getState();
       if (el.paused && isPlaying) {
         usePlayerStore.getState().setIsPlaying(false);
@@ -237,6 +243,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
     };
 
     const onPageShow = () => {
+      syncMediaSessionControls();
       const { isPlaying } = usePlayerStore.getState();
       if (el.paused && isPlaying) {
         usePlayerStore.getState().setIsPlaying(false);
@@ -280,6 +287,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   useEffect(() => {
     updateMediaSession(currentTrackTitle, currentTrackArtist, id3?.album);
     updateMediaSessionPosition(usePlayerStore.getState().initAudio());
+    syncMediaSessionControls();
   }, [currentTrackTitle, currentTrackArtist, id3?.album]);
 
   // Wait for persisted player state before attempting a one-time restore.
@@ -310,6 +318,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
     const restore = async () => {
       try {
         await usePlayerStore.getState().restoreTrack();
+        syncMediaSessionControls();
       } catch {
         import("sonner").then(({ toast }) =>
           shouldSuppressErrorToast()

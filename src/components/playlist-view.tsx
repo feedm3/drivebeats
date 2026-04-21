@@ -592,14 +592,20 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
       )}
 
       {collection.tracks.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
-          <div className="flex size-14 items-center justify-center rounded-2xl bg-muted/30">
-            <ListMusic className="size-6" />
+        <div className="flex min-h-0 flex-1 items-start">
+          <div className="w-full">
+            <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-[1.75rem] border border-dashed border-border/70 bg-muted/20 px-6 py-10 text-center">
+              <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <ListMusic className="size-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-semibold tracking-tight">No tracks yet</h3>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  {getEmptyStateDescription(collection.id)}
+                </p>
+              </div>
+            </div>
           </div>
-          <span className="text-sm">No tracks yet</span>
-          <span className="text-xs">
-            {getEmptyStateDescription(collection.id)}
-          </span>
         </div>
       ) : (
         <ScrollArea className="min-h-0 flex-1 overflow-x-hidden">

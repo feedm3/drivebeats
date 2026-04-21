@@ -327,12 +327,21 @@ export function FileList({
 
   if (files.length === 0) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground">
-        <span>Nothing here yet</span>
-        <span className="text-sm">
-          Add audio files (MP3, FLAC, WAV, AAC, OGG) to this folder in Google
-          Drive to see them here.
-        </span>
+      <div className="flex min-h-0 flex-1 items-start">
+        <div className={cn("w-full", playerBarPadding)}>
+          <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-[1.75rem] border border-dashed border-border/70 bg-muted/20 px-6 py-10 text-center">
+            <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <Music4 className="size-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-semibold tracking-tight">Nothing here yet</h3>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Add audio files (MP3, FLAC, WAV, AAC, OGG) to this folder in
+                Google Drive to see them here.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Ellipsis, RotateCw } from "lucide-react";
+import { Ellipsis, FolderPlus, RotateCw } from "lucide-react";
 import {
   useCallback,
   useDeferredValue,
@@ -174,6 +174,9 @@ export function FileBrowser({
         <div className="flex min-h-0 flex-1 items-start">
           <div className="w-full">
             <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-[1.75rem] border border-dashed border-border/70 bg-muted/20 px-6 py-10 text-center">
+              <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <FolderPlus className="size-6" />
+              </div>
               <div className="space-y-1">
                 <h3 className="font-semibold tracking-tight">
                   Build your library with Google Picker

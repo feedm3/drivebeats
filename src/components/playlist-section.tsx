@@ -204,7 +204,7 @@ export const PlaylistSection = forwardRef<
                   className={cn(
                     "group flex w-full items-center gap-2 rounded-md px-3 py-3 md:gap-1.5 md:px-2 md:py-1.5 text-left text-sm transition-colors cursor-pointer",
                     isActive
-                      ? "bg-accent text-accent-foreground"
+                      ? "bg-primary/10 text-primary font-medium"
                       : "hover:bg-accent/50",
                   )}
                   onClick={() => onSelectPlaylist(collection.id)}
@@ -318,7 +318,7 @@ export const PlaylistSection = forwardRef<
                   className={cn(
                     "group flex w-full items-center gap-2 rounded-md px-3 py-3 md:gap-1.5 md:px-2 md:py-1.5 text-left text-sm transition-colors cursor-pointer",
                     isActive
-                      ? "bg-accent text-accent-foreground"
+                      ? "bg-primary/10 text-primary font-medium"
                       : "hover:bg-accent/50",
                     isDragOver && "ring-2 ring-primary/60 bg-primary/10",
                   )}

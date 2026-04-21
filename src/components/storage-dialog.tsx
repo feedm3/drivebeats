@@ -1,6 +1,13 @@
 "use client";
 
-import { ArrowLeft, HardDrive, Loader2, Trash2, UserX } from "lucide-react";
+import {
+  ArrowLeft,
+  Cloud,
+  HardDrive,
+  Loader2,
+  Trash2,
+  UserX,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -122,15 +129,17 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
       <DialogContent>
         {view === "main" && (
           <>
-            <DialogTitle className="flex items-center gap-2">
-              <HardDrive className="size-4" />
-              Storage & data
-            </DialogTitle>
+            <DialogTitle>Storage & data</DialogTitle>
             <DialogDescription>
               Device downloads and synced account data.
             </DialogDescription>
 
-            <h3 className="mt-3 text-sm font-semibold">Device</h3>
+            <h3 className="mt-4 flex items-center gap-2 text-sm font-semibold tracking-tight">
+              <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <HardDrive className="size-3.5" />
+              </span>
+              Device
+            </h3>
             <div className="mt-1 space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Downloaded tracks</span>
@@ -161,7 +170,12 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
               </Button>
             </div>
 
-            <h3 className="mt-5 border-t pt-4 text-sm font-semibold">Cloud</h3>
+            <h3 className="mt-5 flex items-center gap-2 border-t pt-4 text-sm font-semibold tracking-tight">
+              <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <Cloud className="size-3.5" />
+              </span>
+              Cloud
+            </h3>
             <div className="mt-1 space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Synced playlists</span>

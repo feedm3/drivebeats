@@ -114,7 +114,7 @@ export function FolderTreeNode({
       <div
         className={cn(
           "group flex cursor-pointer items-center gap-1 rounded-md py-1 pr-2 text-sm transition-colors hover:bg-accent/50",
-          isSelected && "bg-accent text-accent-foreground",
+          isSelected && "bg-primary/10 text-primary font-medium",
         )}
         style={{ paddingLeft: depth * 16 + 4 }}
         onClick={handleSelect}

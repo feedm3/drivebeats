@@ -92,6 +92,55 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* See it in action */}
+      <section className="w-full max-w-3xl border-t border-border/50 py-12">
+        <h2 className="mb-8 text-center text-2xl font-semibold">
+          See it in action
+        </h2>
+        <div className="space-y-12">
+          <div className="text-center">
+            <h3 className="text-sm font-semibold">Favorites on every device</h3>
+            <p className="mx-auto mt-1 mb-4 max-w-[48ch] text-xs text-muted-foreground">
+              Heart a track on one device, find it waiting on every other.
+            </p>
+            <Image
+              src="/screenshots/2026-04-21-favorites.png"
+              alt="DriveBeats library view with a Favorites collection, folder tree sidebar, and the bottom player bar"
+              width={2526}
+              height={1942}
+              sizes="(min-width: 768px) 768px, 100vw"
+            />
+          </div>
+          <div className="text-center">
+            <h3 className="text-sm font-semibold">Just the folders you pick</h3>
+            <p className="mx-auto mt-1 mb-4 max-w-[48ch] text-xs text-muted-foreground">
+              Import what you want. No full-Drive access, no clutter.
+            </p>
+            <Image
+              src="/screenshots/2026-04-21-music-folder.png"
+              alt="Browsing an imported album folder in DriveBeats showing track filenames and sizes"
+              width={2526}
+              height={1942}
+              sizes="(min-width: 768px) 768px, 100vw"
+            />
+          </div>
+          <div className="text-center">
+            <h3 className="text-sm font-semibold">Your data, your rules</h3>
+            <p className="mx-auto mt-1 mb-4 max-w-[48ch] text-xs text-muted-foreground">
+              Clear downloads, delete synced cloud data, or remove your account
+              — anytime.
+            </p>
+            <Image
+              src="/screenshots/2026-04-21-storage-and-data.png"
+              alt="DriveBeats Storage and data dialog showing device downloads, sync counts, and delete controls"
+              width={2526}
+              height={1942}
+              sizes="(min-width: 768px) 768px, 100vw"
+            />
+          </div>
+        </div>
+      </section>
+
       {/* Features */}
       <section className="w-full max-w-3xl border-t border-border/50 py-12">
         <h2 className="mb-8 text-center text-2xl font-semibold">

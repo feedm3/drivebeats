@@ -8,6 +8,7 @@ interface ImportedDriveState {
   rootFolders: DriveFile[];
   rootFiles: DriveFile[];
   upsertItems: (items: DriveFile[]) => void;
+  removeRootFolder: (id: string) => void;
   clear: () => void;
 }
 
@@ -55,6 +56,12 @@ export const useImportedDriveStore = create<ImportedDriveState>()(
         set((state) => ({
           rootFolders: mergeById(state.rootFolders, nextFolders),
           rootFiles: mergeById(state.rootFiles, nextFiles),
+        }));
+      },
+
+      removeRootFolder: (id) => {
+        set((state) => ({
+          rootFolders: state.rootFolders.filter((folder) => folder.id !== id),
         }));
       },
 

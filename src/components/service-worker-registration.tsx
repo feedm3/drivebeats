@@ -4,11 +4,21 @@ import { useEffect } from "react";
 
 export function ServiceWorkerRegistration() {
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") {
+    if (!("serviceWorker" in navigator)) {
       return;
     }
 
-    if (!("serviceWorker" in navigator)) {
+    if (process.env.NODE_ENV !== "production") {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) => {
+          for (const registration of registrations) {
+            void registration.unregister();
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to unregister service workers:", error);
+        });
       return;
     }
 

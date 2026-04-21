@@ -133,6 +133,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   // Audio element event listeners
   useEffect(() => {
     const el = usePlayerStore.getState().initAudio();
+    const errorRetryRef = { trackId: null as string | null, attempts: 0 };
 
     // Register Media Session handlers immediately so CarPlay/lock-screen
     // controls work even before the first track plays (e.g. after PWA restart).
@@ -184,6 +185,8 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       updateMediaSessionPosition(el);
     };
     const onPlaying = () => {
+      errorRetryRef.trackId = null;
+      errorRetryRef.attempts = 0;
       syncMediaSessionControls();
       updateMediaSessionPlaybackState("playing");
       updateMediaSessionPosition(el);
@@ -208,6 +211,29 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
         usePlayerStore.getState();
       if (!currentTrack) return;
 
+      if (errorRetryRef.trackId !== currentTrack.id) {
+        errorRetryRef.trackId = currentTrack.id;
+        errorRetryRef.attempts = 0;
+      }
+
+      const showErrorToast = () => {
+        import("sonner").then(({ toast }) =>
+          shouldSuppressErrorToast()
+            ? undefined
+            : toast.error(`Failed to play "${currentTrack.name}"`),
+        );
+      };
+
+      if (errorRetryRef.attempts >= 1) {
+        el.removeAttribute("src");
+        el.load();
+        usePlayerStore.getState().setIsPlaying(false);
+        showErrorToast();
+        return;
+      }
+
+      errorRetryRef.attempts += 1;
+
       // Evict the broken cached source so the retry goes through the full
       // IndexedDB → Drive fetch flow instead of reusing the same failing URL.
       blobCache.delete(currentTrack.id);
@@ -219,11 +245,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
         // Retry failed, fall through to toast
       }
 
-      import("sonner").then(({ toast }) =>
-        shouldSuppressErrorToast()
-          ? undefined
-          : toast.error(`Failed to play "${currentTrack.name}"`),
-      );
+      showErrorToast();
     };
 
     // Sync store with actual audio state when the page becomes visible again.

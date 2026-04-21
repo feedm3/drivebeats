@@ -1,12 +1,19 @@
 "use client";
 
-import { ChevronRight, Plus } from "lucide-react";
+import { ChevronRight, Ellipsis, Plus, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { DriveImportButton } from "@/components/drive-import-button";
 import { FolderTreeNode } from "@/components/folder-tree-node";
+import { ManageFoldersDialog } from "@/components/manage-folders-dialog";
 import { PlaylistSection } from "@/components/playlist-section";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import { useDriveImport } from "@/hooks/use-drive-import";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { sortFoldersNatural } from "@/lib/sort";
@@ -17,6 +24,8 @@ import { FOLDER_MIME, INITIAL_STACK } from "@/types";
 
 const STORAGE_KEY_FOLDERS = "sidebar-folders-collapsed";
 const STORAGE_KEY_PLAYLISTS = "sidebar-playlists-collapsed";
+const MENU_ITEM_CLASS =
+  "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50";
 
 function readCollapsed(key: string): boolean {
   if (typeof window === "undefined") return false;
@@ -51,6 +60,8 @@ export function FolderTree({
   const [playlistsCollapsed, setPlaylistsCollapsed] = useState(() =>
     readCollapsed(STORAGE_KEY_PLAYLISTS),
   );
+  const [folderMenuOpen, setFolderMenuOpen] = useState(false);
+  const [manageFoldersOpen, setManageFoldersOpen] = useState(false);
   const rootFolders = useMemo(
     () =>
       sortFoldersNatural(
@@ -95,18 +106,49 @@ export function FolderTree({
         </button>
         {!foldersCollapsed && (
           <div className="flex min-w-6 shrink-0 justify-center">
-            <IconTooltip label="Add from Drive">
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="text-muted-foreground"
-                onClick={() => void importFromDrive()}
-                disabled={isImporting}
-                aria-label="Add from Drive"
-              >
-                <Plus className="size-3.5" />
-              </Button>
-            </IconTooltip>
+            <Popover open={folderMenuOpen} onOpenChange={setFolderMenuOpen}>
+              <IconTooltip label="Folder options">
+                <PopoverTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="text-muted-foreground"
+                      aria-label="Folder options"
+                    />
+                  }
+                >
+                  <Ellipsis className="size-3.5" />
+                </PopoverTrigger>
+              </IconTooltip>
+              <PopoverContent side="bottom" align="end" className="w-48">
+                <button
+                  type="button"
+                  className={MENU_ITEM_CLASS}
+                  onClick={() => {
+                    setFolderMenuOpen(false);
+                    void importFromDrive();
+                  }}
+                  disabled={isImporting}
+                >
+                  <Plus className="size-3.5" />
+                  Add from Drive
+                </button>
+                <Separator className="my-1 bg-border/60" />
+                <button
+                  type="button"
+                  className={cn(MENU_ITEM_CLASS, "text-destructive")}
+                  onClick={() => {
+                    setFolderMenuOpen(false);
+                    setManageFoldersOpen(true);
+                  }}
+                  disabled={rootFolders.length === 0}
+                >
+                  <Trash2 className="size-3.5" />
+                  Remove folders…
+                </button>
+              </PopoverContent>
+            </Popover>
           </div>
         )}
       </div>
@@ -175,6 +217,14 @@ export function FolderTree({
           />
           <div className={playerBarPadding} />
         </div>
+      )}
+
+      {manageFoldersOpen && (
+        <ManageFoldersDialog
+          open={manageFoldersOpen}
+          onOpenChange={setManageFoldersOpen}
+          onFolderRemoved={() => onSelectFolder(INITIAL_STACK)}
+        />
       )}
     </div>
   );

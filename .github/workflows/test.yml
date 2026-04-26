@@ -16,7 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      CI: true
       NEXT_PUBLIC_APP_URL: https://www.drivebeats.app
 
     steps:

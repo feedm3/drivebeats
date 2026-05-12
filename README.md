@@ -1,14 +1,15 @@
 # Google Drive Music Player
 
 A free, open-source web app that lets you stream your music collection
-directly from Google Drive. Supports MP3 and FLAC playback, synced playlists
-and favorites, and offline downloads without uploading your audio files.
+directly from Google Drive. Supports MP3, FLAC, WAV, AAC, and OGG playback,
+synced playlists and favorites, and offline downloads without uploading your
+audio files.
 
 ## Features
 
 - Import folders or audio files from Google Drive with Google Picker
 - Browse imported folders in a focused library view
-- Stream MP3 and FLAC files directly from Google Drive
+- Stream MP3, FLAC, WAV, AAC, and OGG files directly from Google Drive
 - Sync playlists and favorites across devices
 - Spotify-style player with shuffle, repeat, and seekable progress bar
 - Volume control and keyboard shortcuts
@@ -69,14 +70,21 @@ pnpm start
 
 Deploy to [Vercel](https://vercel.com) with the same environment variables
 configured in your project settings, plus a Neon Postgres database wired
-through `DATABASE_URL`. Update `NEXT_PUBLIC_APP_URL` to match your production
-domain.
+through `DATABASE_URL`. Set `NEXT_PUBLIC_APP_URL=https://www.drivebeats.app`
+for the Production environment. If `NEXT_PUBLIC_APP_URL` is unset, the app
+falls back to `https://www.drivebeats.app` for SEO metadata, sitemap, and
+robots, but OAuth still requires it to be set correctly.
+
+The canonical host is `https://www.drivebeats.app`; configure the apex
+`drivebeats.app` to redirect to `www` in the Vercel domain settings, and add
+`https://www.drivebeats.app/api/auth/callback` as an authorized redirect URI
+in the Google Cloud OAuth client.
 
 ## FAQ
 
 ### What file formats are supported?
 
-DriveBeats currently supports MP3 and FLAC files from Google Drive.
+DriveBeats currently supports MP3, FLAC, WAV, AAC, and OGG files from Google Drive.
 
 ### Which Google Drive scope does the app use?
 

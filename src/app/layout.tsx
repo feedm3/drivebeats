@@ -2,6 +2,7 @@ import { Analytics } from "@vercel/analytics/react";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
+import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,8 +14,6 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
-
-const siteUrl = `${process.env.NEXT_PUBLIC_APP_URL}`;
 
 export const viewport: Viewport = {
   viewportFit: "cover",
@@ -53,14 +52,14 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "DriveBeats" }],
   creator: "DriveBeats",
-  metadataBase: new URL(siteUrl),
+  metadataBase: new URL(SITE_URL),
   alternates: {
     canonical: "/",
   },
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: siteUrl,
+    url: SITE_URL,
     siteName: "DriveBeats",
     title: "DriveBeats | Stream Your Music Collection from Google Drive",
     description:
@@ -99,7 +98,7 @@ export default function RootLayout({
     "@context": "https://schema.org",
     "@type": "WebApplication",
     name: "DriveBeats",
-    url: siteUrl,
+    url: SITE_URL,
     description:
       "Free music player for Google Drive. Stream MP3, FLAC, WAV, AAC, and OGG files, sync playlists and favorites across devices, and download tracks for offline playback.",
     applicationCategory: "MultimediaApplication",

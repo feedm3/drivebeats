@@ -123,7 +123,7 @@ export default function PrivacyPolicyPage() {
           <a
             href="https://www.dietenberger.me/"
             target="_blank"
-            rel="noopener noreferrer"
+            rel="noopener"
             className="text-foreground underline"
           >
             dietenberger.me

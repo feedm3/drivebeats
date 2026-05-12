@@ -15,7 +15,7 @@ export function Footer() {
         <a
           href="https://www.dietenberger.me/"
           target="_blank"
-          rel="noopener noreferrer"
+          rel="noopener"
           className="hover:underline"
         >
           Made by Fabian Dietenberger

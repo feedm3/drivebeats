@@ -261,6 +261,10 @@ interface PlayerState {
   isPlaying: boolean;
   duration: number;
   currentTime: number;
+  // When true, the progress bar jumps to currentTime without its glide
+  // transition (used for seeks and track switches). Cleared on the next
+  // timeupdate tick via setCurrentTime.
+  suppressGlide: boolean;
   volume: number;
   isMuted: boolean;
   shuffle: boolean;
@@ -315,6 +319,7 @@ export const usePlayerStore = create<PlayerState>()(
       isPlaying: false,
       duration: 0,
       currentTime: 0,
+      suppressGlide: false,
       volume: 0.7,
       isMuted: false,
       shuffle: false,
@@ -398,7 +403,12 @@ export const usePlayerStore = create<PlayerState>()(
             await audio.play();
           } else {
             audio.load();
-            set({ isPlaying: false, currentTime: 0, duration: 0 });
+            set({
+              isPlaying: false,
+              currentTime: 0,
+              duration: 0,
+              suppressGlide: true,
+            });
           }
 
           return true;
@@ -511,6 +521,7 @@ export const usePlayerStore = create<PlayerState>()(
               isPlaying: true,
               currentTime: 0,
               duration: 0,
+              suppressGlide: true,
             });
           });
           queueMicrotask(() => get().prefetchNextTrack());
@@ -586,7 +597,7 @@ export const usePlayerStore = create<PlayerState>()(
         if (playlist.length === 0) return;
 
         if (audio && audio.currentTime > 3) {
-          audio.currentTime = 0;
+          get().seek(0);
           return;
         }
 
@@ -623,7 +634,7 @@ export const usePlayerStore = create<PlayerState>()(
         const { audio } = get();
         if (audio) {
           audio.currentTime = time;
-          set({ currentTime: time });
+          set({ currentTime: time, suppressGlide: true });
         }
       },
 
@@ -665,7 +676,7 @@ export const usePlayerStore = create<PlayerState>()(
         queueMicrotask(() => get().prefetchNextTrack());
       },
 
-      setCurrentTime: (t) => set({ currentTime: t }),
+      setCurrentTime: (t) => set({ currentTime: t, suppressGlide: false }),
       setDuration: (d) => set({ duration: d }),
       setIsPlaying: (p) => set({ isPlaying: p }),
 
@@ -699,6 +710,7 @@ export const usePlayerStore = create<PlayerState>()(
           isPlaying: false,
           duration: 0,
           currentTime: 0,
+          suppressGlide: true,
           isLoading: false,
           shuffleHistory: [],
           nextShuffleFileId: null,

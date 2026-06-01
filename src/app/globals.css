@@ -184,6 +184,12 @@
   transition: all 200ms linear;
 }
 
+/* Seeks and track switches set data-no-anim so the bar jumps to the new
+   position instantly instead of gliding. Cleared on the next timeupdate. */
+.progress-smooth[data-no-anim] [data-slot="slider-range"] {
+  transition: none;
+}
+
 @keyframes shimmer {
   0% {
     background-position: -200% 0;

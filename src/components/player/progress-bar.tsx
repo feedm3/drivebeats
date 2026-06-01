@@ -13,6 +13,7 @@ export function ProgressBar() {
   const currentTime = usePlayerStore((s) => s.currentTime);
   const duration = usePlayerStore((s) => s.duration);
   const seek = usePlayerStore((s) => s.seek);
+  const suppressGlide = usePlayerStore((s) => s.suppressGlide);
 
   return (
     <div className="flex items-center gap-2">
@@ -25,6 +26,7 @@ export function ProgressBar() {
         step={0.1}
         onValueChange={(v) => seek(Array.isArray(v) ? v[0] : v)}
         className="group flex-1 progress-smooth"
+        data-no-anim={suppressGlide ? "" : undefined}
       />
       <span className="w-10 text-right tabular-nums text-xs text-muted-foreground">
         {formatTime(duration)}

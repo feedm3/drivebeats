@@ -200,7 +200,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       updateMediaSessionPlaybackState("paused");
       const { repeat, next } = usePlayerStore.getState();
       if (repeat === "one") {
-        el.currentTime = 0;
+        usePlayerStore.getState().seek(0);
         void usePlayerStore.getState().play();
         return;
       }

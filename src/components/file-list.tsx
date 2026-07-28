@@ -42,8 +42,17 @@ interface FileListProps {
 type NameSortDirection = "asc" | "desc";
 const INITIAL_VISIBLE_FILE_COUNT = 200;
 const VISIBLE_FILE_BATCH_SIZE = 200;
+// Row actions are revealed on hover, but only where hovering exists: the
+// `pointer-fine` capability query keeps them permanently visible on a tablet,
+// which is wide enough for `md:` yet has no pointer to hover with.
 const rowActionClassName =
-  "opacity-100 transition-none md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100";
+  "opacity-100 transition-none md:pointer-fine:opacity-0 md:pointer-fine:group-hover:opacity-100 md:pointer-fine:focus-visible:opacity-100";
+// The two action columns are 36px wide on a mouse. On touch each button's hit
+// area grows to 44px, so the columns grow to match: 44px columns put the two
+// buttons exactly 44px apart centre-to-centre, which is the closest they can
+// sit without one stealing taps from the other.
+const rowActionCellClassName =
+  "w-9 px-0.5 pointer-coarse:w-11 pointer-coarse:px-0";
 
 function isFolder(file: DriveFile) {
   return file.mimeType === FOLDER_MIME;
@@ -164,7 +173,9 @@ const FileListRow = memo(function FileListRow({
       tabIndex={0}
       role="button"
       aria-label={folder ? `Open folder ${file.name}` : `Play ${file.name}`}
-      className="group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      // `active:bg-muted` is the touch press state: with the iOS tap highlight
+      // removed, `hover:` alone leaves a tap on the row looking dead.
+      className="group cursor-pointer active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       onClick={onActivate}
       onKeyDown={(event) => onRowKeyDown(event, onActivate)}
       draggable
@@ -201,7 +212,7 @@ const FileListRow = memo(function FileListRow({
           </span>
         </div>
       </TableCell>
-      <TableCell className="w-9 px-0.5">
+      <TableCell className={rowActionCellClassName}>
         {!folder ? (
           <FavoriteToggleButton
             fileId={file.id}
@@ -213,7 +224,7 @@ const FileListRow = memo(function FileListRow({
           />
         ) : null}
       </TableCell>
-      <TableCell className="w-9 px-0.5">
+      <TableCell className={rowActionCellClassName}>
         <AddToPlaylistPopover file={file} className={rowActionClassName} />
       </TableCell>
       <TableCell className="text-muted-foreground text-right tabular-nums">
@@ -405,8 +416,8 @@ export function FileList({
                     </span>
                   </button>
                 </TableHead>
-                <TableHead className="h-11 w-9 px-0.5" />
-                <TableHead className="h-11 w-9 px-0.5" />
+                <TableHead className={cn("h-11", rowActionCellClassName)} />
+                <TableHead className={cn("h-11", rowActionCellClassName)} />
                 <TableHead className="h-11 w-[96px] px-4 text-right">
                   <span className="text-xs font-semibold tracking-[0.16em] uppercase">
                     Size

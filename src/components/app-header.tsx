@@ -110,7 +110,7 @@ export function AppHeader() {
 
   return (
     <header className="relative z-10 border-b bg-background/95 backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-4">
+      <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-safe-4">
         <Link
           href="/app"
           className="flex items-center gap-2 font-semibold tracking-tight"
@@ -132,7 +132,11 @@ export function AppHeader() {
                   render={
                     <button
                       type="button"
-                      className="flex items-center gap-2 rounded-full py-1 pr-1.5 pl-1 text-muted-foreground/80 transition-colors hover:bg-muted/35 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                      // Not a <Button>, so it opts into `touch-target` by
+                      // hand: 36px tall painted, 44px tall to a finger. It is
+                      // the only control on this side of the h-14 header, so
+                      // there is nothing for the expansion to collide with.
+                      className="touch-target flex items-center gap-2 rounded-full py-1 pr-1.5 pl-1 text-muted-foreground/80 transition-colors hover:bg-muted/35 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                       aria-label="Open account menu"
                     />
                   }

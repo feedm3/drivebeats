@@ -4,6 +4,7 @@ import {
   getGoogleDriveFileMetadata,
 } from "@/lib/google-api";
 import * as offlineDb from "@/lib/offline-db";
+import { getTrackSignature } from "@/lib/track-signature";
 import { useAuthStore } from "@/stores/auth-store";
 import { getFavoriteTracks, useLibraryStore } from "@/stores/library-store";
 import {
@@ -241,15 +242,6 @@ function updateAllCollectionProgress(): void {
     ).length;
     store.updateCollectionProgress(collectionId, { downloadedCount });
   }
-}
-
-function getTrackSignature(tracks: PlaylistTrack[]): string {
-  return tracks
-    .map(
-      (track) =>
-        `${track.fileId}:${track.modifiedTime ?? ""}:${track.size ?? ""}`,
-    )
-    .join("|");
 }
 
 async function recoverOfflineState(): Promise<void> {

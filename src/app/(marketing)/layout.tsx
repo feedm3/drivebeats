@@ -11,7 +11,9 @@ export default function MarketingLayout({
     <Providers>
       <div className="flex min-h-dvh flex-col">
         <MarketingHeader />
-        <main className="mt-14 flex-1">{children}</main>
+        {/* mt-14 clears the fixed header, pt-safe clears the extra height the
+            header gained from its own top inset. */}
+        <main className="mt-14 flex-1 pt-safe">{children}</main>
         <Footer />
       </div>
     </Providers>

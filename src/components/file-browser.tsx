@@ -202,7 +202,9 @@ export function FileBrowser({
           onNavigate={onBreadcrumbNavigate}
           className="min-w-0 overflow-hidden"
         />
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        {/* gap-3 on touch so the 32px search and overflow buttons sit 44px
+            apart centre-to-centre once their hit areas expand. */}
+        <div className="ml-auto flex shrink-0 items-center gap-2 pointer-coarse:gap-3">
           <FolderSearch value={searchQuery} onChange={setSearchQuery} />
           <IconTooltip
             label={refreshing ? "Refreshing folder" : "Refresh folder"}

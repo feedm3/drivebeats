@@ -27,9 +27,17 @@ export function ThemeToggle({ size = "default" }: ThemeToggleProps) {
 
   useEffect(() => setMounted(true), []);
 
+  // Placeholder must track the coarse-pointer sizes below or the header jumps
+  // on hydration.
   if (!mounted) {
     return (
-      <div className={size === "menu" ? "h-9 w-[108px]" : "h-7 w-[84px]"} />
+      <div
+        className={
+          size === "menu"
+            ? "h-9 w-[108px] pointer-coarse:h-13 pointer-coarse:w-[148px]"
+            : "h-7 w-[84px] pointer-coarse:h-[50px] pointer-coarse:w-[122px]"
+        }
+      />
     );
   }
 
@@ -38,10 +46,18 @@ export function ThemeToggle({ size = "default" }: ThemeToggleProps) {
       ? "inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/70 p-1 shadow-xs backdrop-blur-sm"
       : "inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-background/70 p-0.5 shadow-xs backdrop-blur-sm";
 
+  // Segmented control: the three options sit against each other, so an
+  // out-of-flow hit area would make each segment steal from its neighbours.
+  // These grow with real padding instead, which moves the segments apart as
+  // it grows them. The "menu" variant reaches 44x44 (16px icon + 2x14px).
+  // The header variant reaches 46px tall but only 38px wide — a full 44px
+  // per segment would make the control 146px and overflow the 320px
+  // marketing header next to the wordmark, and a mis-tap here only picks a
+  // neighbouring theme.
   const buttonClass =
     size === "menu"
-      ? "rounded-full p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-      : "rounded-full p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+      ? "rounded-full p-1.5 pointer-coarse:p-3.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      : "rounded-full p-1 pointer-coarse:px-3 pointer-coarse:py-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
 
   const iconClass = size === "menu" ? "size-4" : "size-3.5";
 

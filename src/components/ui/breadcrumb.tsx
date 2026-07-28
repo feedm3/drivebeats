@@ -41,9 +41,16 @@ function BreadcrumbLink({
   const Comp = asChild ? Slot : "a";
 
   return (
+    // Crumbs are bare text ~20px tall and the list wraps, so an out-of-flow
+    // overlay would overlap the row above. Real height (min-h-11) keeps
+    // wrapped rows 44px apart; px-1 widens very short crumb names without
+    // costing enough width to overflow a 320px viewport.
     <Comp
       data-slot="breadcrumb-link"
-      className={cn("transition-colors hover:text-foreground", className)}
+      className={cn(
+        "transition-colors hover:text-foreground pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center pointer-coarse:px-1",
+        className,
+      )}
       {...props}
     />
   );

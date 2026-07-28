@@ -1,46 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import {
-  bootstrapCloudLibrarySync,
-  createCloudLibrarySnapshot,
-  fetchCloudLibrarySync,
-  isCloudLibraryEmpty,
-} from "@/lib/cloud-library-api";
+import { useEffect } from "react";
+import { runCloudLibrarySync } from "@/lib/cloud-library-sync-runner";
 import { useAuthStore } from "@/stores/auth-store";
-import { useId3MetadataStore } from "@/stores/id3-metadata-store";
-import {
-  getFavoriteTracks,
-  hasPendingFavoriteMutations,
-  useLibraryStore,
-  waitForPendingFavoriteMutations,
-} from "@/stores/library-store";
-import {
-  hasPendingPlaylistMutations,
-  usePlaylistStore,
-  waitForPendingPlaylistMutations,
-} from "@/stores/playlist-store";
-
-const CLOUD_BOOTSTRAP_KEY = "drivebeats-cloud-bootstrap-v1";
-
-function canUseNetworkSync() {
-  return typeof navigator === "undefined" || navigator.onLine;
-}
-
-function hasPendingLocalMutations() {
-  return hasPendingPlaylistMutations() || hasPendingFavoriteMutations();
-}
-
-async function waitForPendingLocalMutations() {
-  await Promise.all([
-    waitForPendingPlaylistMutations(),
-    waitForPendingFavoriteMutations(),
-  ]);
-}
 
 export function CloudLibrarySync() {
   const authStatus = useAuthStore((state) => state.authStatus);
-  const syncInFlightRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     if (authStatus !== "authenticated") {
@@ -48,94 +13,34 @@ export function CloudLibrarySync() {
     }
 
     let cancelled = false;
+    // Speaks only for this mount. A sync started here that outlives it is still
+    // applied for a remounted `CloudLibrarySync` of the same session; the runner
+    // separately refuses to apply a payload once the session itself changed.
+    const isCancelled = () => cancelled;
 
-    const runSync = async () => {
-      if (!canUseNetworkSync() || syncInFlightRef.current) {
-        return syncInFlightRef.current;
-      }
+    // The first sync after sign-in hydrates the stores and may bootstrap the
+    // cloud from local data, so it must never be dropped by the throttle.
+    void runCloudLibrarySync({ force: true, isCancelled });
 
-      syncInFlightRef.current = (async () => {
-        try {
-          let payload = null;
-
-          for (let attempt = 0; attempt < 3; attempt++) {
-            await waitForPendingLocalMutations();
-
-            const localPlaylists = usePlaylistStore.getState().playlists;
-            const localFavorites = getFavoriteTracks(
-              useLibraryStore.getState().tracks,
-            );
-            let nextPayload = await fetchCloudLibrarySync();
-
-            if (
-              typeof window !== "undefined" &&
-              !window.localStorage.getItem(CLOUD_BOOTSTRAP_KEY) &&
-              isCloudLibraryEmpty(nextPayload) &&
-              (localPlaylists.length > 0 || localFavorites.length > 0)
-            ) {
-              const localId3Cache = useId3MetadataStore.getState().cache;
-              const localMetadata =
-                Object.keys(localId3Cache).length > 0
-                  ? localId3Cache
-                  : undefined;
-              await bootstrapCloudLibrarySync(
-                createCloudLibrarySnapshot(
-                  localPlaylists,
-                  localFavorites,
-                  localMetadata,
-                ),
-              );
-              nextPayload = await fetchCloudLibrarySync();
-            }
-
-            payload = nextPayload;
-
-            if (!hasPendingLocalMutations()) {
-              break;
-            }
-          }
-
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem(CLOUD_BOOTSTRAP_KEY, "1");
-          }
-
-          if (cancelled || !payload || hasPendingLocalMutations()) {
-            return;
-          }
-
-          usePlaylistStore
-            .getState()
-            .replacePlaylistsFromCloud(payload.playlists);
-          useLibraryStore
-            .getState()
-            .replaceFavoritesFromCloud(payload.favorites);
-          useId3MetadataStore.getState().hydrateFromSync(payload.trackMetadata);
-        } catch (error) {
-          console.error("Cloud library sync failed:", error);
-        } finally {
-          syncInFlightRef.current = null;
-        }
-      })();
-
-      return syncInFlightRef.current;
-    };
-
-    void runSync();
-
-    const onFocus = () => {
+    // `visibilitychange` is the reliable resume signal in an installed PWA;
+    // `focus` additionally covers desktop where the user clicks back into the
+    // window without the tab ever becoming hidden. Both funnel into one
+    // throttled call, so the pair of events a single resume usually fires can no
+    // longer start two overlapping syncs.
+    const onResume = () => {
       if (document.visibilityState === "hidden") {
         return;
       }
-      void runSync();
+      void runCloudLibrarySync({ isCancelled });
     };
 
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", onResume);
+    document.addEventListener("visibilitychange", onResume);
 
     return () => {
       cancelled = true;
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", onResume);
+      document.removeEventListener("visibilitychange", onResume);
     };
   }, [authStatus]);
 

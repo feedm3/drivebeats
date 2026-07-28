@@ -32,12 +32,16 @@ export function AppMobileView({
   const playerBarPadding = usePlayerBarPadding();
 
   return (
-    <div className="flex h-full flex-col">
+    // px-safe on the wrapper insets the tab strip and the content below it in
+    // one place, so it is never applied twice further down the tree.
+    <div className="flex h-full flex-col px-safe">
       <div className="flex shrink-0 border-b">
         <button
           type="button"
           className={cn(
-            "flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors",
+            // These tabs are tap-only, so they need an explicit pressed state
+            // now that the iOS tap highlight is gone.
+            "flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors active:bg-accent",
             mobileTab === "files"
               ? "border-b-2 border-primary text-primary"
               : "text-muted-foreground",
@@ -50,7 +54,7 @@ export function AppMobileView({
         <button
           type="button"
           className={cn(
-            "flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors",
+            "flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors active:bg-accent",
             mobileTab === "playlists"
               ? "border-b-2 border-primary text-primary"
               : "text-muted-foreground",
@@ -70,7 +74,7 @@ export function AppMobileView({
         ) : mobileCollection ? (
           <PlaylistView collection={mobileCollection} onBack={onPlaylistBack} />
         ) : (
-          <div className="h-full overflow-y-auto px-2 pt-4">
+          <div className="h-full overflow-y-auto overscroll-contain px-2 pt-4">
             <PlaylistSection
               activePlaylistId={activePlaylistId}
               onSelectPlaylist={onSelectMobilePlaylist}

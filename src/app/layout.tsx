@@ -3,6 +3,11 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 import { SITE_URL } from "@/lib/site";
+import {
+  THEME_COLOR_DARK,
+  THEME_COLOR_LIGHT,
+  THEME_COLOR_META_ID,
+} from "@/lib/theme-color";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,6 +22,15 @@ const geistMono = Geist_Mono({
 
 export const viewport: Viewport = {
   viewportFit: "cover",
+  // Paints the iOS status bar / Android browser chrome in the app background
+  // color. These two media-qualified tags follow the *system* color scheme and
+  // are the no-JavaScript fallback. When JavaScript runs, the unqualified
+  // `#theme-color` tag rendered below takes over so a manual in-app theme
+  // override (localStorage "theme") is respected too.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: THEME_COLOR_LIGHT },
+    { media: "(prefers-color-scheme: dark)", color: THEME_COLOR_DARK },
+  ],
 };
 
 export const metadata: Metadata = {
@@ -122,6 +136,19 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Resolved-theme status bar color. Server-rendered with `media="not
+            all"` so it never applies without JavaScript (the media-qualified
+            tags from `viewport.themeColor` handle that case). `theme-init.js`
+            drops the media attribute and fills in the resolved color before
+            first paint; because this tag precedes the generated ones in tree
+            order, the browser picks it first. */}
+        <meta
+          id={THEME_COLOR_META_ID}
+          name="theme-color"
+          media="not all"
+          content={THEME_COLOR_DARK}
+          suppressHydrationWarning
+        />
         <script src="/theme-init.js" />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </head>

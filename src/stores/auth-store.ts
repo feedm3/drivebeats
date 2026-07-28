@@ -3,9 +3,31 @@ import type { AuthUser } from "@/lib/auth-session";
 
 const REFRESH_FAILURE_COOLDOWN_MS = 5_000;
 
+/**
+ * `/api/auth/refresh` answers with these statuses only when the session itself
+ * is no longer usable: missing/invalid auth session cookie, missing Drive
+ * scope, or a refresh token Google rejected. Every other failure (5xx, 429,
+ * a thrown fetch, a malformed payload) is transient and must not sign the user
+ * out of an installed PWA.
+ */
+const INVALID_SESSION_STATUSES = new Set([401, 403]);
+
 let refreshAccessTokenPromise: Promise<boolean> | null = null;
 let lastRefreshFailureAt = 0;
 let logoutPromise: Promise<void> | null = null;
+
+/**
+ * Rate limits refresh attempts after any failure, transient or authoritative,
+ * so a broken connection cannot turn into a tight retry loop. It expires on its
+ * own after `REFRESH_FAILURE_COOLDOWN_MS` and is reset on every success, so it
+ * can never permanently wedge a session that is still valid.
+ */
+function isWithinRefreshCooldown() {
+  return (
+    lastRefreshFailureAt !== 0 &&
+    Date.now() - lastRefreshFailureAt < REFRESH_FAILURE_COOLDOWN_MS
+  );
+}
 
 type AuthStatus = "unknown" | "authenticated" | "unauthenticated";
 
@@ -100,11 +122,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return refreshAccessTokenPromise;
     }
 
-    const state = get();
-    if (
-      state.authStatus === "unauthenticated" &&
-      Date.now() - lastRefreshFailureAt < REFRESH_FAILURE_COOLDOWN_MS
-    ) {
+    if (isWithinRefreshCooldown()) {
       return false;
     }
 
@@ -114,9 +132,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           method: "POST",
         });
 
-        if (!res.ok) {
+        // Only an authoritative rejection ends the session.
+        if (INVALID_SESSION_STATUSES.has(res.status)) {
           lastRefreshFailureAt = Date.now();
           get().clearTokens();
+          return false;
+        }
+
+        // 5xx, 429, and anything else: transient, keep the session intact.
+        if (!res.ok) {
+          lastRefreshFailureAt = Date.now();
           return false;
         }
 
@@ -126,12 +151,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           user: AuthUser | null;
         }>;
 
+        // A malformed 200 payload is a server problem, not an invalid session.
         if (
           typeof data.access_token !== "string" ||
           typeof data.expires_at !== "number"
         ) {
           lastRefreshFailureAt = Date.now();
-          get().clearTokens();
           return false;
         }
 
@@ -145,8 +170,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         });
         return true;
       } catch {
+        // Offline or a network-layer failure. Never a session verdict.
         lastRefreshFailureAt = Date.now();
-        get().clearTokens();
         return false;
       } finally {
         refreshAccessTokenPromise = null;
@@ -162,10 +187,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return state.accessToken;
     }
 
-    if (
-      state.authStatus === "unauthenticated" &&
-      Date.now() - lastRefreshFailureAt < REFRESH_FAILURE_COOLDOWN_MS
-    ) {
+    if (isWithinRefreshCooldown()) {
       return null;
     }
 

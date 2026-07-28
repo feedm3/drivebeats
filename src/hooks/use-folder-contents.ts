@@ -29,7 +29,20 @@ export function useFolderContents() {
 
       const token = await useAuthStore.getState().getValidAccessToken();
       if (!token) {
-        useAuthStore.getState().logout();
+        const authStore = useAuthStore.getState();
+
+        // Only log out when the refresh endpoint rejected the session. A
+        // transient network failure leaves the status untouched, so keep the
+        // session and let a later attempt recover it.
+        if (authStore.authStatus === "unauthenticated") {
+          if (!authStore.isLoggingOut) {
+            toast.error("Session expired. Please sign in again.");
+          }
+          authStore.logout();
+        } else if (!authStore.isLoggingOut) {
+          toast.error("Network error. Check your connection.");
+        }
+
         return null;
       }
 
@@ -114,6 +127,12 @@ export function useFolderContents() {
         }
         return;
       }
+
+      // Listings are persisted in IndexedDB and hydrate asynchronously. Wait
+      // for that before deciding whether this folder is cached, otherwise every
+      // cold start reads an empty map, shows a skeleton and refetches folders
+      // the device already has.
+      await useFolderCacheStore.getState().hydrate();
 
       const cached = useFolderCacheStore.getState().getFiles(folderId);
 

@@ -73,7 +73,7 @@ export function PlaylistTrackItem({
       {isReorderable ? (
         <button
           type="button"
-          className="flex h-11 w-11 shrink-0 items-center justify-center self-center touch-none text-muted-foreground opacity-100 transition-opacity cursor-grab active:cursor-grabbing md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+          className="flex h-11 w-11 shrink-0 items-center justify-center self-center touch-none text-muted-foreground opacity-100 transition-opacity cursor-grab active:cursor-grabbing md:pointer-fine:opacity-0 md:pointer-fine:group-hover:opacity-100 md:pointer-fine:focus-visible:opacity-100"
           data-drag-handle
           onClick={(e) => e.stopPropagation()}
           aria-label={`Reorder ${track.fileName}`}
@@ -155,12 +155,21 @@ export function PlaylistTrackItem({
           {subtitle}
         </span>
       )}
-      <div className="flex shrink-0 items-center pr-2">
+      {/* On coarse pointers the 24px remove button carries a 44px `touch-target`
+          overlay. Without a slot wide enough to contain it, that overlay hangs
+          10px over the neighbouring play target and — painting later — would
+          turn a tap near the row edge into a removal. `w-14` plus centring keeps
+          the whole hit area inside this slot. */}
+      <div className="flex shrink-0 items-center pr-2 pointer-coarse:w-14 pointer-coarse:justify-center">
         <IconTooltip label={removeLabel} side="left">
           <Button
             variant="ghost"
             size="icon-xs"
-            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+            // Was hover-only, so on a phone the remove action could never be
+            // reached. Same rule as the drag handle and the file-list row
+            // actions: visible by default, hidden until hover only where a
+            // hovering pointer actually exists.
+            className="opacity-100 md:pointer-fine:opacity-0 md:pointer-fine:group-hover:opacity-100 md:pointer-fine:focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
             onClick={(e) => {
               e.stopPropagation();
               onRemove();

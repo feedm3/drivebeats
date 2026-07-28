@@ -48,7 +48,9 @@ export function AppDesktopView({
 
   return (
     <div className="h-full">
-      <div className="mx-auto h-full max-w-[1440px]">
+      {/* Landscape on a notched iPhone renders this (>= 768px wide) view, so the
+          sidebar and the content column both need the horizontal insets. */}
+      <div className="mx-auto h-full max-w-[1440px] px-safe">
         <SplitView sidebar={sidebar}>{desktopMainContent}</SplitView>
       </div>
     </div>

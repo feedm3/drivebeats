@@ -407,14 +407,24 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   if (!currentTrack) return null;
 
   return (
-    <div className="animate-in slide-in-from-bottom-4 fade-in duration-300 fixed inset-x-0 bottom-0 z-50 border-t border-border/50 bg-background/95 shadow-[0_-2px_10px_rgba(0,0,0,0.18)] backdrop-blur supports-[backdrop-filter]:bg-background/80 standalone:pb-[env(safe-area-inset-bottom,0px)]">
-      <div className="mx-auto max-w-[1440px] px-4">
-        <div className="pt-3">
+    <div className="animate-in slide-in-from-bottom-4 fade-in duration-300 fixed inset-x-0 bottom-0 z-50 border-t border-border/50 bg-background/95 shadow-[0_-2px_10px_rgba(0,0,0,0.18)] backdrop-blur supports-[backdrop-filter]:bg-background/80 standalone:pb-safe">
+      {/* The bar is `fixed`, so it escapes the shell's padding and needs its
+          own horizontal insets for landscape on notched devices. */}
+      <div className="mx-auto max-w-[1440px] px-safe-4">
+        {/* On coarse pointers the seek slider grows its own 44px tap strip
+            (see slider.tsx), which already contains the gutter this padding
+            used to provide — dropping `pt-3` there keeps the visible track in
+            the same place instead of pushing the whole bar 12px taller, and
+            keeps the strip inside the bar so it cannot swallow taps on the
+            list scrolling behind it. */}
+        <div className="pt-3 pointer-coarse:pt-0">
           <ProgressBar />
         </div>
         <div className="flex items-center gap-1 py-3 sm:hidden">
           <TrackInfo onNavigateToTrack={onNavigateToTrack} />
-          <div className="flex shrink-0 items-center gap-1">
+          {/* gap-3 on touch: the two 32px icon buttons need 44px between
+              centres so their expanded hit areas meet but never overlap. */}
+          <div className="flex shrink-0 items-center gap-1 pointer-coarse:gap-3">
             <FavoriteToggleButton
               fileId={currentTrack.id}
               fileName={currentTrack.name}
@@ -432,7 +442,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
           </div>
           <PlayControls />
           <div className="absolute right-0 sm:static standalone:hidden">
-            <div className="flex items-center justify-end gap-1">
+            <div className="flex items-center justify-end gap-1 pointer-coarse:gap-3">
               <FavoriteToggleButton
                 fileId={currentTrack.id}
                 fileName={currentTrack.name}

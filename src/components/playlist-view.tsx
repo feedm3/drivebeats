@@ -412,9 +412,11 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
             </h1>
           )}
         </div>
-        <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1">
+        {/* gap-3 on touch: these are 32px icon buttons whose hit areas expand
+            to 44px, so they need 44px between centres to stay separable. */}
+        <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1 pointer-coarse:gap-3">
           {collection.id !== RECENTLY_PLAYED_COLLECTION_ID && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 pointer-coarse:gap-3">
               <IconTooltip
                 label={
                   failedCount > 0

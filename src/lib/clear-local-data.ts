@@ -1,6 +1,7 @@
 "use client";
 
 import { toast } from "sonner";
+import { clearFolderListings } from "@/lib/folder-cache-db";
 import { removeAllDownloads } from "@/lib/offline-download-manager";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
@@ -66,6 +67,15 @@ export async function clearLocalData() {
   }
 
   useFolderCacheStore.getState().clear();
+  // `clear()` empties the in-memory map and fires the IndexedDB wipe, but
+  // logout redirects right after, so await the wipe here to make sure the
+  // persisted folder listings are really gone before the page navigates.
+  try {
+    await clearFolderListings();
+  } catch {
+    // best-effort
+  }
+
   useImportedDriveStore.getState().clear();
   useImportedDriveStore.persist.clearStorage();
 

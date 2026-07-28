@@ -27,7 +27,18 @@ export function AppShell({ children, initialUser }: AppShellProps) {
       <CloudLibrarySync />
       <GooglePickerScripts />
       <GooglePickerCloseButton />
-      <div className="flex h-dvh flex-col overflow-hidden">
+      {/* `pt-safe` lives on this container, not on the header, so the top inset
+          is applied exactly once no matter whether OfflineStatusBanner is
+          rendering above the header. The status bar strip it frees up shows the
+          body background, which is the same color as the theme-color meta. */}
+      {/* `data-app-shell` is the scope for the touch rules in globals.css:
+          everything below here is chrome, so long-press callouts and text
+          selection are off (inputs opt back in). The marketing pages render
+          outside this subtree and stay selectable. */}
+      <div
+        data-app-shell
+        className="flex h-dvh flex-col overflow-hidden pt-safe"
+      >
         <OfflineStatusBanner />
         <AppHeader />
         <div className="flex-1 overflow-hidden">{children}</div>

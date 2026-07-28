@@ -141,8 +141,9 @@ export function AddToPlaylistPopover({
           render={
             <button
               type="button"
+              // Not a <Button>, so it opts into `touch-target` by hand.
               className={cn(
-                "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-[opacity,color,background-color] hover:bg-accent hover:text-foreground",
+                "touch-target inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-[opacity,color,background-color] hover:bg-accent hover:text-foreground",
                 className,
               )}
               onClick={(e) => e.stopPropagation()}
@@ -163,7 +164,10 @@ export function AddToPlaylistPopover({
                 <button
                   key={p.id}
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+                  // Menu rows are stacked edge to edge, so they get real
+                  // padding on touch (44px = 12 + 20 line-box + 12) rather
+                  // than an overlay that would swallow the neighbouring row.
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 pointer-coarse:py-3 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
                   aria-pressed={isInPlaylist}
                   aria-label={
                     isInPlaylist
@@ -239,7 +243,7 @@ export function AddToPlaylistPopover({
           ) : (
             <button
               type="button"
-              className="flex w-full items-center gap-2 border-t px-2 py-1.5 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+              className="flex w-full items-center gap-2 border-t px-2 py-1.5 pointer-coarse:py-3 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
               onClick={(e) => {
                 e.stopPropagation();
                 if (playlistCountLimitReached) {

@@ -115,9 +115,16 @@ export function AuthGuard({
         return;
       }
 
+      // The store only reports "unauthenticated" when the server gave an
+      // authoritative verdict. A transient failure (offline, 5xx) leaves the
+      // session intact, so keep the user in the app instead of bouncing them
+      // to the landing page.
+      const sessionRejected =
+        useAuthStore.getState().authStatus === "unauthenticated";
+
       setAccessState({
         ready: true,
-        offlineAccessAllowed: canUseOfflineMode(),
+        offlineAccessAllowed: !sessionRejected || canUseOfflineMode(),
       });
     });
 
@@ -131,13 +138,20 @@ export function AuthGuard({
     refreshAccessToken,
   ]);
 
-  if (!ready) {
-    return <AppLoadingShell />;
-  }
+  const accessAllowed =
+    hasServerSession || hasLiveSession || offlineAccessAllowed;
 
-  if (!(hasServerSession || hasLiveSession) && !offlineAccessAllowed) {
+  // Redirecting is a side effect, so it must not run during render.
+  useEffect(() => {
+    if (!ready || accessAllowed) {
+      return;
+    }
+
     window.location.href = "/";
-    return null;
+  }, [ready, accessAllowed]);
+
+  if (!ready || !accessAllowed) {
+    return <AppLoadingShell />;
   }
 
   return <>{children}</>;

@@ -46,6 +46,10 @@ export function FolderTreeNode({
     currentTrack && playingFolderStack.some((f) => f.id === id);
 
   const loadChildren = useCallback(async () => {
+    // Persisted listings hydrate asynchronously; without waiting, a cold start
+    // would refetch folders that are already cached on this device.
+    await useFolderCacheStore.getState().hydrate();
+
     const cached = useFolderCacheStore.getState().getFiles(id);
     if (cached) {
       setChildren(
@@ -113,7 +117,10 @@ export function FolderTreeNode({
     <div>
       <div
         className={cn(
-          "group flex cursor-pointer items-center gap-1 rounded-md py-1 pr-2 text-sm transition-colors hover:bg-accent/50",
+          // Tree rows are stacked edge to edge, so the row grows with real
+          // padding on touch (44px = 12 + 20 line-box + 12) instead of an
+          // overlay that would reach into the rows above and below.
+          "group flex cursor-pointer items-center gap-1 rounded-md py-1 pointer-coarse:py-3 pr-2 text-sm transition-colors hover:bg-accent/50",
           isSelected && "bg-primary/10 text-primary font-medium",
         )}
         style={{ paddingLeft: depth * 16 + 4 }}
@@ -129,13 +136,18 @@ export function FolderTreeNode({
           }
         }}
       >
-        <span className="flex size-5 shrink-0 items-center justify-center">
+        {/* The expander grows to the full row height on touch but keeps its
+            20px width: a 44px-wide hit area would reach across the folder
+            icon and name, so tapping the label would toggle instead of
+            select. Selecting the row expands it anyway, so the expander is a
+            shortcut rather than the only way in. */}
+        <span className="flex size-5 shrink-0 items-center justify-center pointer-coarse:h-11">
           {loading ? (
             <Loader2 className="size-3 animate-spin text-muted-foreground" />
           ) : hasChildren ? (
             <button
               type="button"
-              className="flex size-5 shrink-0 items-center justify-center rounded transition-colors hover:bg-accent"
+              className="flex size-5 shrink-0 items-center justify-center rounded transition-colors hover:bg-accent pointer-coarse:h-11"
               onClick={handleToggle}
               tabIndex={-1}
               aria-label={isExpanded ? "Collapse" : "Expand"}

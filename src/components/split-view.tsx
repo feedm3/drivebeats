@@ -90,7 +90,7 @@ export function SplitView({ sidebar, children }: SplitViewProps) {
   return (
     <div className="flex h-full min-h-0">
       <div
-        className="hidden shrink-0 overflow-y-auto md:block"
+        className="hidden shrink-0 overflow-y-auto overscroll-contain md:block"
         style={{ width: sidebarWidth }}
       >
         {sidebar}

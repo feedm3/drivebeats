@@ -1,5 +1,8 @@
 const OFFLINE_MEDIA_PATH_PREFIX = "/offline-media/";
 const SESSION_MEDIA_PATH_PREFIX = "/cached-media/";
+// The service worker reads this cache to serve /cached-media/* range requests
+// and keeps it alive across activations. Keep in sync with
+// SESSION_MEDIA_CACHE_NAME in public/sw.js.
 const SESSION_MEDIA_CACHE_NAME = "drivebeats-media-v1";
 
 export function getOfflineTrackUrl(fileId: string) {

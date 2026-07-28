@@ -202,7 +202,7 @@ export const PlaylistSection = forwardRef<
                   key={collection.id}
                   type="button"
                   className={cn(
-                    "group flex w-full items-center gap-2 rounded-md px-3 py-3 md:gap-1.5 md:px-2 md:py-1.5 text-left text-sm transition-colors cursor-pointer",
+                    "group flex w-full items-center gap-2 rounded-md px-3 py-3 md:pointer-fine:gap-1.5 md:pointer-fine:px-2 md:pointer-fine:py-1.5 text-left text-sm transition-colors cursor-pointer",
                     isActive
                       ? "bg-primary/10 text-primary font-medium"
                       : "hover:bg-accent/50",
@@ -316,7 +316,7 @@ export const PlaylistSection = forwardRef<
                   key={playlist.id}
                   type="button"
                   className={cn(
-                    "group flex w-full items-center gap-2 rounded-md px-3 py-3 md:gap-1.5 md:px-2 md:py-1.5 text-left text-sm transition-colors cursor-pointer",
+                    "group flex w-full items-center gap-2 rounded-md px-3 py-3 md:pointer-fine:gap-1.5 md:pointer-fine:px-2 md:pointer-fine:py-1.5 text-left text-sm transition-colors cursor-pointer",
                     isActive
                       ? "bg-primary/10 text-primary font-medium"
                       : "hover:bg-accent/50",

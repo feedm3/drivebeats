@@ -29,7 +29,11 @@ export function PlayControls() {
   });
 
   return (
-    <div className="flex items-center justify-center gap-2">
+    // The transport buttons stay 32px/40px visually; `touch-target` on Button
+    // widens each hit area to 44px. gap-2 would leave the 32px pairs only 40px
+    // apart centre-to-centre, so their expanded areas would overlap — gap-3
+    // puts every neighbouring pair at >=44px apart on touch.
+    <div className="flex items-center justify-center gap-2 pointer-coarse:gap-3">
       <IconTooltip label={`Shuffle is ${shuffle ? "on" : "off"}`}>
         <Button
           variant="ghost"

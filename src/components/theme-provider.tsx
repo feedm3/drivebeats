@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { syncThemeColorMeta } from "@/lib/theme-color";
 
 type Theme = "system" | "light" | "dark";
 type ResolvedTheme = "light" | "dark";
@@ -58,6 +59,10 @@ function applyTheme(theme: ResolvedTheme) {
   root.classList.remove("light", "dark");
   root.classList.add(theme);
   root.style.colorScheme = theme;
+  // The static media-qualified theme-color tags only follow the *system*
+  // scheme, so the iOS status bar has to be repainted whenever the resolved
+  // theme changes through the in-app toggle.
+  syncThemeColorMeta(theme);
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

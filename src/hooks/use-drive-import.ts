@@ -76,7 +76,11 @@ export function useDriveImport() {
     try {
       const accessToken = await getValidAccessToken();
       if (!accessToken) {
-        toast.error("Your session expired. Please sign in again.");
+        toast.error(
+          useAuthStore.getState().authStatus === "unauthenticated"
+            ? "Your session expired. Please sign in again."
+            : "Could not reach Google Drive. Check your connection.",
+        );
         return;
       }
 

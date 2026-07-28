@@ -1,9 +1,98 @@
-const CACHE_NAME = "drivebeats-shell-v2";
+// Cache topology. Three lifetimes, three caches:
+//
+//   drivebeats-shell-<SHELL_CACHE_VERSION>  generation-scoped, one per worker
+//   drivebeats-assets-<IMMUTABLE_ASSET_CACHE_VERSION>  persists across deploys
+//   drivebeats-media-v1                     session media, owned by the page
+//
+// Shell HTML (`/`, `/app`) is MUTABLE per deploy: the same URL returns
+// different bytes after every deployment. Since this worker no longer calls
+// skipWaiting() on install, a newly installed worker can sit in `waiting` for a
+// long time (the whole time a track is playing) while the previous worker stays
+// active and keeps serving fetches. If both shared one cache, the waiting
+// worker's install would overwrite `/` and `/app` underneath the active worker
+// and an offline navigation would be answered with the next deployment's HTML.
+// Each generation therefore owns its own shell cache, and every shell read is
+// scoped to that one cache with caches.open(SHELL_CACHE_NAME) instead of the
+// global caches.match(), which searches every cache including a waiting
+// generation's precache.
+//
+// Content-hashed build output (/_next/static/*) is IMMUTABLE: the hash is in
+// the URL, so two deployments can never disagree about what a given URL
+// contains. Generation-scoping it would be actively harmful: a fresh shell
+// generation starts empty apart from APP_SHELL_URLS, so pruning the previous
+// generation on activate would throw away every chunk the app needs to boot and
+// an offline launch right after an update would find no chunks at all. Those
+// assets therefore live in one cache that survives across generations, so an
+// offline boot finds whatever chunks were cached, old or new.
+//
+// BUMP SHELL_CACHE_VERSION ON EVERY CHANGE TO THIS FILE.
+//
+// This file is served statically with no build step, so there is no build hash
+// to key the cache on. A hand-maintained constant is safe here because a
+// browser only installs a new worker when this file changes byte-wise: a new
+// generation can only ever come into existence through an edit to this file, so
+// bumping the constant is part of the same edit. Skipping the bump makes the
+// incoming worker share the active worker's shell cache again, which is exactly
+// the corruption described above.
+const SHELL_CACHE_VERSION = "v4";
+const SHELL_CACHE_NAME = `drivebeats-shell-${SHELL_CACHE_VERSION}`;
+// Immutable content-hashed build output. Deliberately NOT generation-scoped:
+// its entries can never conflict across deploys, and keeping them is what makes
+// an offline boot right after an activation possible. Bump this version only if
+// the meaning of the entries themselves changes; activate then drops the old
+// one along with any other foreign cache.
+const IMMUTABLE_ASSET_CACHE_VERSION = "v1";
+const IMMUTABLE_ASSET_CACHE_NAME = `drivebeats-assets-${IMMUTABLE_ASSET_CACHE_VERSION}`;
+// Session media cache. The page writes downloaded tracks into it and this
+// worker reads them back to serve /cached-media/* range requests.
+// Keep in sync with SESSION_MEDIA_CACHE_NAME in src/lib/offline-media.ts.
+const SESSION_MEDIA_CACHE_NAME = "drivebeats-media-v1";
+// Caches this worker owns and must never drop on activation. Anything else in
+// Cache Storage is a leftover from an older worker generation and gets cleaned
+// up. The media cache holds the currently playing track, so wiping it would
+// break playback the moment a new worker version activates.
+const OWNED_CACHE_NAMES = [
+  SHELL_CACHE_NAME,
+  IMMUTABLE_ASSET_CACHE_NAME,
+  SESSION_MEDIA_CACHE_NAME,
+];
+// Bound for the immutable asset cache. Nothing else evicts it: content-hashed
+// URLs from retired deployments are never requested again, so without a bound
+// it grows by one deployment's worth of build output forever.
+//
+// The numbers come from this app's build output: `.next/static` currently ships
+// ~52 files totalling ~3.3 MB, so one deployment costs roughly 50-60 entries.
+//
+//   - Prune target 300 entries (~5-6 deployments, ~20 MB). Deep enough that a
+//     prune can never touch the deployment that is about to be served, and deep
+//     enough that a user who skipped a few updates still boots offline from
+//     chunks an older deployment left behind.
+//   - Prune at 400 entries (~7 deployments, ~25 MB). The gap between the two
+//     numbers means a prune reclaims ~2 deployments at once instead of trimming
+//     a handful of entries on every single activation.
+//
+// Eviction is by Cache Storage insertion order, which the spec defines as the
+// order of the last successful put: `Cache.keys()` returns oldest write first,
+// and a re-put moves an entry to the end. Immutable entries are only ever
+// written on a cache miss, so that order is first-fetch order (FIFO) rather
+// than true LRU. Read hits deliberately do not re-put to refresh the position,
+// because that would rewrite the whole JS payload to disk on every page load.
+// The cost of the approximation is that an unchanged vendor chunk carried
+// across many deploys ages out even though it is still referenced; the
+// generous 300-entry floor is what keeps that from mattering in practice, and a
+// single online load re-adds anything that was dropped.
+const MAX_IMMUTABLE_ASSET_ENTRIES = 400;
+const IMMUTABLE_ASSET_PRUNE_TARGET = 300;
 const OFFLINE_DB_NAME = "drivebeats-offline";
 const OFFLINE_DB_VERSION = 1;
 const OFFLINE_TRACKS_STORE = "offline_tracks";
 const OFFLINE_MEDIA_PATH_PREFIX = "/offline-media/";
 const SESSION_MEDIA_PATH_PREFIX = "/cached-media/";
+// Next.js emits everything under /_next/static/ with a content hash in the
+// filename and serves it as `public, max-age=31536000, immutable`, so a given
+// URL can never change content. Requests for these are served cache-first with
+// no background revalidation.
+const IMMUTABLE_ASSET_PATH_PREFIXES = ["/_next/static/"];
 const APP_SHELL_URLS = [
   "/",
   "/app",
@@ -11,6 +100,12 @@ const APP_SHELL_URLS = [
   "/web-app-manifest-192x192.png",
   "/web-app-manifest-512x512.png",
 ];
+
+function isImmutableAssetPath(pathname) {
+  return IMMUTABLE_ASSET_PATH_PREFIXES.some((prefix) =>
+    pathname.startsWith(prefix),
+  );
+}
 
 function createOfflineResponse() {
   return new Response("Offline", {
@@ -142,7 +237,8 @@ async function createOfflineTrackResponse(request, fileId) {
 }
 
 async function createCachedMediaResponse(request) {
-  const cachedResponse = await caches.match(request.url);
+  const mediaCache = await caches.open(SESSION_MEDIA_CACHE_NAME);
+  const cachedResponse = await mediaCache.match(request.url);
   if (!cachedResponse) {
     return new Response("Not found", { status: 404 });
   }
@@ -197,42 +293,115 @@ async function createCachedMediaResponse(request) {
   });
 }
 
-async function cacheResponse(request, response) {
+// Every read goes through a named cache handle on purpose. The global
+// caches.match() searches every cache in Cache Storage, including the precache
+// of a worker that is installed but still waiting, so the active worker could
+// answer with the next deployment's HTML while only the current deployment's
+// chunks are cached locally. Nothing in this file may use caches.match().
+// Resolves to undefined instead of rejecting when Cache Storage is
+// unavailable, so callers can always fall through to the network.
+function matchCache(cacheName, request) {
+  return caches
+    .open(cacheName)
+    .then((cache) => cache.match(request))
+    .catch(() => undefined);
+}
+
+// Scoped to this worker generation's shell cache.
+function matchShellCache(request) {
+  return matchCache(SHELL_CACHE_NAME, request);
+}
+
+// Scoped to the cross-generation immutable asset cache.
+function matchImmutableAssetCache(request) {
+  return matchCache(IMMUTABLE_ASSET_CACHE_NAME, request);
+}
+
+async function cacheResponse(cacheName, request, response) {
   try {
-    const cache = await caches.open(CACHE_NAME);
+    const cache = await caches.open(cacheName);
     await cache.put(request, response);
   } catch (error) {
     console.error("Failed to cache service worker response:", error);
   }
 }
 
+// Runs during activate only. At that point the previous worker has already
+// stopped receiving fetch events and this one has not started serving yet, so
+// no navigation can be mid-flight against the entries being dropped. Failure is
+// swallowed: a cache that stays too large is harmless next to an activation
+// that never completes.
+async function pruneImmutableAssetCache() {
+  try {
+    const cache = await caches.open(IMMUTABLE_ASSET_CACHE_NAME);
+    const keys = await cache.keys();
+    if (keys.length <= MAX_IMMUTABLE_ASSET_ENTRIES) {
+      return;
+    }
+
+    const staleKeys = keys.slice(0, keys.length - IMMUTABLE_ASSET_PRUNE_TARGET);
+    await Promise.all(staleKeys.map((key) => cache.delete(key)));
+  } catch (error) {
+    console.error("Failed to prune the immutable asset cache:", error);
+  }
+}
+
 self.addEventListener("install", (event) => {
+  // Writes the shell cache only. SHELL_CACHE_NAME is generation-scoped, so this
+  // precache is invisible to the worker that is still active and serving.
+  // waitUntil keeps the all-or-nothing semantics: if addAll rejects, install
+  // fails and this worker never activates, leaving the previous generation and
+  // its complete cache in place. The immutable asset cache is untouched here:
+  // it is shared with the active generation and its content-hashed URLs are not
+  // knowable without a build step, so it fills in on demand from fetch.
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL_URLS)),
+    caches.open(SHELL_CACHE_NAME).then((cache) => cache.addAll(APP_SHELL_URLS)),
   );
-  self.skipWaiting();
+  // No skipWaiting() here on purpose: taking over a page that is already
+  // running would swap the shell cache under its content-hashed chunks and can
+  // interrupt playback. The page asks for the swap via a SKIP_WAITING message
+  // when it is safe (see src/components/service-worker-registration.tsx).
 });
 
 self.addEventListener("activate", (event) => {
+  // Promotion is atomic and free: this generation's shell cache was fully
+  // populated during install, and the moment this worker becomes the active one
+  // every read switches to it. The browser does not dispatch fetch events to a
+  // worker until it reaches `activated`, so no request can observe a
+  // half-promoted state. Cleanup then drops previous generations' shell caches
+  // and any other leftovers, while keeping all three owned caches: this
+  // generation's shell, the cross-generation immutable asset cache (dropping it
+  // would leave an offline boot with HTML and no chunks), and the session media
+  // cache with the currently playing track. Only then is the immutable asset
+  // cache trimmed back to its bound.
   event.waitUntil(
     caches
       .keys()
       .then((keys) =>
         Promise.all(
           keys.map((key) => {
-            if (key === CACHE_NAME) {
+            if (OWNED_CACHE_NAMES.includes(key)) {
               return Promise.resolve();
             }
             return caches.delete(key);
           }),
         ),
       )
+      .then(() => pruneImmutableAssetCache())
       .then(() => self.clients.claim()),
   );
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data === "CLEAR_CACHES") {
+  const data = event.data;
+  const messageType = typeof data === "string" ? data : data?.type;
+
+  if (messageType === "SKIP_WAITING") {
+    self.skipWaiting();
+    return;
+  }
+
+  if (messageType === "CLEAR_CACHES") {
     event.waitUntil(
       caches
         .keys()
@@ -263,37 +432,76 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Navigations: network-first. Reads and writes the generation-scoped SHELL
+  // cache only, never the immutable asset cache.
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((response) => {
           if (response.ok) {
-            void cacheResponse(request, response.clone());
+            void cacheResponse(SHELL_CACHE_NAME, request, response.clone());
           }
           return response;
         })
         .catch(async () => {
-          const cachedApp = await caches.match("/app");
-          if (cachedApp && url.pathname === "/") {
-            return cachedApp;
-          }
+          try {
+            // One cache handle for the whole fallback, scoped to this
+            // generation: the shell HTML served here must be the newest one
+            // this worker precached, never a waiting generation's.
+            const cache = await caches.open(SHELL_CACHE_NAME);
+            const cachedApp = await cache.match("/app");
+            if (cachedApp && url.pathname === "/") {
+              return cachedApp;
+            }
 
-          const cachedResponse = await caches.match(request);
-          if (cachedResponse) {
-            return cachedResponse;
-          }
+            const cachedResponse = await cache.match(request);
+            if (cachedResponse) {
+              return cachedResponse;
+            }
 
-          if (cachedApp) {
-            return cachedApp;
-          }
+            if (cachedApp) {
+              return cachedApp;
+            }
 
-          const cachedRoot = await caches.match("/");
-          if (cachedRoot) {
-            return cachedRoot;
+            const cachedRoot = await cache.match("/");
+            if (cachedRoot) {
+              return cachedRoot;
+            }
+          } catch (error) {
+            console.error("Failed to read the app shell cache:", error);
           }
 
           return createOfflineResponse();
         }),
+    );
+    return;
+  }
+
+  // Immutable build output: reads and writes the cross-generation IMMUTABLE
+  // ASSET cache only, never the shell cache. A cache hit can never be stale
+  // because the content hash is in the URL, so serve it directly and skip the
+  // network entirely. Only a miss hits the network, and a successful miss
+  // populates the shared cache so the chunk survives the next activation.
+  if (isImmutableAssetPath(url.pathname)) {
+    event.respondWith(
+      matchImmutableAssetCache(request).then((cachedResponse) => {
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+
+        return fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              void cacheResponse(
+                IMMUTABLE_ASSET_CACHE_NAME,
+                request,
+                response.clone(),
+              );
+            }
+            return response;
+          })
+          .catch(() => createOfflineResponse());
+      }),
     );
     return;
   }
@@ -303,12 +511,17 @@ self.addEventListener("fetch", (event) => {
   );
   if (!isStaticAsset) return;
 
+  // Mutable static assets (public/ images, fonts, non-hashed scripts and
+  // styles): stale-while-revalidate, because the same URL can change content.
+  // Reads and writes the generation-scoped SHELL cache, for the same reason the
+  // HTML lives there: these URLs are mutable per deploy, and the manifest and
+  // the two icons are already precached there by install.
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
+    matchShellCache(request).then((cachedResponse) => {
       const networkFetch = fetch(request)
         .then((response) => {
           if (response.ok) {
-            void cacheResponse(request, response.clone());
+            void cacheResponse(SHELL_CACHE_NAME, request, response.clone());
           }
           return response;
         })

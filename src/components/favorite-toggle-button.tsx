@@ -43,7 +43,10 @@ export function FavoriteToggleButton({
           "text-muted-foreground transition-colors hover:text-foreground",
           isFavorite && "text-primary hover:text-primary",
           className,
-          isFavorite && "opacity-100 md:opacity-100",
+          // A set favorite stays visible even where the caller hides row
+          // actions until hover. The variant chain must match the one the
+          // caller uses so `cn`'s tailwind-merge resolves it as a conflict.
+          isFavorite && "opacity-100 md:pointer-fine:opacity-100",
         )}
         aria-label={
           isFavorite

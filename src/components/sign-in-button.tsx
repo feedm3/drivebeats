@@ -39,7 +39,7 @@ export function SignInButton({ className }: SignInButtonProps) {
       onClick={onSignIn}
       disabled={checkingSession}
     >
-      {checkingSession ? "Checking session..." : "Sign in with Google"}
+      {checkingSession ? "Checking session…" : "Sign in with Google"}
     </button>
   );
 }

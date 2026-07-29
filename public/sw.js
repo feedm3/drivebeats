@@ -34,7 +34,7 @@
 // bumping the constant is part of the same edit. Skipping the bump makes the
 // incoming worker share the active worker's shell cache again, which is exactly
 // the corruption described above.
-const SHELL_CACHE_VERSION = "v4";
+const SHELL_CACHE_VERSION = "v5";
 const SHELL_CACHE_NAME = `drivebeats-shell-${SHELL_CACHE_VERSION}`;
 // Immutable content-hashed build output. Deliberately NOT generation-scoped:
 // its entries can never conflict across deploys, and keeping them is what makes
@@ -86,6 +86,12 @@ const IMMUTABLE_ASSET_PRUNE_TARGET = 300;
 const OFFLINE_DB_NAME = "drivebeats-offline";
 const OFFLINE_DB_VERSION = 1;
 const OFFLINE_TRACKS_STORE = "offline_tracks";
+const OFFLINE_COLLECTIONS_STORE = "offline_collections";
+// Safari has had failure modes where IndexedDB open/transaction events never
+// arrive after suspension or storage-process loss. A fetch event must always
+// settle, so both service-worker storage phases use the same bounded deadline
+// as the page-side IndexedDB adapter.
+const OFFLINE_DB_TIMEOUT_MS = 15_000;
 const OFFLINE_MEDIA_PATH_PREFIX = "/offline-media/";
 const SESSION_MEDIA_PATH_PREFIX = "/cached-media/";
 // Next.js emits everything under /_next/static/ with a content hash in the
@@ -115,19 +121,71 @@ function createOfflineResponse() {
   });
 }
 
+function createOfflineStorageUnavailableResponse() {
+  return new Response("Offline storage unavailable", {
+    status: 503,
+    statusText: "Offline Storage Unavailable",
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
+}
+
+function createOfflineStorageTimeoutError(phase) {
+  const error = new Error(`Offline storage ${phase} timed out`);
+  error.name = "TimeoutError";
+  return error;
+}
+
 function openOfflineDb() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION);
+    let settled = false;
+    let request;
+    const timeoutId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(createOfflineStorageTimeoutError("open"));
+    }, OFFLINE_DB_TIMEOUT_MS);
+
+    const rejectOpen = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      reject(error);
+    };
+
+    try {
+      request = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION);
+    } catch (error) {
+      rejectOpen(error);
+      return;
+    }
 
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(OFFLINE_TRACKS_STORE)) {
         db.createObjectStore(OFFLINE_TRACKS_STORE);
       }
+      // The page and worker share version 1. If the worker is the first opener,
+      // it must create every store because opening the same version later will
+      // not run another upgrade transaction.
+      if (!db.objectStoreNames.contains(OFFLINE_COLLECTIONS_STORE)) {
+        db.createObjectStore(OFFLINE_COLLECTIONS_STORE);
+      }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db = request.result;
+      if (settled) {
+        // The browser may complete an open request after our fetch deadline.
+        // This worker no longer owns that connection, so do not leak it.
+        db.close();
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeoutId);
+      resolve(db);
+    };
     request.onerror = () =>
-      reject(request.error ?? new Error("Failed to open offline DB"));
+      rejectOpen(request.error ?? new Error("Failed to open offline DB"));
   });
 }
 
@@ -135,19 +193,66 @@ async function getOfflineTrackRecord(fileId) {
   const db = await openOfflineDb();
 
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(OFFLINE_TRACKS_STORE, "readonly");
-    const store = tx.objectStore(OFFLINE_TRACKS_STORE);
-    const request = store.get(fileId);
+    let settled = false;
+    let readCompleted = false;
+    let readResult;
+    let tx;
+    const timeoutId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try {
+        tx?.abort();
+      } catch {
+        // A completed/aborting transaction cannot be aborted again.
+      }
+      db.close();
+      reject(createOfflineStorageTimeoutError("read"));
+    }, OFFLINE_DB_TIMEOUT_MS);
 
-    const closeDb = () => db.close();
+    const finish = (callback) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      db.close();
+      callback();
+    };
 
-    tx.oncomplete = closeDb;
-    tx.onabort = closeDb;
-    tx.onerror = closeDb;
+    try {
+      tx = db.transaction(OFFLINE_TRACKS_STORE, "readonly");
+      const store = tx.objectStore(OFFLINE_TRACKS_STORE);
+      const request = store.get(fileId);
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () =>
-      reject(request.error ?? new Error("Failed to read offline track"));
+      // A request can report success before its transaction later aborts.
+      // Resolve (and therefore permit a 404) only after transaction completion.
+      request.onsuccess = () => {
+        readCompleted = true;
+        readResult = request.result;
+      };
+      request.onerror = () =>
+        finish(() =>
+          reject(
+            request.error ?? new Error("Failed to read offline track record"),
+          ),
+        );
+      tx.oncomplete = () =>
+        finish(() => {
+          if (!readCompleted) {
+            reject(new Error("Offline track read completed without a result"));
+            return;
+          }
+          resolve(readResult);
+        });
+      tx.onabort = () =>
+        finish(() =>
+          reject(tx.error ?? new Error("Offline track read was aborted")),
+        );
+      tx.onerror = () =>
+        finish(() =>
+          reject(tx.error ?? new Error("Failed to read offline track")),
+        );
+    } catch (error) {
+      finish(() => reject(error));
+    }
   });
 }
 
@@ -192,7 +297,14 @@ function parseRangeHeader(rangeHeader, size) {
 }
 
 async function createOfflineTrackResponse(request, fileId) {
-  const offlineRecord = await getOfflineTrackRecord(fileId);
+  let offlineRecord;
+  try {
+    offlineRecord = await getOfflineTrackRecord(fileId);
+  } catch (error) {
+    console.error("Failed to read offline media storage:", error);
+    return createOfflineStorageUnavailableResponse();
+  }
+
   if (!offlineRecord?.blob) {
     return new Response("Not found", { status: 404 });
   }
@@ -326,6 +438,18 @@ async function cacheResponse(cacheName, request, response) {
   }
 }
 
+function fetchAndCache(cacheName, request) {
+  const response = fetch(request);
+  const cacheWrite = response
+    .then((networkResponse) => {
+      if (!networkResponse.ok) return;
+      return cacheResponse(cacheName, request, networkResponse.clone());
+    })
+    .catch(() => undefined);
+
+  return { response, cacheWrite };
+}
+
 // Runs during activate only. At that point the previous worker has already
 // stopped receiving fetch events and this one has not started serving yet, so
 // no navigation can be mid-flight against the entries being dropped. Failure is
@@ -435,44 +559,41 @@ self.addEventListener("fetch", (event) => {
   // Navigations: network-first. Reads and writes the generation-scoped SHELL
   // cache only, never the immutable asset cache.
   if (request.mode === "navigate") {
+    const networkFetch = fetchAndCache(SHELL_CACHE_NAME, request);
+    // Register during the original fetch-event dispatch. Calling waitUntil for
+    // the first time inside a later promise callback is too late in Safari.
+    event.waitUntil(networkFetch.cacheWrite);
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            void cacheResponse(SHELL_CACHE_NAME, request, response.clone());
-          }
-          return response;
-        })
-        .catch(async () => {
-          try {
-            // One cache handle for the whole fallback, scoped to this
-            // generation: the shell HTML served here must be the newest one
-            // this worker precached, never a waiting generation's.
-            const cache = await caches.open(SHELL_CACHE_NAME);
-            const cachedApp = await cache.match("/app");
-            if (cachedApp && url.pathname === "/") {
-              return cachedApp;
-            }
-
-            const cachedResponse = await cache.match(request);
-            if (cachedResponse) {
-              return cachedResponse;
-            }
-
-            if (cachedApp) {
-              return cachedApp;
-            }
-
-            const cachedRoot = await cache.match("/");
-            if (cachedRoot) {
-              return cachedRoot;
-            }
-          } catch (error) {
-            console.error("Failed to read the app shell cache:", error);
+      networkFetch.response.catch(async () => {
+        try {
+          // One cache handle for the whole fallback, scoped to this
+          // generation: the shell HTML served here must be the newest one
+          // this worker precached, never a waiting generation's.
+          const cache = await caches.open(SHELL_CACHE_NAME);
+          const cachedApp = await cache.match("/app");
+          if (cachedApp && url.pathname === "/") {
+            return cachedApp;
           }
 
-          return createOfflineResponse();
-        }),
+          const cachedResponse = await cache.match(request);
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+
+          if (cachedApp) {
+            return cachedApp;
+          }
+
+          const cachedRoot = await cache.match("/");
+          if (cachedRoot) {
+            return cachedRoot;
+          }
+        } catch (error) {
+          console.error("Failed to read the app shell cache:", error);
+        }
+
+        return createOfflineResponse();
+      }),
     );
     return;
   }
@@ -483,26 +604,25 @@ self.addEventListener("fetch", (event) => {
   // network entirely. Only a miss hits the network, and a successful miss
   // populates the shared cache so the chunk survives the next activation.
   if (isImmutableAssetPath(url.pathname)) {
-    event.respondWith(
-      matchImmutableAssetCache(request).then((cachedResponse) => {
+    const runtimeResult = matchImmutableAssetCache(request).then(
+      (cachedResponse) => {
         if (cachedResponse) {
-          return cachedResponse;
+          return {
+            cacheWrite: Promise.resolve(),
+            response: Promise.resolve(cachedResponse),
+          };
         }
 
-        return fetch(request)
-          .then((response) => {
-            if (response.ok) {
-              void cacheResponse(
-                IMMUTABLE_ASSET_CACHE_NAME,
-                request,
-                response.clone(),
-              );
-            }
-            return response;
-          })
-          .catch(() => createOfflineResponse());
-      }),
+        const networkFetch = fetchAndCache(IMMUTABLE_ASSET_CACHE_NAME, request);
+        return {
+          cacheWrite: networkFetch.cacheWrite,
+          response: networkFetch.response.catch(() => createOfflineResponse()),
+        };
+      },
     );
+
+    event.waitUntil(runtimeResult.then((result) => result.cacheWrite));
+    event.respondWith(runtimeResult.then((result) => result.response));
     return;
   }
 
@@ -516,18 +636,20 @@ self.addEventListener("fetch", (event) => {
   // Reads and writes the generation-scoped SHELL cache, for the same reason the
   // HTML lives there: these URLs are mutable per deploy, and the manifest and
   // the two icons are already precached there by install.
+  const cachedResponse = matchShellCache(request);
+  // Capture the stale entry before starting the write that can replace it.
+  // The complete revalidation chain is still registered synchronously.
+  const revalidation = cachedResponse.then(() =>
+    fetchAndCache(SHELL_CACHE_NAME, request),
+  );
+  event.waitUntil(revalidation.then((result) => result.cacheWrite));
   event.respondWith(
-    matchShellCache(request).then((cachedResponse) => {
-      const networkFetch = fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            void cacheResponse(SHELL_CACHE_NAME, request, response.clone());
-          }
-          return response;
-        })
-        .catch(() => createOfflineResponse());
-
-      return cachedResponse ?? networkFetch;
-    }),
+    cachedResponse.then(
+      (cached) =>
+        cached ??
+        revalidation.then((result) =>
+          result.response.catch(() => createOfflineResponse()),
+        ),
+    ),
   );
 });

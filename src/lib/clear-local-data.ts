@@ -2,7 +2,8 @@
 
 import { toast } from "sonner";
 import { clearFolderListings } from "@/lib/folder-cache-db";
-import { removeAllDownloads } from "@/lib/offline-download-manager";
+import { clearOfflineDownloadDiagnostics } from "@/lib/offline-download-diagnostics";
+import { offlineDownloadManager } from "@/lib/offline-download-manager";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { useId3MetadataStore } from "@/stores/id3-metadata-store";
@@ -61,7 +62,7 @@ export async function clearLocalData() {
   useId3MetadataStore.persist.clearStorage();
 
   try {
-    await removeAllDownloads();
+    await offlineDownloadManager.removeAllDownloads();
   } catch {
     // best-effort
   }
@@ -82,6 +83,7 @@ export async function clearLocalData() {
   for (const key of APP_STORAGE_KEYS) {
     window.localStorage.removeItem(key);
   }
+  clearOfflineDownloadDiagnostics();
 
   await purgeServiceWorkerCaches();
 }

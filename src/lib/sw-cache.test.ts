@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 // These mirror the constants and helpers in public/sw.js, which is plain JS
 // served statically and therefore cannot be imported here. Keep them in sync.
-const SHELL_CACHE_VERSION = "v4";
+const SHELL_CACHE_VERSION = "v5";
 const SHELL_CACHE_NAME = `drivebeats-shell-${SHELL_CACHE_VERSION}`;
 // The generation the previously deployed worker owns and keeps serving from
 // while the new worker sits in `waiting`.
-const PREVIOUS_SHELL_CACHE_NAME = "drivebeats-shell-v3";
+const PREVIOUS_SHELL_CACHE_NAME = "drivebeats-shell-v4";
 // Not generation-scoped: survives activation so an offline boot right after an
 // update still finds the content-hashed chunks it needs.
 const IMMUTABLE_ASSET_CACHE_NAME = "drivebeats-assets-v1";

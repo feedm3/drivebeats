@@ -160,6 +160,84 @@ describe("refreshAccessToken failure handling", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("times out a hung refresh and permits a later successful refresh", async () => {
+    vi.useFakeTimers();
+    try {
+      const useAuthStore = await loadAuthStore();
+      useAuthStore.getState().setTokens("stale-token", Date.now() - 1_000);
+      useAuthStore.setState({ user: testUser });
+
+      fetchMock.mockImplementationOnce(
+        (_input: RequestInfo | URL, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => {
+              reject(
+                new DOMException("The operation was aborted.", "AbortError"),
+              );
+            });
+          }),
+      );
+
+      const timedOutRefresh = useAuthStore.getState().refreshAccessToken();
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      await expect(timedOutRefresh).resolves.toBe(false);
+      expect(useAuthStore.getState().authStatus).toBe("authenticated");
+
+      await vi.advanceTimersByTimeAsync(5_001);
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, {
+          access_token: "recovered-token",
+          expires_at: Date.now() + 3_600_000,
+          user: testUser,
+        }),
+      );
+
+      await expect(useAuthStore.getState().refreshAccessToken()).resolves.toBe(
+        true,
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(useAuthStore.getState().accessToken).toBe("recovered-token");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("times out a hung successful response body and clears the single flight", async () => {
+    vi.useFakeTimers();
+    try {
+      const useAuthStore = await loadAuthStore();
+      useAuthStore.getState().setTokens("stale-token", Date.now() - 1_000);
+      useAuthStore.setState({ user: testUser });
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => new Promise<never>(() => undefined),
+      } as unknown as Response);
+
+      const timedOutRefresh = useAuthStore.getState().refreshAccessToken();
+      await vi.advanceTimersByTimeAsync(15_000);
+      await expect(timedOutRefresh).resolves.toBe(false);
+
+      await vi.advanceTimersByTimeAsync(5_001);
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, {
+          access_token: "body-recovered-token",
+          expires_at: Date.now() + 3_600_000,
+          user: testUser,
+        }),
+      );
+
+      await expect(useAuthStore.getState().refreshAccessToken()).resolves.toBe(
+        true,
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("rate limits retries after a transient failure", async () => {
     const useAuthStore = await loadAuthStore();
     useAuthStore.getState().setTokens("stale-token", Date.now() - 1_000);

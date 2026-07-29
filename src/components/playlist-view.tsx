@@ -9,6 +9,7 @@ import {
   Loader2,
   Pencil,
   Play,
+  RotateCcw,
   Trash2,
   TriangleAlert,
 } from "lucide-react";
@@ -32,10 +33,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { playlistTrackToDriveFile } from "@/lib/audio";
-import {
-  startCollectionDownload,
-  stopCollectionDownload,
-} from "@/lib/offline-download-manager";
+import { offlineDownloadManager } from "@/lib/offline-download-manager";
 import { isPlaylistFull, MAX_TRACKS_PER_PLAYLIST } from "@/lib/playlist-limits";
 import { cn, formatRelativeDate } from "@/lib/utils";
 import { useLibraryStore } from "@/stores/library-store";
@@ -234,7 +232,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const offlineCollection = useOfflineStore(
     (s) => s.collections[collection.id],
   );
-  const offlineTrackStatus = useOfflineStore((s) => s.trackStatus);
+  const offlineTrackJobs = useOfflineStore((s) => s.trackJobs);
   const isOfflineEnabled = !!offlineCollection?.enabled;
   const allDownloaded =
     isOfflineEnabled &&
@@ -242,9 +240,15 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
     offlineCollection.downloadedCount === offlineCollection.totalCount;
   const failedCount = isOfflineEnabled
     ? offlineCollection.trackFileIds.filter(
-        (id) => offlineTrackStatus[id] === "failed",
+        (id) => offlineTrackJobs[id]?.status === "failed",
       ).length
     : 0;
+  const hasActiveDownloads = isOfflineEnabled
+    ? offlineCollection.trackFileIds.some((id) => {
+        const status = offlineTrackJobs[id]?.status;
+        return status === "downloading" || status === "updating";
+      })
+    : false;
   const downloadProgress = offlineCollection?.totalCount
     ? offlineCollection.downloadedCount / offlineCollection.totalCount
     : 0;
@@ -262,9 +266,11 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
     setOfflineToggling(true);
     try {
       if (isOfflineEnabled) {
-        await stopCollectionDownload(collection.id);
+        await offlineDownloadManager.retryDownloads(collection.id);
       } else {
-        await startCollectionDownload(collection.id);
+        await offlineDownloadManager.ensureCollectionAvailableOffline(
+          collection.id,
+        );
       }
     } finally {
       offlineTogglingRef.current = false;
@@ -278,7 +284,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
     setOfflineToggling(true);
     setRemoveDownloadsOpen(false);
     try {
-      await stopCollectionDownload(collection.id);
+      await offlineDownloadManager.removeCollectionDownloads(collection.id);
     } finally {
       offlineTogglingRef.current = false;
       setOfflineToggling(false);
@@ -331,7 +337,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
 
   const handleDelete = useCallback(async () => {
     if (!isEditablePlaylist) return;
-    await stopCollectionDownload(collection.id);
+    await offlineDownloadManager.removeCollectionDownloads(collection.id);
     await deletePlaylist(collection.id);
     setActivePlaylist(null);
     setDeleteOpen(false);
@@ -424,8 +430,8 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                     : allDownloaded
                       ? "Remove downloads"
                       : isOfflineEnabled
-                        ? `${offlineCollection.downloadedCount}/${offlineCollection.totalCount} downloaded`
-                        : "Available offline"
+                        ? `Resume downloads · ${offlineCollection.downloadedCount}/${offlineCollection.totalCount} downloaded`
+                        : "Download for offline"
                 }
               >
                 <Button
@@ -441,9 +447,9 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                     allDownloaded
                       ? "Remove downloads"
                       : failedCount > 0
-                        ? `${offlineCollection.downloadedCount} of ${offlineCollection.totalCount} downloaded, ${failedCount} failed`
+                        ? `Retry failed downloads, ${offlineCollection.downloadedCount} of ${offlineCollection.totalCount} downloaded, ${failedCount} failed`
                         : isOfflineEnabled
-                          ? `${offlineCollection.downloadedCount} of ${offlineCollection.totalCount} downloaded, stop download`
+                          ? `Resume downloads, ${offlineCollection.downloadedCount} of ${offlineCollection.totalCount} downloaded`
                           : "Download for offline"
                   }
                 >
@@ -483,6 +489,8 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                     )}
                   {offlineToggling ? (
                     <Loader2 className="size-4 animate-spin" />
+                  ) : isOfflineEnabled && !allDownloaded ? (
+                    <RotateCcw className="size-4" />
                   ) : (
                     <Download className="size-4" />
                   )}
@@ -497,18 +505,32 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                 </Button>
               </IconTooltip>
               {isOfflineEnabled && !allDownloaded && (
-                <span
-                  className={cn(
-                    "text-xs tabular-nums",
-                    failedCount > 0
-                      ? "text-amber-600 dark:text-amber-400"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  {offlineCollection.downloadedCount}/
-                  {offlineCollection.totalCount}
-                  {failedCount > 0 && "!"}
-                </span>
+                <>
+                  <span
+                    className={cn(
+                      "text-xs tabular-nums",
+                      failedCount > 0
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {offlineCollection.downloadedCount}/
+                    {offlineCollection.totalCount}
+                    {failedCount > 0 && "!"}
+                  </span>
+                  <IconTooltip label="Remove downloads">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => setRemoveDownloadsOpen(true)}
+                      disabled={offlineToggling}
+                      aria-label="Remove downloads"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </IconTooltip>
+                </>
               )}
             </div>
           )}
@@ -584,6 +606,16 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
 
       <Separator className="my-3" />
 
+      {hasActiveDownloads && (
+        <div
+          className="mb-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-muted-foreground"
+          role="status"
+        >
+          Downloads continue while DriveBeats is open. iOS may pause them in the
+          background; they will resume when you return.
+        </div>
+      )}
+
       {isFullEditablePlaylist && (
         <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
           <TriangleAlert className="mt-0.5 size-4 shrink-0" />
@@ -656,9 +688,9 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                         drag.overIndex === index ? drag.position : null
                       }
                       isReorderable={isEditablePlaylist}
-                      offlineStatus={
+                      offlineJob={
                         isOfflineEnabled
-                          ? offlineTrackStatus[track.fileId]
+                          ? offlineTrackJobs[track.fileId]
                           : undefined
                       }
                       onPlay={() =>
@@ -705,8 +737,8 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
         <DialogContent>
           <DialogTitle>Remove downloads</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete all downloaded files from this
-            playlist?
+            Remove this playlist&apos;s offline files from this device? Tracks
+            shared with another offline collection will stay downloaded.
           </DialogDescription>
           <div className="mt-4 flex justify-end gap-2">
             <DialogClose render={<Button variant="outline" size="sm" />}>
@@ -717,7 +749,7 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
               size="sm"
               onClick={handleRemoveDownloads}
             >
-              Remove
+              Remove downloads
             </Button>
           </div>
         </DialogContent>

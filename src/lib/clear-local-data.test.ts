@@ -150,7 +150,9 @@ async function mockAuthStore(
 
 const mockRemoveAllDownloads = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/lib/offline-download-manager", () => ({
-  removeAllDownloads: (...args: unknown[]) => mockRemoveAllDownloads(...args),
+  offlineDownloadManager: {
+    removeAllDownloads: (...args: unknown[]) => mockRemoveAllDownloads(...args),
+  },
 }));
 
 const USER_ID = "111111111111111111111";
@@ -225,6 +227,10 @@ describe("clearLocalData", () => {
   });
 
   it("clears all stores and local storage", async () => {
+    localStorage.setItem(
+      "drivebeats-offline-download-diagnostics:v1",
+      '[{"timestamp":1}]',
+    );
     const { clearLocalData } = await import("@/lib/clear-local-data");
 
     await clearLocalData();
@@ -243,6 +249,9 @@ describe("clearLocalData", () => {
     expect(mockImportedDriveClear).toHaveBeenCalled();
     expect(mockImportedDriveClearStorage).toHaveBeenCalled();
     expect(mockRemoveAllDownloads).toHaveBeenCalled();
+    expect(
+      localStorage.getItem("drivebeats-offline-download-diagnostics:v1"),
+    ).toBeNull();
   });
 
   it("posts CLEAR_CACHES message to service worker", async () => {

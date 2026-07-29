@@ -9,7 +9,7 @@ import { GooglePickerScripts } from "@/components/google-picker-scripts";
 import { OfflineStatusBanner } from "@/components/offline-status-banner";
 import { Providers } from "@/components/providers";
 import type { AuthUser } from "@/lib/auth-session";
-import { initOfflineSync } from "@/lib/offline-download-manager";
+import { startOfflineDownloads } from "@/lib/offline-download-manager";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -18,7 +18,7 @@ interface AppShellProps {
 
 export function AppShell({ children, initialUser }: AppShellProps) {
   useEffect(() => {
-    initOfflineSync();
+    return startOfflineDownloads();
   }, []);
 
   return (

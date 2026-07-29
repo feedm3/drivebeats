@@ -3,9 +3,11 @@
 import {
   ArrowDown,
   Check,
+  CircleAlert,
   GripVertical,
   Loader2,
   Music4,
+  RotateCcw,
   X,
 } from "lucide-react";
 import { NowPlayingBars } from "@/components/now-playing-bars";
@@ -14,7 +16,10 @@ import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { resolveTrackMetadata } from "@/lib/track-metadata";
 import { cn } from "@/lib/utils";
 import { useId3MetadataStore } from "@/stores/id3-metadata-store";
-import type { OfflineTrackStatus } from "@/stores/offline-store";
+import type {
+  OfflineDownloadErrorCategory,
+  OfflineTrackJob,
+} from "@/stores/offline-store";
 import type { PlaylistTrack } from "@/types";
 
 interface PlaylistTrackItemProps {
@@ -26,11 +31,50 @@ interface PlaylistTrackItemProps {
   isDragging: boolean;
   dropIndicator: "above" | "below" | null;
   isReorderable?: boolean;
-  offlineStatus?: OfflineTrackStatus;
+  offlineJob?: OfflineTrackJob;
   subtitle?: string;
   onPlay: () => void;
   onRemove: () => void;
   removeLabel?: string;
+}
+
+const FAILURE_REASONS: Record<OfflineDownloadErrorCategory, string> = {
+  network: "Network unavailable. Reconnect, then retry.",
+  timeout: "Download timed out. Try again.",
+  "auth-required": "Sign in again, then retry.",
+  "access-denied": "Drive access denied. Check the file permissions.",
+  "missing-file": "This file is no longer available in Drive.",
+  "rate-limited": "Drive is limiting downloads. Try again later.",
+  server: "Drive is temporarily unavailable. Try again later.",
+  "storage-full": "Not enough device storage. Free space, then retry.",
+  "storage-unavailable":
+    "Offline storage is unavailable. Reopen DriveBeats, then retry.",
+  integrity: "The downloaded file was incomplete. Try again.",
+  unknown: "Download could not be completed. Try again or copy diagnostics.",
+};
+
+const ACTION_REQUIRED_FAILURES = new Set<OfflineDownloadErrorCategory>([
+  "auth-required",
+  "access-denied",
+  "missing-file",
+  "storage-full",
+  "storage-unavailable",
+]);
+
+function getOfflineLabel(job: OfflineTrackJob | undefined) {
+  if (!job) return null;
+
+  if (job.status === "downloaded") return "Downloaded";
+  if (job.status === "queued") return "Waiting to download";
+  if (job.status === "failed") {
+    return job.errorCategory
+      ? FAILURE_REASONS[job.errorCategory]
+      : "Download failed. Try again.";
+  }
+  if (job.phase === "authorizing") return "Preparing download";
+  if (job.phase === "reading") return "Processing download";
+  if (job.phase === "storing") return "Saving for offline";
+  return job.status === "updating" ? "Updating download" : "Downloading";
 }
 
 export function PlaylistTrackItem({
@@ -42,7 +86,7 @@ export function PlaylistTrackItem({
   isDragging,
   dropIndicator,
   isReorderable = true,
-  offlineStatus,
+  offlineJob,
   subtitle,
   onPlay,
   onRemove,
@@ -54,6 +98,11 @@ export function PlaylistTrackItem({
     track.parentFolderName,
     id3,
   );
+  const offlineLabel = getOfflineLabel(offlineJob);
+  const isActionRequiredFailure =
+    offlineJob?.status === "failed" &&
+    offlineJob.errorCategory !== undefined &&
+    ACTION_REQUIRED_FAILURES.has(offlineJob.errorCategory);
 
   return (
     <div
@@ -115,37 +164,48 @@ export function PlaylistTrackItem({
               {metadataSubtitle}
             </span>
           )}
+          {offlineJob?.status === "failed" && offlineLabel && (
+            <span
+              className={cn(
+                "block text-xs",
+                isActionRequiredFailure
+                  ? "text-destructive"
+                  : "text-amber-600 dark:text-amber-400",
+              )}
+            >
+              {offlineLabel}
+            </span>
+          )}
         </span>
-        {offlineStatus && (
+        {offlineJob && offlineLabel && (
           <span
             className={cn(
               "shrink-0 ml-1",
-              offlineStatus === "downloaded"
+              offlineJob.status === "downloaded"
                 ? "text-emerald-500"
-                : offlineStatus === "failed"
-                  ? "text-destructive"
+                : offlineJob.status === "failed"
+                  ? isActionRequiredFailure
+                    ? "text-destructive"
+                    : "text-amber-600 dark:text-amber-400"
                   : "text-muted-foreground",
             )}
-            title={
-              offlineStatus === "downloaded"
-                ? "Downloaded"
-                : offlineStatus === "downloading" ||
-                    offlineStatus === "updating"
-                  ? "Downloading"
-                  : offlineStatus === "failed"
-                    ? "Download failed"
-                    : "Queued"
-            }
+            title={offlineLabel}
+            role="img"
+            aria-label={offlineLabel}
           >
-            {offlineStatus === "downloaded" ? (
-              <Check className="size-3" />
-            ) : offlineStatus === "downloading" ||
-              offlineStatus === "updating" ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : offlineStatus === "failed" ? (
-              <X className="size-3" />
+            {offlineJob.status === "downloaded" ? (
+              <Check aria-hidden="true" className="size-3" />
+            ) : offlineJob.status === "downloading" ||
+              offlineJob.status === "updating" ? (
+              <Loader2 aria-hidden="true" className="size-3 animate-spin" />
+            ) : offlineJob.status === "failed" ? (
+              isActionRequiredFailure ? (
+                <CircleAlert aria-hidden="true" className="size-3" />
+              ) : (
+                <RotateCcw aria-hidden="true" className="size-3" />
+              )
             ) : (
-              <ArrowDown className="size-3" />
+              <ArrowDown aria-hidden="true" className="size-3" />
             )}
           </span>
         )}

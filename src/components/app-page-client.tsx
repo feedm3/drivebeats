@@ -200,7 +200,13 @@ export function AppPageClient({ hasServerSession }: AppPageClientProps) {
 
   return (
     <AuthGuard hasServerSession={hasServerSession}>
-      {isDesktop ? (
+      {/* `isDesktop` is null until the client has read the real viewport. The
+          loading shell picks its layout with CSS, so it is correct on both
+          form factors and keeps us from prerendering (and shipping) the wrong
+          view chunk before we know which one the visitor needs. */}
+      {isDesktop === null ? (
+        <AppLoadingShell />
+      ) : isDesktop ? (
         <AppDesktopView
           activeCollection={activeCollection}
           activePlaylistId={activePlaylistId}

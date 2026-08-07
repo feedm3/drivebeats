@@ -54,7 +54,9 @@ export function ManageFoldersDialog({
           are not changed.
         </DialogDescription>
 
-        <div className="mt-4 max-h-80 overflow-y-auto rounded-md border">
+        {/* No inner scroller: DialogContent already caps its own height and
+            scrolls, and nesting the two strands the list on short viewports. */}
+        <div className="mt-4 rounded-md border">
           {folders.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-muted-foreground">
               No imported folders.

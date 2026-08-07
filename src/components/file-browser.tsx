@@ -1,6 +1,6 @@
 "use client";
 
-import { Ellipsis, FolderPlus, RotateCw } from "lucide-react";
+import { Ellipsis, FolderPlus, Plus, RotateCw } from "lucide-react";
 import {
   useCallback,
   useDeferredValue,
@@ -17,11 +17,13 @@ import { FolderSearch } from "@/components/folder-search";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import {
+  POPOVER_MENU_ITEM_CLASS,
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import { useDriveImport } from "@/hooks/use-drive-import";
 import { useFolderContents } from "@/hooks/use-folder-contents";
 import {
   getImportedLibraryRootEntries,
@@ -40,6 +42,7 @@ export function FileBrowser({
   onFolderNavigate,
 }: FileBrowserProps) {
   const { fetchFromApi, fetchFolderContents } = useFolderContents();
+  const { importFromDrive, isImporting } = useDriveImport();
   const { rootFolders: importedRootFolders, rootFiles: importedRootFiles } =
     useImportedDriveStore(
       useShallow((state) => ({
@@ -212,7 +215,7 @@ export function FileBrowser({
             <Button
               variant="ghost"
               size="icon"
-              className="hidden text-muted-foreground size-8 sm:inline-flex"
+              className="hidden text-muted-foreground size-8 md:inline-flex"
               onClick={onRefresh}
               disabled={refreshing}
               aria-label={refreshing ? "Refreshing folder" : "Refresh folder"}
@@ -228,17 +231,34 @@ export function FileBrowser({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="text-muted-foreground sm:hidden"
+                  // `md`, not `sm`: the sidebar that holds the desktop "Add
+                  // from Drive" only appears at 768px (app-page-client swaps to
+                  // AppMobileView below that). Hiding this at 640px would strip
+                  // the last import entry point between 640px and 767px.
+                  className="text-muted-foreground md:hidden"
                   aria-label="More options"
                 />
               }
             >
               <Ellipsis className="size-4" />
             </PopoverTrigger>
-            <PopoverContent side="bottom" align="end" className="w-44">
+            <PopoverContent side="bottom" align="end" className="w-48">
               <button
                 type="button"
-                className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50"
+                className={POPOVER_MENU_ITEM_CLASS}
+                disabled={isImporting}
+                onClick={() => {
+                  setMenuOpen(false);
+                  void importFromDrive();
+                }}
+              >
+                <Plus className="size-3.5" />
+                Add from Drive
+              </button>
+              <Separator className="my-1 bg-border/60" />
+              <button
+                type="button"
+                className={POPOVER_MENU_ITEM_CLASS}
                 disabled={refreshing}
                 onClick={() => {
                   setMenuOpen(false);

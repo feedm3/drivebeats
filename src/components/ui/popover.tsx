@@ -4,6 +4,16 @@ import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 
 import { cn } from "@/lib/utils";
 
+/* Shared row style for popover menus.
+
+   Stacked menu rows cannot use the `touch-target` utility — its overlay is out
+   of flow, so adjacent rows would silently swallow each other's taps. Per the
+   note in globals.css such groups take real padding instead, which is what
+   `pointer-coarse:min-h-11` does here: 44px rows for a finger, unchanged
+   compact rows for a mouse. Gated on pointer capability, not viewport width. */
+const POPOVER_MENU_ITEM_CLASS =
+  "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 pointer-coarse:min-h-11 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50";
+
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />;
 }
@@ -49,4 +59,4 @@ function PopoverContent({
   );
 }
 
-export { Popover, PopoverContent, PopoverTrigger };
+export { POPOVER_MENU_ITEM_CLASS, Popover, PopoverContent, PopoverTrigger };

@@ -9,6 +9,7 @@ import { PlaylistSection } from "@/components/playlist-section";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import {
+  POPOVER_MENU_ITEM_CLASS,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -24,8 +25,6 @@ import { FOLDER_MIME, INITIAL_STACK } from "@/types";
 
 const STORAGE_KEY_FOLDERS = "sidebar-folders-collapsed";
 const STORAGE_KEY_PLAYLISTS = "sidebar-playlists-collapsed";
-const MENU_ITEM_CLASS =
-  "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50";
 
 function readCollapsed(key: string): boolean {
   if (typeof window === "undefined") return false;
@@ -124,7 +123,7 @@ export function FolderTree({
               <PopoverContent side="bottom" align="end" className="w-48">
                 <button
                   type="button"
-                  className={MENU_ITEM_CLASS}
+                  className={POPOVER_MENU_ITEM_CLASS}
                   onClick={() => {
                     setFolderMenuOpen(false);
                     void importFromDrive();
@@ -137,7 +136,7 @@ export function FolderTree({
                 <Separator className="my-1 bg-border/60" />
                 <button
                   type="button"
-                  className={cn(MENU_ITEM_CLASS, "text-destructive")}
+                  className={cn(POPOVER_MENU_ITEM_CLASS, "text-destructive")}
                   onClick={() => {
                     setFolderMenuOpen(false);
                     setManageFoldersOpen(true);

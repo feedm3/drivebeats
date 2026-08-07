@@ -35,7 +35,7 @@ export function ThemeToggle({ size = "default" }: ThemeToggleProps) {
         className={
           size === "menu"
             ? "h-9 w-[108px] pointer-coarse:h-13 pointer-coarse:w-[148px]"
-            : "h-7 w-[84px] pointer-coarse:h-[50px] pointer-coarse:w-[122px]"
+            : "h-7 w-[84px] pointer-coarse:h-[50px] pointer-coarse:w-[142px]"
         }
       />
     );
@@ -49,17 +49,18 @@ export function ThemeToggle({ size = "default" }: ThemeToggleProps) {
   // Segmented control: the three options sit against each other, so an
   // out-of-flow hit area would make each segment steal from its neighbours.
   // These grow with real padding instead, which moves the segments apart as
-  // it grows them. The "menu" variant reaches 44x44 (16px icon + 2x14px).
-  // The header variant reaches 46px tall but only 38px wide — a full 44px
-  // per segment would make the control 146px and overflow the 320px
-  // marketing header next to the wordmark, and a mis-tap here only picks a
-  // neighbouring theme.
+  // it grows them. Both variants reach a square 44x44 on coarse pointers
+  // (16px icon + 2x14px) — padding has to stay symmetric or the segments
+  // turn into narrow portrait slivers that read as squashed together. The
+  // header variant then measures 140px, which still clears the ~157px the
+  // 320px marketing header leaves beside the wordmark.
   const buttonClass =
     size === "menu"
       ? "rounded-full p-1.5 pointer-coarse:p-3.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-      : "rounded-full p-1 pointer-coarse:px-3 pointer-coarse:py-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+      : "rounded-full p-1 pointer-coarse:p-3.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
 
-  const iconClass = size === "menu" ? "size-4" : "size-3.5";
+  const iconClass =
+    size === "menu" ? "size-4" : "size-3.5 pointer-coarse:size-4";
 
   return (
     <div className={shellClass}>

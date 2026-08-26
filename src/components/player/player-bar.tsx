@@ -111,6 +111,7 @@ interface PlayerBarProps {
 
 export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const playerBarRef = useRef<HTMLDivElement>(null);
   const recentTrackRef = useRef<string | null>(null);
   const restoreAttemptedRef = useRef(false);
   const [playerHydrated, setPlayerHydrated] = useState(
@@ -129,6 +130,30 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   const currentTrackTitle = trackMetadata?.title ?? "";
   const currentTrackArtist =
     trackMetadata?.subtitle ?? (currentTrack ? "Google Drive" : "");
+
+  useEffect(() => {
+    if (!currentTrack) return;
+
+    const playerBar = playerBarRef.current;
+    if (!playerBar) return;
+
+    const root = document.documentElement;
+    const updateHeight = () => {
+      root.style.setProperty(
+        "--player-bar-height",
+        `${Math.ceil(playerBar.getBoundingClientRect().height)}px`,
+      );
+    };
+
+    updateHeight();
+    const resizeObserver = new ResizeObserver(updateHeight);
+    resizeObserver.observe(playerBar);
+
+    return () => {
+      resizeObserver.disconnect();
+      root.style.removeProperty("--player-bar-height");
+    };
+  }, [currentTrack]);
 
   // Audio element event listeners
   useEffect(() => {
@@ -407,7 +432,10 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   if (!currentTrack) return null;
 
   return (
-    <div className="animate-in slide-in-from-bottom-4 fade-in duration-300 fixed inset-x-0 bottom-0 z-50 border-t border-border/50 bg-background/95 shadow-[0_-2px_10px_rgba(0,0,0,0.18)] backdrop-blur supports-[backdrop-filter]:bg-background/80 standalone:pb-safe">
+    <div
+      ref={playerBarRef}
+      className="animate-in slide-in-from-bottom-4 fade-in duration-300 fixed inset-x-0 bottom-0 z-50 border-t border-border/50 bg-background/95 shadow-[0_-2px_10px_rgba(0,0,0,0.18)] backdrop-blur supports-[backdrop-filter]:bg-background/80 standalone:pb-safe"
+    >
       {/* The bar is `fixed`, so it escapes the shell's padding and needs its
           own horizontal insets for landscape on notched devices. */}
       <div className="mx-auto max-w-[1440px] px-safe-4">

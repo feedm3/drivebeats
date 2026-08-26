@@ -25,7 +25,9 @@ import {
   filterFilesBySearch,
   getHighlightedTextParts,
 } from "@/lib/file-search";
+import { resolveTrackMetadata } from "@/lib/track-metadata";
 import { cn } from "@/lib/utils";
+import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { usePlayerStore } from "@/stores/player-store";
 import type { DriveFile, FolderEntry } from "@/types";
 import { FOLDER_MIME } from "@/types";
@@ -118,14 +120,16 @@ function sortFilesByName(
 function HighlightedName({
   name,
   searchQuery,
+  className,
 }: {
   name: string;
   searchQuery: string;
+  className?: string;
 }) {
   const parts = getHighlightedTextParts(name, searchQuery);
 
   return (
-    <span className="block truncate font-medium">
+    <span className={cn("block truncate font-medium", className)}>
       {parts.map((part) =>
         part.isMatch ? (
           <mark
@@ -139,6 +143,50 @@ function HighlightedName({
         ),
       )}
     </span>
+  );
+}
+
+function MobileFileMetadata({
+  file,
+  context,
+  searchQuery,
+}: {
+  file: DriveFile;
+  context?: string;
+  searchQuery: string;
+}) {
+  const id3 = useId3MetadataStore((state) => state.cache[file.id]);
+  const folder = isFolder(file);
+  const metadata = resolveTrackMetadata(file.name, file.parentFolderName, id3);
+  const artistAndSize = [metadata.subtitle, formatSize(file.size)]
+    .filter(Boolean)
+    .join(" · ");
+
+  if (folder) {
+    return (
+      <>
+        <HighlightedName name={file.name} searchQuery={searchQuery} />
+        {context ? (
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+            {context}
+          </span>
+        ) : null}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <HighlightedName name={metadata.title} searchQuery={searchQuery} />
+      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+        {artistAndSize}
+      </span>
+      {context ? (
+        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground/80">
+          {context}
+        </span>
+      ) : null}
+    </>
   );
 }
 
@@ -221,7 +269,7 @@ const FileListRow = memo(function FileListRow({
         e.dataTransfer.setData("application/drivebeats", dragData);
       }}
     >
-      <TableCell className="max-w-0">
+      <TableCell className="max-w-0 p-0 sm:p-4">
         <div
           className={cn(
             "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-all",
@@ -245,12 +293,21 @@ const FileListRow = memo(function FileListRow({
             )}
           </span>
           <span className="min-w-0 flex-1">
-            <HighlightedName name={file.name} searchQuery={searchQuery} />
-            {context ? (
-              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                {context}
-              </span>
-            ) : null}
+            <span className="sm:hidden">
+              <MobileFileMetadata
+                file={file}
+                context={context}
+                searchQuery={searchQuery}
+              />
+            </span>
+            <span className="hidden sm:block">
+              <HighlightedName name={file.name} searchQuery={searchQuery} />
+              {context ? (
+                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                  {context}
+                </span>
+              ) : null}
+            </span>
           </span>
         </div>
       </TableCell>
@@ -269,7 +326,7 @@ const FileListRow = memo(function FileListRow({
       <TableCell className={rowActionCellClassName}>
         <AddToPlaylistPopover file={file} className={rowActionClassName} />
       </TableCell>
-      <TableCell className="text-muted-foreground text-right tabular-nums">
+      <TableCell className="hidden text-right text-muted-foreground tabular-nums sm:table-cell">
         {folder ? "—" : formatSize(file.size)}
       </TableCell>
     </TableRow>
@@ -455,7 +512,7 @@ export function FileList({
           >
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-11 px-4">
+                <TableHead className="h-11 px-2 sm:px-4">
                   <button
                     type="button"
                     className="flex items-center gap-2 text-xs font-semibold tracking-[0.16em] uppercase transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
@@ -480,7 +537,7 @@ export function FileList({
                 </TableHead>
                 <TableHead className={cn("h-11", rowActionCellClassName)} />
                 <TableHead className={cn("h-11", rowActionCellClassName)} />
-                <TableHead className="h-11 w-[96px] px-4 text-right">
+                <TableHead className="hidden h-11 w-[96px] px-4 text-right sm:table-cell">
                   <span className="text-xs font-semibold tracking-[0.16em] uppercase">
                     Size
                   </span>

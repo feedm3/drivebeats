@@ -66,14 +66,14 @@ export function FileListSkeleton() {
       <Table aria-label="Loading files">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="h-11 px-4">
+            <TableHead className="h-11 px-2 sm:px-4">
               <span className="text-xs font-semibold tracking-[0.16em] uppercase">
                 Name
               </span>
             </TableHead>
             <TableHead className="h-11 w-9 px-0.5" />
             <TableHead className="h-11 w-9 px-0.5" />
-            <TableHead className="h-11 w-[96px] px-4 text-right">
+            <TableHead className="hidden h-11 w-[96px] px-4 text-right sm:table-cell">
               <span className="text-xs font-semibold tracking-[0.16em] uppercase">
                 Size
               </span>
@@ -86,7 +86,7 @@ export function FileListSkeleton() {
 
             return (
               <TableRow key={row.id}>
-                <TableCell className="max-w-0">
+                <TableCell className="max-w-0 p-0 sm:p-4">
                   <div className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left">
                     <span className="shrink-0 text-muted-foreground">
                       <Icon className="size-4" />
@@ -112,7 +112,7 @@ export function FileListSkeleton() {
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="text-right text-muted-foreground tabular-nums">
+                <TableCell className="hidden text-right text-muted-foreground tabular-nums sm:table-cell">
                   {row.type === "folder" ? (
                     "—"
                   ) : (

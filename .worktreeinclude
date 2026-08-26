@@ -1,0 +1,2 @@
+# Copy ignored local environment files into Codex-managed worktrees.
+.env*

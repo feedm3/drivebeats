@@ -11,6 +11,7 @@ interface AppDesktopViewProps {
   activePlaylistId: string | null;
   activeView: "files" | "playlist";
   currentFolderId: string;
+  fileSearchResetKey: number;
   folderStack: FolderEntry[];
   onFolderNavigate: (folderStack: FolderEntry[]) => void;
   onSelectFolder: (path: FolderEntry[]) => void;
@@ -22,6 +23,7 @@ export function AppDesktopView({
   activePlaylistId,
   activeView,
   currentFolderId,
+  fileSearchResetKey,
   folderStack,
   onFolderNavigate,
   onSelectFolder,
@@ -41,6 +43,7 @@ export function AppDesktopView({
       <PlaylistView collection={activeCollection} />
     ) : (
       <FileBrowser
+        key={fileSearchResetKey}
         externalFolderStack={folderStack}
         onFolderNavigate={onFolderNavigate}
       />

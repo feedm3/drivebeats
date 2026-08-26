@@ -149,7 +149,7 @@ export function AppHeader() {
                     />
                     <span className="absolute right-0 bottom-0 size-2 rounded-full border-2 border-background bg-emerald-500" />
                   </span>
-                  <span className="hidden max-w-24 truncate text-[11px] font-medium tracking-[0.02em] text-foreground/70 sm:block">
+                  <span className="hidden max-w-24 truncate text-sm font-medium text-foreground/80 sm:block">
                     {userLabel}
                   </span>
                   <ChevronDown

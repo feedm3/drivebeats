@@ -31,10 +31,14 @@ import type { DriveFile, FolderEntry } from "@/types";
 import { FOLDER_MIME } from "@/types";
 
 interface FileListProps {
+  contextById?: ReadonlyMap<string, string>;
   files: DriveFile[];
+  folderStackById?: ReadonlyMap<string, FolderEntry[]>;
   loading: boolean;
   folderStack: FolderEntry[];
   searchQuery: string;
+  searchScope?: "library" | "folder";
+  sortPathById?: ReadonlyMap<string, string>;
   onClearSearch: () => void;
   onFolderClick: (id: string, name: string) => void;
 }
@@ -75,7 +79,12 @@ function onRowKeyDown(
   }
 }
 
-function sortFilesByName(files: DriveFile[], direction: NameSortDirection) {
+function sortFilesByName(
+  files: DriveFile[],
+  direction: NameSortDirection,
+  contextById?: ReadonlyMap<string, string>,
+  sortPathById?: ReadonlyMap<string, string>,
+) {
   return [...files].sort((a, b) => {
     const folderOrder = Number(isFolder(b)) - Number(isFolder(a));
     if (folderOrder !== 0) return folderOrder;
@@ -85,7 +94,24 @@ function sortFilesByName(files: DriveFile[], direction: NameSortDirection) {
       numeric: true,
     });
 
-    return direction === "asc" ? comparedName : -comparedName;
+    if (comparedName !== 0) {
+      return direction === "asc" ? comparedName : -comparedName;
+    }
+
+    const comparedContext = (
+      sortPathById?.get(a.id) ??
+      contextById?.get(a.id) ??
+      ""
+    ).localeCompare(
+      sortPathById?.get(b.id) ?? contextById?.get(b.id) ?? "",
+      undefined,
+      { sensitivity: "base", numeric: true },
+    );
+    if (comparedContext !== 0) {
+      return direction === "asc" ? comparedContext : -comparedContext;
+    }
+    const comparedId = a.id.localeCompare(b.id);
+    return direction === "asc" ? comparedId : -comparedId;
   });
 }
 
@@ -118,8 +144,10 @@ function HighlightedName({
 
 interface FileListRowProps {
   file: DriveFile;
+  context?: string;
   folderStack: FolderEntry[];
   playableTracks: DriveFile[];
+  playlistFolderStacks?: FolderEntry[][];
   searchQuery: string;
   isActive: boolean;
   isCurrentlyPlaying: boolean;
@@ -131,14 +159,17 @@ interface FileListRowProps {
     playlist: DriveFile[],
     folderStack: FolderEntry[],
     playlistId?: string,
+    playlistFolderStacks?: FolderEntry[][],
   ) => Promise<void>;
   togglePlay: () => void;
 }
 
 const FileListRow = memo(function FileListRow({
   file,
+  context,
   folderStack,
   playableTracks,
+  playlistFolderStacks,
   searchQuery,
   isActive,
   isCurrentlyPlaying,
@@ -154,7 +185,13 @@ const FileListRow = memo(function FileListRow({
       ? onFolderClick(file.id, file.name)
       : isCurrentlyPlaying
         ? togglePlay()
-        : void playTrack(file, playableTracks, folderStack);
+        : void playTrack(
+            file,
+            playableTracks,
+            folderStack,
+            undefined,
+            playlistFolderStacks,
+          );
 
   const dragData = folder
     ? JSON.stringify({
@@ -209,6 +246,11 @@ const FileListRow = memo(function FileListRow({
           </span>
           <span className="min-w-0 flex-1">
             <HighlightedName name={file.name} searchQuery={searchQuery} />
+            {context ? (
+              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                {context}
+              </span>
+            ) : null}
           </span>
         </div>
       </TableCell>
@@ -235,10 +277,14 @@ const FileListRow = memo(function FileListRow({
 });
 
 export function FileList({
+  contextById,
   files,
+  folderStackById,
   loading,
   folderStack,
   searchQuery,
+  searchScope = "folder",
+  sortPathById,
   onClearSearch,
   onFolderClick,
 }: FileListProps) {
@@ -261,8 +307,8 @@ export function FileList({
     [playingFolderStack],
   );
   const sortedFiles = useMemo(
-    () => sortFilesByName(files, nameSortDirection),
-    [files, nameSortDirection],
+    () => sortFilesByName(files, nameSortDirection, contextById, sortPathById),
+    [contextById, files, nameSortDirection, sortPathById],
   );
   const filteredFiles = useMemo(
     () => filterFilesBySearch(sortedFiles, searchQuery),
@@ -271,6 +317,15 @@ export function FileList({
   const playableTracks = useMemo(
     () => filteredFiles.filter((file) => !isFolder(file)),
     [filteredFiles],
+  );
+  const playlistFolderStacks = useMemo(
+    () =>
+      folderStackById
+        ? playableTracks.map(
+            (track) => folderStackById.get(track.id) ?? folderStack,
+          )
+        : undefined,
+    [folderStack, folderStackById, playableTracks],
   );
   const resetVisibleCountKey = useMemo(
     () =>
@@ -336,7 +391,7 @@ export function FileList({
     );
   }
 
-  if (files.length === 0) {
+  if (files.length === 0 && !hasActiveSearch) {
     return (
       <div className="flex min-h-0 flex-1 items-start">
         <div className={cn("w-full", playerBarPadding)}>
@@ -367,11 +422,12 @@ export function FileList({
             </div>
             <div className="space-y-1">
               <h3 className="font-semibold tracking-tight">
-                No matches in this folder
+                No matches in{" "}
+                {searchScope === "library" ? "your Library" : "this folder"}
               </h3>
               <p className="max-w-sm text-sm text-muted-foreground">
                 {hasActiveSearch
-                  ? `Nothing in this view matches "${searchQuery}". Try a shorter term or clear the filter.`
+                  ? `Nothing in this view matches “${searchQuery}”. Try a shorter term or clear the filter.`
                   : "There are no visible items in this view."}
               </p>
             </div>
@@ -390,7 +446,13 @@ export function FileList({
     <ScrollArea className="min-h-0 flex-1">
       <div className={cn(playerBarPadding)}>
         <div className={FILE_TABLE_SHELL_CLASS}>
-          <Table aria-label="Files and folders">
+          <Table
+            aria-label={
+              searchScope === "library"
+                ? "Library Search results"
+                : "Files and folders"
+            }
+          >
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="h-11 px-4">
@@ -441,8 +503,10 @@ export function FileList({
                   <FileListRow
                     key={file.id}
                     file={file}
+                    context={contextById?.get(file.id)}
                     folderStack={folderStack}
                     playableTracks={playableTracks}
+                    playlistFolderStacks={playlistFolderStacks}
                     searchQuery={searchQuery}
                     isActive={isActive}
                     isCurrentlyPlaying={isCurrentlyPlaying}

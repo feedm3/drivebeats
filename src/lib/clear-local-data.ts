@@ -8,6 +8,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
+import { useLibrarySearchStore } from "@/stores/library-search-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { usePlayerStore } from "@/stores/player-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
@@ -38,6 +39,7 @@ export async function clearLocalData() {
   usePlayerStore.setState({
     currentTrack: null,
     playingFolderStack: [],
+    playlistFolderStacks: null,
     playingPlaylistId: null,
     playlist: [],
     currentIndex: -1,
@@ -73,6 +75,14 @@ export async function clearLocalData() {
   // persisted folder listings are really gone before the page navigates.
   try {
     await clearFolderListings();
+  } catch {
+    // best-effort
+  }
+
+  // Seal first so a Drive response that was already in flight cannot publish
+  // or persist a new account-scoped generation after the wipe.
+  try {
+    await useLibrarySearchStore.getState().sealAndClear();
   } catch {
     // best-effort
   }

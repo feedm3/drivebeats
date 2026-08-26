@@ -10,6 +10,7 @@ import type { FolderEntry, TrackCollection } from "@/types";
 
 interface AppMobileViewProps {
   activePlaylistId: string | null;
+  fileSearchResetKey: number;
   folderStack: FolderEntry[];
   mobileCollection: TrackCollection | null;
   mobileTab: "files" | "playlists";
@@ -21,6 +22,7 @@ interface AppMobileViewProps {
 
 export function AppMobileView({
   activePlaylistId,
+  fileSearchResetKey,
   folderStack,
   mobileCollection,
   mobileTab,
@@ -68,6 +70,7 @@ export function AppMobileView({
       <div className="min-h-0 flex-1">
         {mobileTab === "files" ? (
           <FileBrowser
+            key={fileSearchResetKey}
             externalFolderStack={folderStack}
             onFolderNavigate={onFolderNavigate}
           />

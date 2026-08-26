@@ -85,6 +85,7 @@ export function AppPageClient({ hasServerSession }: AppPageClientProps) {
   });
   const [mobileTab, setMobileTab] = useState<"files" | "playlists">("files");
   const [mobilePlaylistId, setMobilePlaylistId] = useState<string | null>(null);
+  const [fileSearchResetKey, setFileSearchResetKey] = useState(0);
 
   const collections: TrackCollection[] = useMemo(
     () => [
@@ -137,7 +138,11 @@ export function AppPageClient({ hasServerSession }: AppPageClientProps) {
       return;
     }
 
-    setFolderStack(playingFolderStack);
+    // Always publish a navigation event, even when the track already belongs
+    // to the Current Folder, so FileBrowser can exit an active search and show
+    // the complete containing folder.
+    setFolderStack([...playingFolderStack]);
+    setFileSearchResetKey((key) => key + 1);
     setActivePlaylist(null);
     setActiveView("files");
     window.history.pushState(
@@ -212,6 +217,7 @@ export function AppPageClient({ hasServerSession }: AppPageClientProps) {
           activePlaylistId={activePlaylistId}
           activeView={activeView}
           currentFolderId={currentFolderId}
+          fileSearchResetKey={fileSearchResetKey}
           folderStack={folderStack}
           onFolderNavigate={handleFolderNavigate}
           onSelectFolder={handleTreeSelect}
@@ -220,6 +226,7 @@ export function AppPageClient({ hasServerSession }: AppPageClientProps) {
       ) : (
         <AppMobileView
           activePlaylistId={mobilePlaylistId}
+          fileSearchResetKey={fileSearchResetKey}
           folderStack={folderStack}
           mobileCollection={mobileCollection}
           mobileTab={mobileTab}

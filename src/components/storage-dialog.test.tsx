@@ -31,6 +31,10 @@ const offlineDb = vi.hoisted(() => ({
   getTrackCount: vi.fn().mockResolvedValue(0),
 }));
 
+const librarySearch = vi.hoisted(() => ({
+  clear: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/lib/offline-download-manager", () => ({
   offlineDownloadManager: manager,
 }));
@@ -41,6 +45,12 @@ vi.mock("@/lib/offline-download-diagnostics", () => ({
 }));
 
 vi.mock("@/lib/offline-db", () => offlineDb);
+
+vi.mock("@/stores/library-search-store", () => ({
+  useLibrarySearchStore: Object.assign(() => ({}), {
+    getState: () => librarySearch,
+  }),
+}));
 
 vi.mock("@/lib/cloud-library-api", () => ({
   deleteAllCloudLibraryData: vi.fn(),
@@ -210,6 +220,7 @@ describe("StorageDialog offline recovery", () => {
 
     await waitFor(() => {
       expect(manager.removeAllDownloads).toHaveBeenCalledOnce();
+      expect(librarySearch.clear).toHaveBeenCalledOnce();
     });
   });
 

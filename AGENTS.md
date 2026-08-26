@@ -44,10 +44,9 @@ Keep database access easy to audit.
 
 ## Testing Guidelines
 
-There is no dedicated automated test runner configured yet. Before opening a PR, run `pnpm lint` and `pnpm build`, then
-manually verify the affected flow in the browser. For authentication or playback changes, document the manual checks you
-performed, for example Google sign-in, Drive import, and player controls. If you add tests, colocate them as `*.test.ts`
-or `*.test.tsx` near the feature they cover.
+Run `pnpm test`, `pnpm lint`, and `pnpm build` before opening a PR, then manually verify the affected flow in the browser.
+For authentication or playback changes, document the manual checks you performed, for example Google sign-in, Drive
+import, and player controls. Colocate tests as `*.test.ts` or `*.test.tsx` near the feature they cover.
 
 For sync-related changes, also verify:
 

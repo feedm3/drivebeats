@@ -32,6 +32,7 @@ import {
 } from "@/lib/offline-download-diagnostics";
 import { offlineDownloadManager } from "@/lib/offline-download-manager";
 import { formatBytes } from "@/lib/utils";
+import { useLibrarySearchStore } from "@/stores/library-search-store";
 import { getFavoriteTracks, useLibraryStore } from "@/stores/library-store";
 import {
   type StoragePersistenceStatus,
@@ -165,6 +166,7 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
     setRemoving(true);
     try {
       await offlineDownloadManager.removeAllDownloads();
+      await useLibrarySearchStore.getState().clear();
       setTrackCount(0);
       setTotalBytes(0);
       setView("main");

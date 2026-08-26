@@ -255,6 +255,7 @@ interface PlayerState {
   currentTrack: DriveFile | null;
   pendingTrackId: string | null;
   playingFolderStack: FolderEntry[];
+  playlistFolderStacks: FolderEntry[][] | null;
   playingPlaylistId: string | null;
   playlist: DriveFile[];
   currentIndex: number;
@@ -288,6 +289,7 @@ interface PlayerState {
     playlist: DriveFile[],
     folderStack: FolderEntry[],
     playlistId?: string,
+    playlistFolderStacks?: FolderEntry[][],
   ) => Promise<void>;
   fetchAndPlay: (fileId: string) => Promise<boolean>;
   togglePlay: () => void;
@@ -313,6 +315,7 @@ export const usePlayerStore = create<PlayerState>()(
       currentTrack: null,
       pendingTrackId: null,
       playingFolderStack: [],
+      playlistFolderStacks: null,
       playingPlaylistId: null,
       playlist: [],
       currentIndex: -1,
@@ -490,7 +493,13 @@ export const usePlayerStore = create<PlayerState>()(
         return get().loadTrack(fileId, true);
       },
 
-      playTrack: async (track, playlist, folderStack, playlistId) => {
+      playTrack: async (
+        track,
+        playlist,
+        folderStack,
+        playlistId,
+        playlistFolderStacks,
+      ) => {
         get().initAudio();
         const index = playlist.findIndex((f) => f.id === track.id);
 
@@ -499,6 +508,12 @@ export const usePlayerStore = create<PlayerState>()(
         const extraState = playlistChanged
           ? { shuffleHistory: [], nextShuffleFileId: null }
           : {};
+        const nextPlaylistFolderStacks =
+          playlistFolderStacks !== undefined
+            ? playlistFolderStacks
+            : playlistChanged
+              ? null
+              : get().playlistFolderStacks;
 
         // Mark the target row active immediately, but keep currentTrack
         // pointing at the playing song until audio actually starts.
@@ -508,7 +523,8 @@ export const usePlayerStore = create<PlayerState>()(
           currentIndex: index,
           playingFolderStack: playlistId
             ? deriveFolderStack(track)
-            : folderStack,
+            : (nextPlaylistFolderStacks?.[index] ?? folderStack),
+          playlistFolderStacks: nextPlaylistFolderStacks,
           playingPlaylistId: playlistId ?? null,
           ...extraState,
         });
@@ -588,6 +604,7 @@ export const usePlayerStore = create<PlayerState>()(
           playlist,
           get().playingFolderStack,
           get().playingPlaylistId ?? undefined,
+          get().playlistFolderStacks ?? undefined,
         );
       },
 
@@ -615,6 +632,7 @@ export const usePlayerStore = create<PlayerState>()(
               playlist,
               get().playingFolderStack,
               get().playingPlaylistId ?? undefined,
+              get().playlistFolderStacks ?? undefined,
             );
             return;
           }
@@ -627,6 +645,7 @@ export const usePlayerStore = create<PlayerState>()(
           playlist,
           get().playingFolderStack,
           get().playingPlaylistId ?? undefined,
+          get().playlistFolderStacks ?? undefined,
         );
       },
 
@@ -704,6 +723,7 @@ export const usePlayerStore = create<PlayerState>()(
           currentTrack: null,
           pendingTrackId: null,
           playingFolderStack: [],
+          playlistFolderStacks: null,
           playingPlaylistId: null,
           playlist: [],
           currentIndex: -1,
@@ -855,6 +875,7 @@ export const usePlayerStore = create<PlayerState>()(
       partialize: (state) => ({
         currentTrack: state.currentTrack,
         playingFolderStack: state.playingFolderStack,
+        playlistFolderStacks: state.playlistFolderStacks,
         playingPlaylistId: state.playingPlaylistId,
         playlist: state.playlist,
         currentIndex: state.currentIndex,

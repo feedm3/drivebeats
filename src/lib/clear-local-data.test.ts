@@ -59,6 +59,13 @@ vi.mock("@/stores/imported-drive-store", () => ({
   }),
 }));
 
+const mockLibrarySearchSealAndClear = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/stores/library-search-store", () => ({
+  useLibrarySearchStore: Object.assign(() => ({}), {
+    getState: () => ({ sealAndClear: mockLibrarySearchSealAndClear }),
+  }),
+}));
+
 // ---------------------------------------------------------------------------
 // The folder cache and the auth store run for real here.
 //
@@ -248,6 +255,7 @@ describe("clearLocalData", () => {
     expect(mockClearFolderListings).toHaveBeenCalled();
     expect(mockImportedDriveClear).toHaveBeenCalled();
     expect(mockImportedDriveClearStorage).toHaveBeenCalled();
+    expect(mockLibrarySearchSealAndClear).toHaveBeenCalled();
     expect(mockRemoveAllDownloads).toHaveBeenCalled();
     expect(
       localStorage.getItem("drivebeats-offline-download-diagnostics:v1"),

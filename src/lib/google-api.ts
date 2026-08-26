@@ -47,6 +47,7 @@ export interface GoogleDriveFileMetadataResponse {
 
 export interface GoogleDriveFilesListResponse {
   files?: DriveFile[];
+  incompleteSearch?: boolean;
   nextPageToken?: string;
 }
 
@@ -116,12 +117,14 @@ export async function refreshGoogleOAuthAccessToken(
 export async function listGoogleDriveFiles(
   accessToken: string,
   params: URLSearchParams | Record<string, string>,
+  signal?: AbortSignal,
 ) {
   const searchParams =
     params instanceof URLSearchParams ? params : new URLSearchParams(params);
 
   return fetch(`${GOOGLE_DRIVE_FILES_URL}?${searchParams.toString()}`, {
     headers: getGoogleAuthHeaders(accessToken),
+    signal,
   });
 }
 

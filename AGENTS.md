@@ -10,6 +10,18 @@ Use `pnpm` for local work because the repository tracks `pnpm-lock.yaml`.
 - `pnpm lint` runs Biome checks.
 - `pnpm format` applies Biome formatting and import organization.
 
+## Vercel access
+
+`mise.local.toml` (gitignored, local-only) holds a `VERCEL_TOKEN` for the private
+Vercel team. Agent shells don't activate mise: run `mise exec -- vercel <cmd>`.
+A bare `vercel` finds no token and opens a browser login into whichever account
+Chrome holds.
+
+- The token reaches every project in the team; work only on project `drivebeats`.
+- Observe freely: `ls`, `inspect`, `logs`, `env ls`, read-only API calls.
+- Ask first before changing Vercel state: deploy, redeploy, promote, rollback,
+  `env add`/`rm`/`pull`, project or domain settings.
+
 ## Coding Style & Naming Conventions
 
 This project uses TypeScript with `strict` mode and Biome for formatting and linting. Prefer 2-space indentation, double

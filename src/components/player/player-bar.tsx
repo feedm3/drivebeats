@@ -167,8 +167,9 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
     const unsubNextAction = usePlayerStore.subscribe((state, prev) => {
       if (
         state.currentIndex !== prev.currentIndex ||
-        state.playlist.length !== prev.playlist.length ||
+        state.playlist !== prev.playlist ||
         state.shuffle !== prev.shuffle ||
+        state.shuffleCycle !== prev.shuffleCycle ||
         state.repeat !== prev.repeat
       ) {
         syncMediaSessionNextAction();
@@ -210,6 +211,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       updateMediaSessionPosition(el);
     };
     const onPlaying = () => {
+      usePlayerStore.getState().confirmPlayback();
       errorRetryRef.trackId = null;
       errorRetryRef.attempts = 0;
       syncMediaSessionControls();

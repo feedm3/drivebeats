@@ -9,6 +9,13 @@ import {
   isBlobUrl,
   isSessionMediaUrl,
 } from "@/lib/offline-media";
+import {
+  consumeShuffleTrack,
+  createShuffleCycle,
+  reconcileShuffleCycle,
+  restartShuffleCycle,
+  type ShuffleCycle,
+} from "@/lib/shuffle";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
@@ -24,9 +31,19 @@ export function hasNextTrack(state: {
   playlist: { length: number };
   shuffle: boolean;
   repeat: RepeatMode;
+  shuffleCycle?: ShuffleCycle | null;
 }) {
+  if (state.playlist.length === 0) return false;
+  if (state.shuffle) {
+    return (
+      state.repeat === "all" ||
+      (state.shuffleCycle
+        ? state.shuffleCycle.remainingIds.length > 0
+        : state.playlist.length > 1 || state.currentIndex < 0)
+    );
+  }
   const isLastTrack = state.currentIndex >= state.playlist.length - 1;
-  return !isLastTrack || state.shuffle || state.repeat === "all";
+  return !isLastTrack || state.repeat === "all";
 }
 
 const MAX_CACHE_SIZE = 20;
@@ -34,6 +51,29 @@ const PLAY_ATTEMPT_TIMEOUT_MS = 1500;
 
 let fetchAbortController: AbortController | null = null;
 let prefetchAbortController: AbortController | null = null;
+let playTrackRequestId = 0;
+let navigationOperation: object | null = null;
+
+async function navigate(action: () => Promise<void>) {
+  if (navigationOperation) return;
+  const operation = {};
+  navigationOperation = operation;
+  try {
+    await action();
+  } finally {
+    if (navigationOperation === operation) navigationOperation = null;
+  }
+}
+
+function collectionKey(
+  folderStack: FolderEntry[],
+  playlistId?: string,
+  playlistFolderStacks?: FolderEntry[][] | null,
+) {
+  if (playlistId) return `playlist:${playlistId}`;
+  if (playlistFolderStacks) return "library-search";
+  return `folder:${JSON.stringify(folderStack.map((folder) => folder.id))}`;
+}
 
 function revokeCachedSource(source?: string) {
   if (source && isBlobUrl(source)) {
@@ -274,10 +314,14 @@ interface PlayerState {
   audio: HTMLAudioElement | null;
   blobCache: Map<string, string>;
   shuffleHistory: string[];
+  shuffleCycle: ShuffleCycle | null;
+  shuffleCollectionKey: string | null;
+  shufflePendingPreviousId: string | null;
   nextShuffleFileId: string | null;
   prefetchingFileId: string | null;
   initAudio: () => HTMLAudioElement;
   play: () => Promise<boolean>;
+  confirmPlayback: () => void;
   pause: () => void;
   loadTrack: (
     fileId: string,
@@ -290,7 +334,8 @@ interface PlayerState {
     folderStack: FolderEntry[],
     playlistId?: string,
     playlistFolderStacks?: FolderEntry[][],
-  ) => Promise<void>;
+    navigation?: "next" | "previous",
+  ) => Promise<boolean>;
   fetchAndPlay: (fileId: string) => Promise<boolean>;
   togglePlay: () => void;
   next: () => Promise<void>;
@@ -331,6 +376,9 @@ export const usePlayerStore = create<PlayerState>()(
       audio: null,
       blobCache: new Map(),
       shuffleHistory: [],
+      shuffleCycle: null,
+      shuffleCollectionKey: null,
+      shufflePendingPreviousId: null,
       nextShuffleFileId: null,
       prefetchingFileId: null,
 
@@ -346,10 +394,21 @@ export const usePlayerStore = create<PlayerState>()(
       play: async () => {
         const { audio, currentTrack } = get();
         if (!audio) return false;
+        const requestId = playTrackRequestId;
+        const confirmPlayback = () => {
+          if (
+            requestId === playTrackRequestId &&
+            currentTrack &&
+            get().currentTrack?.id === currentTrack.id
+          )
+            get().confirmPlayback();
+        };
 
         if (!audio.src) {
           if (!currentTrack) return false;
-          return get().loadTrack(currentTrack.id, true);
+          const played = await get().loadTrack(currentTrack.id, true);
+          if (played) confirmPlayback();
+          return played;
         }
 
         const played = await attemptAudioPlay(audio);
@@ -360,11 +419,48 @@ export const usePlayerStore = create<PlayerState>()(
         ) {
           const recovered = await reloadCurrentSourceAndPlay(audio);
           set({ isPlaying: recovered && !audio.paused });
+          if (recovered) confirmPlayback();
           return recovered;
         }
 
         set({ isPlaying: played && !audio.paused });
+        if (played) confirmPlayback();
         return played;
+      },
+
+      confirmPlayback: () => {
+        const {
+          shuffle,
+          currentTrack,
+          playlist,
+          shuffleCycle,
+          shufflePendingPreviousId,
+        } = get();
+        if (
+          !shuffle ||
+          !currentTrack ||
+          !playlist.some((file) => file.id === currentTrack.id)
+        )
+          return;
+        const cycle = reconcileShuffleCycle(
+          shuffleCycle,
+          playlist.map((file) => file.id),
+        );
+        if (
+          cycle.playedIds.includes(currentTrack.id) &&
+          !shufflePendingPreviousId
+        )
+          return;
+        set((state) => ({
+          shuffleCycle: consumeShuffleTrack(cycle, currentTrack.id),
+          shuffleHistory:
+            shufflePendingPreviousId &&
+            shufflePendingPreviousId !== currentTrack.id
+              ? [...state.shuffleHistory, shufflePendingPreviousId]
+              : state.shuffleHistory,
+          shufflePendingPreviousId: null,
+          nextShuffleFileId: null,
+        }));
       },
 
       pause: () => {
@@ -490,7 +586,10 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       fetchAndPlay: async (fileId) => {
-        return get().loadTrack(fileId, true);
+        const played = await get().loadTrack(fileId, true);
+        if (played && get().currentTrack?.id === fileId)
+          get().confirmPlayback();
+        return played;
       },
 
       playTrack: async (
@@ -499,51 +598,100 @@ export const usePlayerStore = create<PlayerState>()(
         folderStack,
         playlistId,
         playlistFolderStacks,
+        navigation,
       ) => {
         get().initAudio();
         const index = playlist.findIndex((f) => f.id === track.id);
-
-        // Clear shuffle state when switching to a different playlist/folder
-        const playlistChanged = get().playlist !== playlist;
-        const extraState = playlistChanged
-          ? { shuffleHistory: [], nextShuffleFileId: null }
-          : {};
+        if (index < 0) return false;
+        const requestId = ++playTrackRequestId;
+        const state = get();
+        const sourceKey = collectionKey(
+          folderStack,
+          playlistId,
+          playlistFolderStacks,
+        );
+        const previousKey =
+          state.shuffleCollectionKey ??
+          collectionKey(
+            state.playingFolderStack,
+            state.playingPlaylistId ?? undefined,
+            state.playlistFolderStacks,
+          );
+        const playlistChanged = previousKey !== sourceKey;
         const nextPlaylistFolderStacks =
           playlistFolderStacks !== undefined
             ? playlistFolderStacks
             : playlistChanged
               ? null
-              : get().playlistFolderStacks;
+              : state.playlistFolderStacks;
 
         // Mark the target row active immediately, but keep currentTrack
         // pointing at the playing song until audio actually starts.
-        set({
-          pendingTrackId: track.id,
-          playlist,
-          currentIndex: index,
-          playingFolderStack: playlistId
-            ? deriveFolderStack(track)
-            : (nextPlaylistFolderStacks?.[index] ?? folderStack),
-          playlistFolderStacks: nextPlaylistFolderStacks,
-          playingPlaylistId: playlistId ?? null,
-          ...extraState,
-        });
+        set({ pendingTrackId: track.id });
 
+        let applied = false;
         try {
-          await get().loadTrack(track.id, true, () => {
+          const loaded = await get().loadTrack(track.id, true, () => {
+            if (requestId !== playTrackRequestId) return;
+            // Shuffle may have been toggled while the media was downloading.
+            const latest = get();
+            const cycle = latest.shuffle
+              ? playlistChanged
+                ? createShuffleCycle(playlist.map((file) => file.id))
+                : reconcileShuffleCycle(
+                    latest.shuffleCycle,
+                    playlist.map((file) => file.id),
+                    latest.currentTrack?.id,
+                  )
+              : null;
+            applied = true;
             set({
               currentTrack: track,
-              pendingTrackId: null,
+              playlist,
+              currentIndex: index,
+              playingFolderStack: playlistId
+                ? deriveFolderStack(track)
+                : (nextPlaylistFolderStacks?.[index] ?? folderStack),
+              playlistFolderStacks: nextPlaylistFolderStacks,
+              playingPlaylistId: playlistId ?? null,
+              shuffleCollectionKey: sourceKey,
+              shuffleCycle: cycle,
+              shuffleHistory: playlistChanged
+                ? []
+                : latest.shuffleHistory.filter((id) =>
+                    playlist.some((file) => file.id === id),
+                  ),
+              shufflePendingPreviousId:
+                latest.shuffle && navigation === "next" && !playlistChanged
+                  ? (latest.shufflePendingPreviousId ??
+                    latest.currentTrack?.id ??
+                    null)
+                  : null,
+              nextShuffleFileId: null,
               isPlaying: true,
               currentTime: 0,
               duration: 0,
               suppressGlide: true,
             });
           });
-          queueMicrotask(() => get().prefetchNextTrack());
-        } catch {
-          // Loading failed — clear pending so the old track stays active.
+          if (requestId !== playTrackRequestId) return false;
           set({ pendingTrackId: null });
+          if (!loaded || !applied) {
+            if (applied) set({ isPlaying: false });
+            return false;
+          }
+          get().confirmPlayback();
+          queueMicrotask(() => get().prefetchNextTrack());
+          return true;
+        } catch {
+          // Preserve the unconsumed target so failed playback can be retried.
+          if (requestId === playTrackRequestId) {
+            set({
+              pendingTrackId: null,
+              ...(applied ? { isPlaying: false } : {}),
+            });
+          }
+          return false;
         }
       },
 
@@ -557,97 +705,114 @@ export const usePlayerStore = create<PlayerState>()(
         }
       },
 
-      next: async () => {
-        const {
-          playlist,
-          currentIndex,
-          currentTrack,
-          shuffle,
-          repeat,
-          nextShuffleFileId,
-        } = get();
-        if (playlist.length === 0) return;
+      next: () =>
+        navigate(async () => {
+          if (get().pendingTrackId !== null) return;
+          const {
+            playlist,
+            currentIndex,
+            currentTrack,
+            shuffle,
+            repeat,
+            nextShuffleFileId,
+          } = get();
+          if (playlist.length === 0) return;
 
-        let nextIndex: number;
-        if (shuffle) {
-          // Use pre-picked shuffle track if available and still in playlist
-          const prePickedIndex =
-            nextShuffleFileId !== null
-              ? playlist.findIndex((t) => t.id === nextShuffleFileId)
-              : -1;
-          nextIndex =
-            prePickedIndex >= 0
-              ? prePickedIndex
-              : Math.floor(Math.random() * playlist.length);
-          // Push current track to shuffle history before navigating
-          if (currentTrack) {
-            set((s) => ({
-              shuffleHistory: [...s.shuffleHistory, currentTrack.id],
-              nextShuffleFileId: null,
-            }));
+          let nextIndex: number;
+          let nextCycle: ShuffleCycle | null = null;
+          if (shuffle) {
+            nextCycle = reconcileShuffleCycle(
+              get().shuffleCycle,
+              playlist.map((file) => file.id),
+              currentTrack?.id,
+            );
+            if (nextCycle.remainingIds.length === 0) {
+              if (repeat !== "all") {
+                set({ shuffleCycle: nextCycle });
+                get().pause();
+                return;
+              }
+              nextCycle = restartShuffleCycle(
+                playlist.map((file) => file.id),
+                currentTrack?.id,
+                nextShuffleFileId,
+              );
+            }
+            nextIndex = playlist.findIndex(
+              (file) => file.id === nextCycle?.remainingIds[0],
+            );
           } else {
-            set({ nextShuffleFileId: null });
+            nextIndex = currentIndex + 1;
+            if (nextIndex >= playlist.length) {
+              if (repeat === "all") {
+                nextIndex = 0;
+              } else {
+                get().pause();
+                return;
+              }
+            }
           }
-        } else {
-          nextIndex = currentIndex + 1;
-          if (nextIndex >= playlist.length) {
-            if (repeat === "all") {
-              nextIndex = 0;
-            } else {
+
+          // Keep a failed target available for retry, including at a cycle boundary.
+          if (nextCycle) set({ shuffleCycle: nextCycle });
+          await get().playTrack(
+            playlist[nextIndex],
+            playlist,
+            get().playingFolderStack,
+            get().playingPlaylistId ?? undefined,
+            get().playlistFolderStacks ?? undefined,
+            "next",
+          );
+        }),
+
+      previous: () =>
+        navigate(async () => {
+          if (get().pendingTrackId !== null) return;
+          const { audio, playlist, currentIndex, shuffle } = get();
+          const shuffleHistory = get().shuffleHistory.filter((id) =>
+            playlist.some((file) => file.id === id),
+          );
+          if (shuffleHistory.length !== get().shuffleHistory.length)
+            set({ shuffleHistory });
+          if (playlist.length === 0) return;
+
+          if (audio && audio.currentTime > 3) {
+            get().seek(0);
+            return;
+          }
+
+          // In shuffle mode, rewind through play history
+          if (shuffle && shuffleHistory.length > 0) {
+            const prevId = shuffleHistory[shuffleHistory.length - 1];
+            const prevTrack = playlist.find((t) => t.id === prevId);
+            if (prevTrack) {
+              const played = await get().playTrack(
+                prevTrack,
+                playlist,
+                get().playingFolderStack,
+                get().playingPlaylistId ?? undefined,
+                get().playlistFolderStacks ?? undefined,
+                "previous",
+              );
+              if (played) {
+                set((state) => ({
+                  shuffleHistory: state.shuffleHistory.slice(0, -1),
+                }));
+              }
               return;
             }
           }
-        }
 
-        await get().playTrack(
-          playlist[nextIndex],
-          playlist,
-          get().playingFolderStack,
-          get().playingPlaylistId ?? undefined,
-          get().playlistFolderStacks ?? undefined,
-        );
-      },
-
-      previous: async () => {
-        const { audio, playlist, currentIndex, shuffle, shuffleHistory } =
-          get();
-        if (playlist.length === 0) return;
-
-        if (audio && audio.currentTime > 3) {
-          get().seek(0);
-          return;
-        }
-
-        // In shuffle mode, rewind through play history
-        if (shuffle && shuffleHistory.length > 0) {
-          const prevId = shuffleHistory[shuffleHistory.length - 1];
-          set((s) => ({
-            shuffleHistory: s.shuffleHistory.slice(0, -1),
-            nextShuffleFileId: null,
-          }));
-          const prevTrack = playlist.find((t) => t.id === prevId);
-          if (prevTrack) {
-            await get().playTrack(
-              prevTrack,
-              playlist,
-              get().playingFolderStack,
-              get().playingPlaylistId ?? undefined,
-              get().playlistFolderStacks ?? undefined,
-            );
-            return;
-          }
-        }
-
-        const prevIndex =
-          currentIndex - 1 < 0 ? playlist.length - 1 : currentIndex - 1;
-        await get().playTrack(
-          playlist[prevIndex],
-          playlist,
-          get().playingFolderStack,
-          get().playingPlaylistId ?? undefined,
-          get().playlistFolderStacks ?? undefined,
-        );
-      },
+          const prevIndex =
+            currentIndex - 1 < 0 ? playlist.length - 1 : currentIndex - 1;
+          await get().playTrack(
+            playlist[prevIndex],
+            playlist,
+            get().playingFolderStack,
+            get().playingPlaylistId ?? undefined,
+            get().playlistFolderStacks ?? undefined,
+          );
+        }),
 
       seek: (time) => {
         const { audio } = get();
@@ -681,6 +846,13 @@ export const usePlayerStore = create<PlayerState>()(
         set((s) => ({
           shuffle: !s.shuffle,
           shuffleHistory: [],
+          shufflePendingPreviousId: null,
+          shuffleCycle: !s.shuffle
+            ? createShuffleCycle(
+                s.playlist.map((file) => file.id),
+                s.currentTrack?.id,
+              )
+            : null,
           nextShuffleFileId: null,
         }));
         queueMicrotask(() => get().prefetchNextTrack());
@@ -707,6 +879,8 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       resetPlayback: () => {
+        playTrackRequestId++;
+        navigationOperation = null;
         fetchAbortController?.abort();
         fetchAbortController = null;
         prefetchAbortController?.abort();
@@ -733,6 +907,9 @@ export const usePlayerStore = create<PlayerState>()(
           suppressGlide: true,
           isLoading: false,
           shuffleHistory: [],
+          shuffleCycle: null,
+          shuffleCollectionKey: null,
+          shufflePendingPreviousId: null,
           nextShuffleFileId: null,
           prefetchingFileId: null,
         });
@@ -752,14 +929,26 @@ export const usePlayerStore = create<PlayerState>()(
         // Determine which track to prefetch
         let nextFileId: string;
         if (shuffle) {
-          let prePickedId = get().nextShuffleFileId;
+          const cycle = reconcileShuffleCycle(
+            get().shuffleCycle,
+            playlist.map((file) => file.id),
+            get().currentTrack?.id,
+          );
+          // Prefetch peeks at the cycle; only successful playback consumes it.
+          set({ shuffleCycle: cycle });
+          let prePickedId = cycle.remainingIds[0];
           if (!prePickedId) {
-            // Pick a random track, excluding current if possible
-            let idx = Math.floor(Math.random() * (playlist.length - 1));
-            if (idx >= currentIndex) idx++;
-            prePickedId = playlist[idx].id;
-            set({ nextShuffleFileId: prePickedId });
+            if (repeat !== "all") {
+              set({ nextShuffleFileId: null });
+              return;
+            }
+            prePickedId = restartShuffleCycle(
+              playlist.map((file) => file.id),
+              get().currentTrack?.id,
+              get().nextShuffleFileId,
+            ).remainingIds[0];
           }
+          set({ nextShuffleFileId: prePickedId });
           nextFileId = prePickedId;
         } else {
           const nextIndex = currentIndex + 1;
@@ -883,6 +1072,11 @@ export const usePlayerStore = create<PlayerState>()(
         isMuted: state.isMuted,
         shuffle: state.shuffle,
         repeat: state.repeat,
+        shuffleCycle: state.shuffleCycle,
+        shuffleCollectionKey: state.shuffleCollectionKey,
+        shufflePendingPreviousId: state.shufflePendingPreviousId,
+        shuffleHistory: state.shuffleHistory,
+        nextShuffleFileId: state.nextShuffleFileId,
       }),
     },
   ),

@@ -11,6 +11,7 @@ export function PlayControls() {
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const isLoading = usePlayerStore((s) => s.isLoading);
   const shuffle = usePlayerStore((s) => s.shuffle);
+  const shuffleCycle = usePlayerStore((s) => s.shuffleCycle);
   const repeat = usePlayerStore((s) => s.repeat);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const next = usePlayerStore((s) => s.next);
@@ -18,13 +19,14 @@ export function PlayControls() {
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
   const hasCurrentTrack = usePlayerStore((s) => s.currentTrack !== null);
-  const playlistLength = usePlayerStore((s) => s.playlist.length);
+  const playlist = usePlayerStore((s) => s.playlist);
   const currentIndex = usePlayerStore((s) => s.currentIndex);
 
   const hasNext = hasNextTrack({
     currentIndex,
-    playlist: { length: playlistLength },
+    playlist,
     shuffle,
+    shuffleCycle,
     repeat,
   });
 

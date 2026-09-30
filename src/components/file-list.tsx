@@ -202,13 +202,7 @@ interface FileListRowProps {
   isPlayingAncestor: boolean;
   isPlaybackPaused: boolean;
   onFolderClick: (id: string, name: string) => void;
-  playTrack: (
-    track: DriveFile,
-    playlist: DriveFile[],
-    folderStack: FolderEntry[],
-    playlistId?: string,
-    playlistFolderStacks?: FolderEntry[][],
-  ) => Promise<void>;
+  playTrack: ReturnType<typeof usePlayerStore.getState>["playTrack"];
   togglePlay: () => void;
 }
 

@@ -12,10 +12,47 @@ Use `pnpm` for local work because the repository tracks `pnpm-lock.yaml`.
 
 ## Vercel access
 
-`mise.local.toml` (gitignored, local-only) holds a `VERCEL_TOKEN` for the private
-Vercel team. Agent shells don't activate mise: run `mise exec -- vercel <cmd>`.
-A bare `vercel` finds no token and opens a browser login into whichever account
-Chrome holds.
+`mise.local.toml` (gitignored, local-only) supplies `VERCEL_TOKEN` for the
+private Vercel team. Agent shells do not activate mise automatically. Run from
+this repository root with the helper below; no global Vercel installation or
+browser login is needed. Keep the token in the environment, never in output or
+command arguments.
+
+```bash
+vc() {
+  MISE_CACHE_DIR="$PWD/.vercel/agent-cache/mise" \
+  XDG_CACHE_HOME="$PWD/.vercel/agent-cache/xdg" \
+  PNPM_HOME="$PWD/.vercel/agent-cache/pnpm" \
+  NO_UPDATE_NOTIFIER=1 VERCEL_TELEMETRY_DISABLED=1 \
+    mise exec -- pnpm dlx vercel@62.2.0 \
+      --scope fabian-dietenbergers-projects \
+      --global-config "$PWD/.vercel/agent-cache/config" "$@"
+}
+```
+
+The pinned CLI runs on demand; its cache/config files stay under the ignored
+`.vercel/` directory. A bare `mise exec -- vercel` currently fails because the
+global shim has no configured CLI. Mise loads credentials from its working
+directory; Vercel's `--cwd` does not change that.
+
+Confirm `.vercel/project.json` names `drivebeats` before commands that use the
+linked project. If credentials or linkage are missing, report the blocker.
+Use explicit project names and bounded queries:
+
+```bash
+vc ls drivebeats --meta githubCommitRef=main --limit 2 --json |
+  jq '.deployments[] | {url, state, target}'
+vc inspect "$deployment_url"
+(set -o pipefail; vc inspect "$deployment_url" --logs 2>&1 | tail -n 80)
+vc logs "$deployment_url" --since 30m --limit 30
+vc env ls
+```
+
+Take `deployment_url` from the list result. Build logs use stderr, so merge
+streams before limiting output. Runtime logs need no `--follow`; narrow the
+time window or query before increasing limits. `env ls` shows names/scopes;
+do not fetch decrypted values for presence checks. A `READY` deployment proves
+build completion, not runtime health or a working user flow.
 
 - The token reaches every project in the team; work only on project `drivebeats`.
 - Observe freely: `ls`, `inspect`, `logs`, `env ls`, read-only API calls.

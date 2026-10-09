@@ -92,4 +92,4 @@ DriveBeats uses `https://www.googleapis.com/auth/drive.file` together with Googl
 
 ## License
 
-This project is private.
+Licensed under the [MIT License](LICENSE).

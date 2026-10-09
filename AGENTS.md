@@ -1,68 +1,24 @@
 # Repository Guidelines
 
-## Build, Test, and Development Commands
+## Local commands
 
 Use `pnpm` for local work because the repository tracks `pnpm-lock.yaml`.
 
-- `pnpm dev` starts the Next.js dev server on `http://localhost:3000`.
-- `pnpm build` creates the production build and catches type and route issues.
-- `pnpm start` serves the built app locally.
-- `pnpm lint` runs Biome checks.
-- `pnpm format` applies Biome formatting and import organization.
+Read `package.json` for available scripts. `pnpm format` applies formatting only;
+use `pnpm exec biome check --write <changed-files>` to apply safe lint fixes and
+organize imports as well.
 
 ## Vercel access
 
-`mise.local.toml` (gitignored, local-only) supplies `VERCEL_TOKEN` for the
-private Vercel team. Agent shells do not activate mise automatically. Run from
-this repository root with the helper below; no global Vercel installation or
-browser login is needed. Keep the token in the environment, never in output or
-command arguments.
+Before inspecting or changing Vercel resources, read
+[docs/vercel-access.md](docs/vercel-access.md).
 
-```bash
-vc() {
-  MISE_CACHE_DIR="$PWD/.vercel/agent-cache/mise" \
-  XDG_CACHE_HOME="$PWD/.vercel/agent-cache/xdg" \
-  PNPM_HOME="$PWD/.vercel/agent-cache/pnpm" \
-  NO_UPDATE_NOTIFIER=1 VERCEL_TELEMETRY_DISABLED=1 \
-    mise exec -- pnpm dlx vercel@62.2.0 \
-      --scope fabian-dietenbergers-projects \
-      --global-config "$PWD/.vercel/agent-cache/config" "$@"
-}
-```
-
-The pinned CLI runs on demand; its cache/config files stay under the ignored
-`.vercel/` directory. A bare `mise exec -- vercel` currently fails because the
-global shim has no configured CLI. Mise loads credentials from its working
-directory; Vercel's `--cwd` does not change that.
-
-Confirm `.vercel/project.json` names `drivebeats` before commands that use the
-linked project. If credentials or linkage are missing, report the blocker.
-Use explicit project names and bounded queries:
-
-```bash
-vc ls drivebeats --meta githubCommitRef=main --limit 2 --json |
-  jq '.deployments[] | {url, state, target}'
-vc inspect "$deployment_url"
-(set -o pipefail; vc inspect "$deployment_url" --logs 2>&1 | tail -n 80)
-vc logs "$deployment_url" --since 30m --limit 30
-vc env ls
-```
-
-Take `deployment_url` from the list result. Build logs use stderr, so merge
-streams before limiting output. Runtime logs need no `--follow`; narrow the
-time window or query before increasing limits. `env ls` shows names/scopes;
-do not fetch decrypted values for presence checks. A `READY` deployment proves
-build completion, not runtime health or a working user flow.
-
-- The token reaches every project in the team; work only on project `drivebeats`.
-- Observe freely: `ls`, `inspect`, `logs`, `env ls`, read-only API calls.
-- Ask first before changing Vercel state: deploy, redeploy, promote, rollback,
-  `env add`/`rm`/`pull`, project or domain settings.
+Work only on `drivebeats`. Read-only inspection is authorized.
+Ask before changing remote Vercel state or exporting secrets locally.
 
 ## Coding Style & Naming Conventions
 
-This project uses TypeScript with `strict` mode and Biome for formatting and linting. Prefer 2-space indentation, double
-quotes, and the `@/` path alias for imports from `src`. Keep React components in PascalCase exports, but name files in
+Keep React components in PascalCase exports, but name files in
 kebab-case such as `playlist-track-item.tsx`. Follow Next.js file conventions exactly: `page.tsx`, `layout.tsx`,
 `route.ts`, `manifest.ts`, and similar. Store modules should keep the `*-store.ts` suffix.
 
@@ -87,13 +43,19 @@ Keep database access easy to audit.
 ## Sync Boundaries
 
 - `playlists` and `favorites` are cloud-synced through Neon.
+- ID3 title, artist, and album metadata for tracks in playlists or favorites also syncs through Neon.
 - `recently played`, imported Drive items, player state, and offline downloads remain device-local.
 - Do not store the full imported folder tree in the database.
 - Only store metadata needed for synced features. Never store audio blobs in Neon.
 
+Before changing Library Search catalog acquisition, storage, or invalidation, read
+[the device-local catalog ADR](docs/adr/0001-keep-library-search-catalog-device-local.md).
+
 ## Testing Guidelines
 
-Run `pnpm test`, `pnpm lint`, and `pnpm build` before opening a PR, then manually verify the affected flow in the browser.
+Before delivering code changes, run `pnpm test`, `pnpm lint`, and `pnpm build`,
+then manually verify the affected flow in the browser. Report the results and any
+checks that could not be completed.
 For authentication or playback changes, document the manual checks you performed, for example Google sign-in, Drive
 import, and player controls. Colocate tests as `*.test.ts` or `*.test.tsx` near the feature they cover.
 

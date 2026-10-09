@@ -47,9 +47,7 @@ Keep database access easy to audit.
 - `recently played`, imported Drive items, player state, and offline downloads remain device-local.
 - Do not store the full imported folder tree in the database.
 - Only store metadata needed for synced features. Never store audio blobs in Neon.
-
-Before changing Library Search catalog acquisition, storage, or invalidation, read
-[the device-local catalog ADR](docs/adr/0001-keep-library-search-catalog-device-local.md).
+- The Library Search catalog stays account-scoped and device-local; publish only complete catalog generations.
 
 ## Testing Guidelines
 

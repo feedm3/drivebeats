@@ -4,6 +4,11 @@
 
 Use `pnpm` for local work because the repository tracks `pnpm-lock.yaml`.
 
+Run install, dev/start, and validation commands from the repository root.
+The Next app is `apps/drivebeats-web`; portable core code is
+`packages/drivebeats-core`. App environment files belong in
+`apps/drivebeats-web/.env*`; `mise.local.toml` and Vercel linkage stay at root.
+
 Read `package.json` for available scripts. `pnpm format` applies formatting only;
 use `pnpm exec biome check --write <changed-files>` to apply safe lint fixes and
 organize imports as well.
@@ -26,16 +31,16 @@ kebab-case such as `playlist-track-item.tsx`. Follow Next.js file conventions ex
 
 Keep database access easy to audit.
 
-- Put the shared Neon client in `src/db/client.ts`.
-- Put table access in `src/db`, with one file per table such as `playlists.ts`, `playlist-tracks.ts`, and
+- Put the shared Neon client in `apps/drivebeats-web/src/db/client.ts`.
+- Put table access in `apps/drivebeats-web/src/db`, with one file per table such as `playlists.ts`, `playlist-tracks.ts`, and
   `favorite-tracks.ts`.
-- Keep those `src/db` files focused on queries against their own table.
-- Put multi-table workflows in `src/lib/*service.ts`.
+- Keep those database modules focused on queries against their own table.
+- Put multi-table workflows in `apps/drivebeats-web/src/lib/*service.ts`.
 - Keep route handlers thin: validate the request, load auth, call a service, return the response.
 
 ## Migrations
 
-- Add new SQL migrations in `db/migrations`.
+- Add new SQL migrations in repository-root `db/migrations`.
 - Do not rewrite old applied migrations for existing environments. Add a new forward migration instead.
 - If you rename a table, index, or constraint, add an explicit migration for existing databases.
 - Keep database constraints aligned with API validation limits where possible.
@@ -78,6 +83,14 @@ Design for mobile first; all UI must be usable on small screens before scaling u
 - Leave adequate spacing between tap targets so adjacent elements are not accidentally triggered.
 - Avoid hover-only interactions; every action must be reachable via tap.
 - Test layouts at 320px–428px viewport widths before wider breakpoints.
+
+## Installed Next.js guides
+
+Resolve Next.js from `apps/drivebeats-web` (for example, run
+`pnpm --filter @drivebeats/web exec node -p 'require.resolve("next/package.json")'`).
+Read guides in `dist/docs/` beside that resolved manifest; the workspace root
+need not have a `node_modules/next` entry. This resolves the generated rule's
+documentation paths below to the app's installed version.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

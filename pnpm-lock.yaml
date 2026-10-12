@@ -165,7 +165,16 @@ settings:
 importers:
 
   .:
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.5.15
+        version: 2.5.15
+
+  apps/drivebeats-web:
     dependencies:
+      '@drivebeats/core':
+        specifier: workspace:*
+        version: link:../../packages/drivebeats-core
       '@base-ui/react':
         specifier: ^1.9.0
         version: 1.9.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -209,9 +218,6 @@ importers:
         specifier: ^5.0.15
         version: 5.0.15(@types/react@19.3.0)(react@19.3.0)(use-sync-external-store@1.6.0(react@19.3.0))
     devDependencies:
-      '@biomejs/biome':
-        specifier: 2.5.15
-        version: 2.5.15
       '@tailwindcss/postcss':
         specifier: ^4
         version: 4.3.3
@@ -248,6 +254,12 @@ importers:
       vitest:
         specifier: ^5.0.3
         version: 5.0.3(@types/node@26.6.5)(jsdom@30.1.2)(vite@7.3.3(@types/node@26.6.5)(jiti@2.7.0)(lightningcss@1.32.0))
+
+  packages/drivebeats-core:
+    devDependencies:
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
 
 packages:
 

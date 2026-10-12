@@ -1,2 +1,2 @@
-# Copy ignored local environment files into Codex-managed worktrees.
-.env*
+# Copy ignored app environment files into Codex-managed worktrees.
+apps/drivebeats-web/.env*

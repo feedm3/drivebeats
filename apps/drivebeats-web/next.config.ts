@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import type { NextConfig } from "next";
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -27,8 +28,13 @@ const contentSecurityPolicy = [
   "manifest-src 'self'",
 ].join("; ");
 
+const workspaceRoot = resolve(__dirname, "../..");
+
 const nextConfig: NextConfig = {
+  transpilePackages: ["@drivebeats/core"],
+  outputFileTracingRoot: workspaceRoot,
   turbopack: {
+    root: workspaceRoot,
     resolveAlias: {
       // jsmediatags bundles a ReactNativeFileReader that requires react-native-fs.
       // We only use the browser Blob reader, so stub this out.

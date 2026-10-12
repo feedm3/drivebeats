@@ -31,14 +31,15 @@ audio files.
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 24 and pnpm 12.7.0 (pinned in `mise.toml`)
 - A Google Cloud project with the Drive API enabled
 - OAuth 2.0 credentials (Client ID and Client Secret)
 - A browser API key for Google Picker
 
 ### Environment Variables
 
-Create a `.env.local` file:
+Create `apps/drivebeats-web/.env.local`. Next.js loads app environment files
+from this directory when you run the root commands:
 
 ```env
 GOOGLE_CLIENT_ID=your-client-id
@@ -59,6 +60,29 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+Run these commands from the repository root. The root `dev` and `start`
+commands target `@drivebeats/web`; `test`, `lint`, and `build` validate the
+active workspace packages, including the core TypeScript check:
+
+```bash
+pnpm test
+pnpm lint
+pnpm build
+```
+
+### Workspace Layout
+
+- `apps/drivebeats-web`: Next.js app, routes, public assets, and app configuration
+- `packages/drivebeats-core`: source-only portable types and constants, exported
+  through `@drivebeats/core/types`
+- `db/migrations`: existing SQL migration history, kept at the repository root
+- `docs`: operational guides, research, and MCP task briefs
+
+Install dependencies once from the repository root; all packages share
+`pnpm-lock.yaml`. Local Vercel credentials (`mise.local.toml`) and project
+linkage (`.vercel/`) also remain at the repository root. Read
+[Vercel access](docs/vercel-access.md) before inspecting hosting configuration.
+
 ### Production Build
 
 ```bash
@@ -74,6 +98,12 @@ through `DATABASE_URL`. Set `NEXT_PUBLIC_APP_URL=https://www.drivebeats.app`
 for the Production environment. If `NEXT_PUBLIC_APP_URL` is unset, the app
 falls back to `https://www.drivebeats.app` for SEO metadata, sitemap, and
 robots, but OAuth still requires it to be set correctly.
+
+The monorepo's web application root is `apps/drivebeats-web`; its Next.js
+output is `.next` within that directory. Confirm the project's build settings
+and access to workspace files outside the app root before publishing the
+migration. Task 1's [execution notes](docs/mcp/tasks/01-monorepo.md#execution-notes)
+record the inspected settings and any pending hosting changes.
 
 The canonical host is `https://www.drivebeats.app`; configure the apex
 `drivebeats.app` to redirect to `www` in the Vercel domain settings, and add

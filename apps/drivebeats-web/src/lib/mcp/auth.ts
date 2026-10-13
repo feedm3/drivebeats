@@ -182,6 +182,13 @@ export async function getMcpGoogleAccessToken(principal: McpPrincipal) {
   );
   if (typeof decrypted.token !== "string") throw new McpAuthError();
   const data = await refreshAccessToken(decrypted.token);
+  const debugScopes = new Set((data.scope ?? "").split(/\s+/));
+  console.info("[DEBUG-drivebeats-playback] refreshed credential", {
+    scopeReported: typeof data.scope === "string",
+    perFile: debugScopes.has("https://www.googleapis.com/auth/drive.file"),
+    readOnly: debugScopes.has("https://www.googleapis.com/auth/drive.readonly"),
+    fullDrive: debugScopes.has("https://www.googleapis.com/auth/drive"),
+  });
   if (data.error || (data.scope && !hasGoogleDriveScope(data.scope))) {
     await revokeMcpGrant(grant.id, principal.googleUserId);
     throw new McpAuthError();

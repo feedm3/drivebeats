@@ -253,7 +253,7 @@ describe("DriveBeats modern MCP endpoint", () => {
     );
     expect(unauthenticated.result.isError).toBe(true);
     expect(unauthenticated.result._meta["mcp/www_authenticate"][0]).toContain(
-      'scope="profile:read"',
+      'scope="profile:read library:read media:read"',
     );
   });
 

@@ -312,3 +312,31 @@ clicking Copy link displayed success with no console errors. At 320px and
 44px high. Clipboard byte readback could not be confirmed through this browser
 adapter, which returned an empty clipboard despite the success status. Actual
 paste into Firefox and real host linking remain pending the user's test.
+
+### Real account linking and reconnect scope repair, 2026-10-13
+
+The user confirmed that the copied link opens in Firefox and Google linking
+succeeds. Real profile and cloud-library reads succeeded in actual chats;
+the cloud read returned one existing Playlist and 24 favorites. These results
+prove real account access, rather than a synthetic authorization request.
+
+The live host then displayed an authentication-expired reconnect banner.
+Alternating profile and library reads reproduced `scope_required`: the host
+replaced a profile-only connection with a library-only connection. Read-only
+grant metadata confirmed two fresh, unrevoked grants with those separate
+scopes, and no credentials were exported. The linked chat's turns confirm the
+profile-first flow followed by a separate library reconnect.
+
+All private 401/403 tool challenges now request the full account baseline.
+Per-tool scope enforcement and declared minimum scopes remain unchanged;
+existing grants are not elevated. A new regression failed against the old
+profile-only challenge and passed with the repair. Root validation passed
+**48 UI + 396 web = 444 tests**, lint and build. Independent focused review
+passed 18 tests. An isolated native-client probe accepted `oauth.scopes`
+syntactically but did not include it in the resulting authorization request,
+so no unsupported manifest change was published.
+
+The repair still requires one real reconnect with full consent and successful
+profile/library reads using that same connection before scope-loop acceptance
+can be recorded. Selected media, reconnect/revocation and website/session
+preservation checks remain outstanding; Task 3 is not marked complete.

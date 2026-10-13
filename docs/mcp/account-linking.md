@@ -72,6 +72,10 @@ before storage. The host receives only a DriveBeats access/refresh grant.
 Private tools validate token issuer, audience, expiration, scopes and live
 grant ownership on each request. Google access tokens are refreshed on the
 server for an authorized read and never returned to the host or model.
+Private authentication challenges request the full account baseline so the
+installed host's replacement connection can read profile, cloud music and
+selected media together. Each tool still enforces its minimum scope. Reconnect
+requires explicit consent; existing partial grants are not elevated.
 Expired or revoked Google authorization requires reconnecting with consent.
 
 Website logout clears the website's local session/device data. It does not

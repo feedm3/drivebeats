@@ -94,7 +94,44 @@ afterEach(async () => {
 });
 
 describe("Private MCP tool contracts", () => {
-  it("requests the full baseline only for the app's deliberate Connect action", async () => {
+  it.each([
+    ["invalid_token", 401],
+    ["insufficient_scope", 403],
+  ] as const)(
+    "requests the full account baseline for %s while enforcing each tool's minimum scope",
+    async (code, status) => {
+      vi.mocked(authenticateMcpRequest).mockRejectedValue(
+        new McpAuthError(code, status),
+      );
+      const handler = createHandler();
+      for (const [name, required] of [
+        ["drivebeats_get_profile", "profile:read"],
+        ["drivebeats_get_cloud_library", "library:read"],
+        ["drivebeats_prepare_media", "media:read"],
+      ]) {
+        const { result } = await (
+          await handler.fetch(
+            request(
+              "tools/call",
+              name,
+              name === "drivebeats_prepare_media" ? { fileId: "selected" } : {},
+            ),
+          )
+        ).json();
+        expect(authenticateMcpRequest).toHaveBeenLastCalledWith(
+          expect.any(Request),
+          [required],
+        );
+        expect(result.isError).toBe(true);
+        expect(result._meta["mcp/www_authenticate"][0]).toContain(
+          'scope="profile:read library:read media:read"',
+        );
+      }
+      expect(getCloudLibrarySyncPayload).not.toHaveBeenCalled();
+      expect(prepareMcpMedia).not.toHaveBeenCalled();
+    },
+  );
+  it("requires the full baseline for the app's deliberate Connect action", async () => {
     vi.mocked(authenticateMcpRequest).mockRejectedValueOnce(new McpAuthError());
     const { result } = await (
       await createHandler().fetch(

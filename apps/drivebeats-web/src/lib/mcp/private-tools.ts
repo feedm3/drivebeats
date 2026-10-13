@@ -22,11 +22,15 @@ function textResult(structuredContent: Record<string, unknown>, text: string) {
   return { content: [{ type: "text" as const, text }], structuredContent };
 }
 
-export function privateToolFailure(error: unknown, scopes: string[]) {
+export function privateToolFailure(error: unknown) {
   if (error instanceof McpAuthError) {
     let challenge: string;
     try {
-      challenge = getMcpAuthChallenge(scopes);
+      // The installed host replaces operation-specific grants instead of
+      // accumulating their scopes. Reconnection asks for the full account
+      // baseline shown on the consent page; each tool still enforces its own
+      // minimum scope and no existing grant gains additional permissions.
+      challenge = getMcpAuthChallenge();
     } catch {
       return {
         ...textResult(
@@ -83,7 +87,7 @@ export function registerPrivateTools(
         const principal = await authenticateMcpRequest(request, scopes);
         return await operation(principal);
       } catch (error) {
-        return privateToolFailure(error, scopes);
+        return privateToolFailure(error);
       }
     };
   }

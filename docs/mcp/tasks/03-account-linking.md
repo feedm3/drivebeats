@@ -114,9 +114,12 @@ data retention were **not verified**. Evidence inspected: current task 2 host
 notes, official OpenAI/MCP auth documentation, installed OAuth/SDK contracts,
 repository source/tests, built local HTTP responses and simulated-host browser
 checks. No direct injected test token or simulated display is claimed as real
-account linking. The SQL migrations have not been exercised against a database.
+account linking. The authorized rollout below records migrations exercised on
+a Neon rehearsal branch and applied to the intended main database; this proves
+schema readiness, while provider and actual-host acceptance remain separate.
 
-The initial remote activation checklist required authorization: choose the issuer/deployment, apply
+The initial remote activation checklist required authorization: choose the
+issuer/deployment, apply
 migrations `0007` then `0008`, configure the five MCP variables and Google
 callback, deploy the backend/UI, update the existing private plugin connection
 to the preconfigured OAuth client, then run the live acceptance checklist in
@@ -148,6 +151,11 @@ existing task 2 app/build dependencies are part of the release; the pre-existing
   `drivebeats-chatgpt-preview`. Host callback:
   `https://chatgpt.com/connector_platform_oauth_redirect`. The Google callback
   to configure is the issuer plus `/api/mcp/oauth/google`.
+- All five MCP variables are configured for Preview deployments on
+  `codex/mcp-account-linking`; the signing and credential-encryption keys are
+  independent, server-only values. Existing Google and database configuration
+  is reused. Variable presence is configuration evidence; deployed runtime
+  behavior and actual linking remain separate checks.
 - Plugin source is now reproducible in `plugins/drivebeats-preview`, version
   `0.2.0`, preserving the existing internal package name, plugin ID,
   USER/PRIVATE scope, and icon paths. It declares mixed access, provided
@@ -160,11 +168,40 @@ existing task 2 app/build dependencies are part of the release; the pre-existing
   the scoped CSP fix. This is redirect-policy evidence, not ChatGPT linking.
 - Root checks after these fixes passed: `pnpm test` **48 UI + 373 web = 421**,
   `pnpm lint`, `pnpm build`; focused release checks covered 16 tests.
-- Google Cloud browser access currently requires signing in to the account
-  that owns the DriveBeats OAuth client; the available Chrome session contains
-  only the work account. No user credential was entered or exposed. Callback
-  configuration and actual ChatGPT linking await that access.
+- Implementation commit `3ff4158` was pushed on
+  `codex/mcp-account-linking`. The pre-existing `GLOSSARY.md` edit remains
+  outside that commit.
+- Deployment exclusion commit `e51df44` was pushed on the same branch.
+  `.vercelignore` excludes environment files and local mise configuration;
+  the clean deployment dry run verified those exclusions before rebuilding.
+- The clean Preview deployment is READY:
+  `dpl_9GPoane4n6tHTeB6ZFfNWmnqiahW`, with immutable origin
+  `https://drivebeats-egr5w2xko-fabian-dietenbergers-projects.vercel.app`.
+  The stable issuer alias resolves to this deployment, verified by canonical
+  readback. Thirteen deployed smoke checks passed, covering discovery/tool
+  metadata, CSP, auth challenges and invalid requests.
+- A real deployed authorize request returned 307, persisted an encrypted
+  linking request in Neon and redirected to Google with the existing
+  DriveBeats production client, the stable issuer's `/api/mcp/oauth/google`
+  callback, `drive.file` and the existing identity scopes. This proves the
+  deployed start of authorization, not a completed account link.
+- The existing private plugin was updated to version `0.2.0`, release
+  `pluginrel_6acdd2f59bcc81919ecb8b6314ff8153`. Readback verified all four
+  manifest files; plugin identity and USER/PRIVATE scope remain unchanged.
+- Google Cloud sign-in works in Firefox. The exact callback is prepared in
+  the existing client's configuration but remains unsaved: the computer-use
+  policy requires confirmation at that save action. Provider configuration
+  and real ChatGPT linking remain pending. No credentials are included in
+  these notes.
+- The actual ChatGPT plugin page in Firefox shows the installed version
+  `0.2.0`. Its Start action opens the normal `/codex/open-app` launcher and
+  asks to open ChatGPT Desktop. Browser control of the native host UI was
+  blocked, so host connection requires user interaction. Plugin Management
+  search returns no DriveBeats results, and updated DriveBeats tools are
+  unavailable in the current tool inventory after the cached fixture tools
+  disappeared. Neither the web listing nor the launch
+  action proves new tool activation or completed OAuth linking.
 
-Deployment, environment, plugin release, Git and real-host results will be
-appended after their verification. The task remains unchecked until real
-account data and selected Drive reads are accepted.
+Google callback and real-host results will be appended after their
+verification. The task remains unchecked until real account data and selected
+Drive reads are accepted.

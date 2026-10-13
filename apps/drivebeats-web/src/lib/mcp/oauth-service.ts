@@ -334,6 +334,9 @@ export async function startMcpAuthorization(request: NextRequest) {
       response_type: "code",
       scope: `${GOOGLE_DRIVE_SCOPE} openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile`,
       access_type: "offline",
+      // Match website sign-in: retain permissions already approved for this
+      // Google project so saved tracks remain readable after linking MCP.
+      include_granted_scopes: "true",
       prompt: "consent",
       state,
       nonce,

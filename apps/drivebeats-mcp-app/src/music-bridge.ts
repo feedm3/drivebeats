@@ -768,7 +768,14 @@ export function createMusicBridge(app: App | null, audio: HTMLAudioElement) {
       }
     },
     async importMusic() {
-      if (!session || !app || !importOrigin) return;
+      if (!session || !app || !importOrigin) {
+        update({
+          error:
+            "Import music is unavailable. Reopen DriveBeats, then try Import music again.",
+        });
+        return;
+      }
+      update({ error: null });
       try {
         const { metadata } = await call("drivebeats_prepare_import", {
           sessionId: session.sessionId,
@@ -783,7 +790,11 @@ export function createMusicBridge(app: App | null, audio: HTMLAudioElement) {
           url.hash
         )
           throw new Error("The import URL is invalid.");
-        await app.openLink({ url: url.href });
+        const opened = await app.openLink({ url: url.href });
+        if (opened.isError)
+          throw new Error(
+            "Opening the import page was blocked or canceled. Try Import music again.",
+          );
       } catch (error) {
         update({
           error:

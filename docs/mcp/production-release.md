@@ -115,12 +115,39 @@ reported zero imported roots. Cloud collection visibility is not proof of
 Google file access: these rows are read from Neon. Google404 also does not prove
 the file was deleted; it can mean the credential cannot access it.
 
-Recovery requires the user to choose an accessible real track through Import
-music/Google Picker and retry Play. Errors now direct the user to that selection,
-and the playback error area exposes the existing Import music action. No scopes
-were broadened and no Drive write was added. Temporary instrumentation was
-removed after collecting the status. Actual Drive audio playback remains
-unconfirmed until this recovery is exercised in the production host.
+The initial recovery directed the user to Import music/Google Picker; that
+attempt exposed an API developer key error. The user then confirmed these
+same songs play on the website and asked to focus on saved-song playback.
+The playback error area exposes the existing Import music action, but this
+does not fix missing provider authorization by itself.
+
+Live scope-only instrumentation confirmed the ChatGPT credential contains
+`drive.file` and neither `drive.readonly` nor `drive`. Git history shows website
+sign-in previously requested `drive.readonly` and still preserves previously
+approved scopes. MCP sign-in omitted that preservation. Account linking now
+sets `include_granted_scopes=true`, matching the website, while its explicit
+requested scopes remain `drive.file` and profile. No existing website credential
+is borrowed, no new Drive scope is requested and no Drive write is added.
+Google's [incremental authorization documentation](https://developers.google.com/identity/protocols/oauth2/web-server#incrementalAuth)
+describes preserving previously approved permissions for the project.
+The user must reconnect once to obtain the updated
+Google grant, then retry an existing saved song directly. This is the
+authorization mismatch supported by current evidence; actual playback must
+still verify the diagnosis after reconnect. Temporary instrumentation was
+removed after collecting the scope flags.
+
+The rendered Google authorization-link regression failed before the change
+and passes afterward. It verifies preserved authorization and the unchanged
+explicit requested scope list. Independent review confirmed no changes to
+identity binding, credential storage, PKCE, nonce, grant enforcement or Drive
+read boundaries. Final local checks pass475 tests (9 client,31 MCP UI,435 web),
+lint and build. The small bridge reliability fixes also surface a host-denied
+import link or missing import configuration instead of silently returning.
+
+The Picker API-key failure remains a separate unverified configuration issue;
+the import page's `no-referrer` policy and API key origin restrictions need an
+independent follow-up. The user explicitly deferred Picker work while saved
+song playback is repaired.
 
 Recovery validation: root `pnpm test` passes470 tests (9 client,26 MCP UI,
 435 web); `pnpm lint`, `pnpm build` and React Doctor pass. An isolated actual

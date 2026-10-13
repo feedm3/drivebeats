@@ -478,6 +478,15 @@ describe("OAuth request boundaries", () => {
     expect(html).toContain(
       'id="continue-google" href="https://accounts.google.com/o/oauth2/v2/auth?',
     );
+    const googleLink = html.match(/id="continue-google" href="([^"]+)"/)?.[1];
+    const googleUrl = new URL((googleLink ?? "").replaceAll("&amp;", "&"));
+    expect(googleUrl.searchParams.get("include_granted_scopes")).toBe("true");
+    expect(googleUrl.searchParams.get("scope")?.split(" ")).toEqual([
+      "https://www.googleapis.com/auth/drive.file",
+      "openid",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile",
+    ]);
     expect(html).not.toContain("web-refresh");
     const cookie = response.headers.get("set-cookie") ?? "";
     expect(cookie).toContain("__Host-mcp_link=");

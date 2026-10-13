@@ -400,3 +400,59 @@ it("opens the existing music selection flow from a failed real-track preparation
   });
   expect(bridge.player.getSnapshot().playing).toBe(false);
 });
+it("reports a host-denied external import link instead of silently treating it as opened", async () => {
+  const testHost = await connected();
+  testHost.app.openLink.mockResolvedValueOnce({ isError: true });
+  await bridge?.importMusic();
+  expect(bridge?.getSnapshot().error).toContain("blocked");
+});
+it("reports an unavailable trusted import origin instead of ignoring Import music", async () => {
+  document.getElementById("drivebeats-import-selection")?.remove();
+  const testHost = await connected();
+  await bridge?.importMusic();
+  expect(testHost.app.openLink).not.toHaveBeenCalled();
+  expect(bridge?.getSnapshot().error).toContain("Import music is unavailable");
+});
+it("reports external browser rejection without starting playback or claiming completion", async () => {
+  const testHost = await connected();
+  testHost.app.openLink.mockRejectedValueOnce(
+    new Error("The default browser is unavailable."),
+  );
+  await bridge?.importMusic();
+  expect(bridge?.getSnapshot().error).toBe(
+    "The default browser is unavailable.",
+  );
+  expect(bridge?.player.getSnapshot().playing).toBe(false);
+});
+it("rejects missing tool metadata before opening a link", async () => {
+  const testHost = await connected();
+  const original = testHost.app.callServerTool.getMockImplementation();
+  if (!original) throw new Error("Missing test host implementation.");
+  testHost.app.callServerTool.mockImplementation(async (params) =>
+    params.name === "drivebeats_prepare_import"
+      ? { structuredContent: {}, _meta: {} }
+      : original(params),
+  );
+  await bridge?.importMusic();
+  expect(testHost.app.openLink).not.toHaveBeenCalled();
+  expect(bridge?.getSnapshot().error).toBe("The import page could not open.");
+});
+it("reports an expired import session without opening its selection link", async () => {
+  const testHost = await connected();
+  const original = testHost.app.callServerTool.getMockImplementation();
+  if (!original) throw new Error("Missing test host implementation.");
+  testHost.app.callServerTool.mockImplementation(async (params) =>
+    params.name === "drivebeats_prepare_import"
+      ? {
+          structuredContent: {
+            status: "unavailable",
+            message: "The player session expired. Open DriveBeats again.",
+          },
+          isError: true,
+        }
+      : original(params),
+  );
+  await bridge?.importMusic();
+  expect(testHost.app.openLink).not.toHaveBeenCalled();
+  expect(bridge?.getSnapshot().error).toContain("session expired");
+});

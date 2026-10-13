@@ -340,3 +340,11 @@ The repair still requires one real reconnect with full consent and successful
 profile/library reads using that same connection before scope-loop acceptance
 can be recorded. Selected media, reconnect/revocation and website/session
 preservation checks remain outstanding; Task 3 is not marked complete.
+
+Commit `bdcb0fb` was pushed and deployed to preview as
+`dpl_5BBGnnEfyqYg2F6hrbmPfFJPVzci`; canonical alias readback confirms that exact
+deployment. All ten private-tool challenges across modern and legacy protocols
+request the full baseline, while tool declarations retain their minimum scopes.
+Actual desktop CLI package/discovery checks still pass. A fresh real profile
+call generated the updated reconnect prompt; the current library-only grant
+continues to require new explicit consent before profile access is available.

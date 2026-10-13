@@ -11,7 +11,7 @@
     "composerIcon": "./assets/drivebeats.png"
   },
   "name": "drivebeats-fixture-player",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Connect your DriveBeats account to read synced Playlists and favorites, with selected audio access and original sample playback.",
   "author": {
     "name": "Fabian Dietenberger",

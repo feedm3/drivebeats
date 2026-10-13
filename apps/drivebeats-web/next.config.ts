@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import type { NextConfig } from "next";
+import { isMcpClientCallback } from "./src/lib/mcp/client-callbacks";
 
 const isProduction = process.env.NODE_ENV === "production";
 const scriptSources = [
@@ -35,13 +36,7 @@ function consentCallbackOrigins() {
     const callbacks = (process.env.MCP_CLIENT_REDIRECT_URIS ?? "")
       .split(",")
       .map((value) => new URL(value.trim()));
-    if (
-      callbacks.some(
-        (url) =>
-          url.protocol !== "https:" || url.username || url.password || url.hash,
-      )
-    )
-      return [];
+    if (callbacks.some((url) => !isMcpClientCallback(url))) return [];
     return [...new Set(callbacks.map((url) => url.origin))];
   } catch {
     return [];

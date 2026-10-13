@@ -43,6 +43,10 @@ describe("OAuth consent form CSP", () => {
     "https://user:password@attacker.example/callback",
     "https://attacker.example/callback#fragment",
     "https://chatgpt.com/callback,invalid",
+    "http://localhost:46123/callback",
+    "http://127.0.0.1:46124/callback",
+    "http://127.0.0.1:46123/another-callback",
+    "http://127.0.0.1:46123/callback?redirect=elsewhere",
   ])(
     "fails closed for an invalid callback allowlist: %s",
     async (callbacks) => {
@@ -51,4 +55,15 @@ describe("OAuth consent form CSP", () => {
       expect(consent).toBe(global);
     },
   );
+  it("permits only the registered desktop loopback origin on the consent page", async () => {
+    vi.stubEnv(
+      "MCP_CLIENT_REDIRECT_URIS",
+      "https://chatgpt.com/connector_platform_oauth_redirect,http://127.0.0.1:46123/callback",
+    );
+    const { global, consent } = await policies();
+    expect(global).not.toContain("127.0.0.1");
+    expect(consent).toContain(
+      "form-action 'self' https://chatgpt.com http://127.0.0.1:46123;",
+    );
+  });
 });

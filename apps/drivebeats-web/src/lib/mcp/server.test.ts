@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDrivebeatsMcpHandler } from "./server";
 import {
   createUiResource,
@@ -11,6 +11,7 @@ const handlers: ReturnType<typeof createDrivebeatsMcpHandler>[] = [];
 
 afterEach(async () => {
   await Promise.all(handlers.splice(0).map((handler) => handler.close()));
+  vi.unstubAllEnvs();
 });
 
 function buildHandler(html = "<html><body>Fixture player</body></html>") {
@@ -50,6 +51,27 @@ function modernRequest(method: string, params: Record<string, unknown> = {}) {
       },
     }),
   });
+}
+
+function legacyRequest(method: string, params: Record<string, unknown> = {}) {
+  return new Request("http://localhost/mcp", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+}
+
+async function readLegacyResult(response: Response) {
+  expect(response.status).toBe(200);
+  if (response.headers.get("content-type")?.includes("application/json"))
+    return response.json();
+  const body = await response.text();
+  const event = body.split("\n").find((line) => line.startsWith("data: "));
+  expect(event).toBeDefined();
+  return JSON.parse(event?.slice(6) ?? "");
 }
 
 describe("DriveBeats modern MCP endpoint", () => {
@@ -175,21 +197,61 @@ describe("DriveBeats modern MCP endpoint", () => {
     expect((await unknownResource.json()).error).toBeDefined();
   });
 
-  it("fails legacy negotiation and malformed or mismatched modern requests", async () => {
+  it("supports the installed desktop client's 2025 handshake and anonymous discovery without dropping OAuth schemes", async () => {
+    vi.stubEnv("MCP_AUTH_ISSUER", "https://drivebeats.example");
+    vi.stubEnv("MCP_CLIENT_ID", "drivebeats-chatgpt-preview");
+    vi.stubEnv("MCP_CLIENT_REDIRECT_URIS", "https://chatgpt.com/callback");
     const handler = buildHandler();
-    const legacy = await handler.fetch(
-      new Request("http://localhost/mcp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "initialize",
-          params: { protocolVersion: "2025-11-25", capabilities: {} },
+    const initialized = await readLegacyResult(
+      await handler.fetch(
+        legacyRequest("initialize", {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: { name: "codex-desktop", version: "0.162.0" },
         }),
-      }),
+      ),
     );
-    expect((await legacy.json()).error).toBeDefined();
+    expect(initialized.error).toBeUndefined();
+    expect(initialized.result.protocolVersion).toBe("2025-06-18");
+    const listed = await readLegacyResult(
+      await handler.fetch(legacyRequest("tools/list")),
+    );
+    expect(listed.result.tools).toHaveLength(7);
+    expect(listed.result.tools[0].securitySchemes).toEqual([
+      { type: "noauth" },
+    ]);
+    const profile = listed.result.tools.find(
+      (tool: { name: string }) => tool.name === "drivebeats_get_profile",
+    );
+    expect(profile.securitySchemes).toEqual([
+      { type: "oauth2", scopes: ["profile:read"] },
+    ]);
+    expect(profile._meta.securitySchemes).toEqual(profile.securitySchemes);
+    const fixture = await readLegacyResult(
+      await handler.fetch(
+        legacyRequest("tools/call", {
+          name: "drivebeats_list_fixture_tracks",
+          arguments: {},
+        }),
+      ),
+    );
+    expect(fixture.result.structuredContent.tracks).toHaveLength(2);
+    const unauthenticated = await readLegacyResult(
+      await handler.fetch(
+        legacyRequest("tools/call", {
+          name: "drivebeats_get_profile",
+          arguments: {},
+        }),
+      ),
+    );
+    expect(unauthenticated.result.isError).toBe(true);
+    expect(unauthenticated.result._meta["mcp/www_authenticate"][0]).toContain(
+      'scope="profile:read"',
+    );
+  });
+
+  it("fails malformed or mismatched modern requests", async () => {
+    const handler = buildHandler();
     const mismatch = modernRequest("tools/list");
     mismatch.headers.set("Mcp-Method", "tools/call");
     const response = await handler.fetch(mismatch);
@@ -199,7 +261,10 @@ describe("DriveBeats modern MCP endpoint", () => {
     const malformed = await handler.fetch(
       new Request("http://localhost/mcp", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+        },
         body: "{",
       }),
     );

@@ -7,6 +7,7 @@ import {
 } from "@/db/mcp-grants";
 import type { AuthUser } from "@/lib/auth-session";
 import { hasGoogleDriveScope, refreshAccessToken } from "@/lib/google";
+import { isMcpClientCallback } from "./client-callbacks";
 
 export const MCP_SCOPES = [
   "profile:read",
@@ -46,15 +47,7 @@ export function getMcpAuthConfig() {
   const redirectUris = callback.split(",").map((value) => value.trim());
   if (
     !redirectUris.length ||
-    redirectUris.some((value) => {
-      const u = new URL(value);
-      return (
-        u.protocol !== "https:" ||
-        Boolean(u.hash) ||
-        Boolean(u.username) ||
-        Boolean(u.password)
-      );
-    })
+    redirectUris.some((value) => !isMcpClientCallback(new URL(value)))
   )
     throw new Error("Invalid MCP client callback allowlist");
   return {

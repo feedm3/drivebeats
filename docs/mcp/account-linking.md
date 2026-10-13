@@ -14,7 +14,7 @@ Configure the web backend, not the browser bundle. Existing `DATABASE_URL`,
 | --- | --- |
 | `MCP_AUTH_ISSUER` | Canonical HTTPS backend origin, without a trailing slash. The protected resource is this origin plus `/mcp`. |
 | `MCP_CLIENT_ID` | One preconfigured public OAuth client identifier, entered in the private plugin connection. |
-| `MCP_CLIENT_REDIRECT_URIS` | Comma-separated exact HTTPS callbacks copied from the host's connection management page. No wildcards. |
+| `MCP_CLIENT_REDIRECT_URIS` | Comma-separated exact HTTPS callbacks copied from the host's connection management page, plus the registered desktop callback `http://127.0.0.1:46123/callback` when using the compatible desktop package. No wildcards or other HTTP destinations. |
 | `MCP_ACCESS_TOKEN_SIGNING_KEY` | Independent random 32-byte base64url key for DriveBeats access tokens. |
 | `MCP_CREDENTIAL_ENCRYPTION_KEY` | Independent random 32-byte base64url key for encrypted Google credentials and linking state. |
 
@@ -32,6 +32,15 @@ and canceled authorization responses. Current OpenAI guidance describes the
 stable callback `https://chatgpt.com/connector_platform_oauth_redirect` for this
 mode; use the exact callback displayed by the actual connection instead of
 assuming it. [OpenAI authentication](https://developers.openai.com/plugins/build/auth).
+
+The installed desktop CLI `0.162.0-alpha.17.2` requires the compatible package
+described in [the preview plugin guide](../../plugins/drivebeats-preview/README.md).
+Its `.mcp.json` declares the same public client with `oauth.clientId` and a
+fixed `oauth.callbackUrl`/`callbackPort`. The loopback callback is permitted
+only when explicitly included in the server allowlist; other loopback ports,
+paths, queries and ordinary HTTP callbacks are rejected. Only the consent
+page's form policy includes the configured callback origin.
+[Codex plugin OAuth configuration](https://learn.chatgpt.com/docs/extend/mcp#plugin-provided-mcp-servers).
 
 Add this exact Google authorized redirect URI for the backend origin:
 `<MCP_AUTH_ISSUER>/api/mcp/oauth/google`. This is a separate linking callback;

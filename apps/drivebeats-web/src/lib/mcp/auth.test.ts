@@ -7,6 +7,7 @@ import {
   authenticateMcpRequest,
   decryptMcpSecret,
   encryptMcpSecret,
+  getMcpAuthConfig,
   getMcpGoogleAccessToken,
   issueMcpAccessToken,
 } from "./auth";
@@ -65,6 +66,30 @@ beforeEach(() => {
     Buffer.alloc(32, 2).toString("base64url"),
   );
   vi.mocked(getMcpGrant).mockResolvedValue(grant);
+});
+describe("MCP client callback configuration", () => {
+  it("allows the registered desktop callback alongside the ChatGPT callback", () => {
+    vi.stubEnv(
+      "MCP_CLIENT_REDIRECT_URIS",
+      "https://chatgpt.com/connector_platform_oauth_redirect,http://127.0.0.1:46123/callback",
+    );
+    expect(getMcpAuthConfig().redirectUris).toEqual([
+      "https://chatgpt.com/connector_platform_oauth_redirect",
+      "http://127.0.0.1:46123/callback",
+    ]);
+  });
+  it.each([
+    "http://attacker.example/callback",
+    "http://localhost:46123/callback",
+    "http://127.0.0.1:46124/callback",
+    "http://127.0.0.1:46123/another-callback",
+    "http://127.0.0.1:46123/callback?return=https://attacker.example",
+    "http://user:password@127.0.0.1:46123/callback",
+    "http://127.0.0.1:46123/callback#fragment",
+  ])("rejects unregistered insecure callbacks: %s", (callback) => {
+    vi.stubEnv("MCP_CLIENT_REDIRECT_URIS", callback);
+    expect(() => getMcpAuthConfig()).toThrow();
+  });
 });
 describe("MCP grant verification", () => {
   it("accepts an owned token without website cookies", async () => {

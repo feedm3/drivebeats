@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter @drivebeats/web dev",
-    "build": "pnpm --filter @drivebeats/core typecheck && pnpm -r --if-present build",
+    "build": "pnpm --filter @drivebeats/core typecheck && pnpm --filter @drivebeats/web build",
     "start": "pnpm --filter @drivebeats/web start",
     "lint": "biome check && pnpm -r --if-present typecheck",
     "format": "biome format --write",

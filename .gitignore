@@ -10,6 +10,8 @@ coverage/
 # next.js and package build output
 .next/
 dist/
+.mcp-ui/
+/apps/drivebeats-web/public/mcp-fixtures/
 out/
 
 # misc

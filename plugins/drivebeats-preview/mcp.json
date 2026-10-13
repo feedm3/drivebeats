@@ -1,0 +1,24 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "drivebeats": {
+      "type": "streamable-http",
+      "url": "https://drivebeats-mcp-preview-fabian.vercel.app/mcp",
+      "headers": {},
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "mixed",
+            "client": {
+              "mode": "provided",
+              "clientId": "drivebeats-chatgpt-preview",
+              "tokenEndpointAuthMethod": "none"
+            },
+            "baseScopes": ["profile:read", "library:read", "media:read"],
+            "resource": "https://drivebeats-mcp-preview-fabian.vercel.app/mcp"
+          }
+        }
+      }
+    }
+  }
+}

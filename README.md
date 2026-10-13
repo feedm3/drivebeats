@@ -73,6 +73,8 @@ pnpm build
 ### Workspace Layout
 
 - `apps/drivebeats-web`: Next.js app, routes, public assets, and app configuration
+- `apps/drivebeats-mcp-app`: React MCP App, built as browser HTML for the web
+  app's `/mcp` resource, with account linking and checked-in MP3 samples
 - `packages/drivebeats-core`: source-only portable types and constants, exported
   through `@drivebeats/core/types`
 - `db/migrations`: existing SQL migration history, kept at the repository root
@@ -89,6 +91,18 @@ linkage (`.vercel/`) also remain at the repository root. Read
 pnpm build
 pnpm start
 ```
+
+The web build first compiles the MCP App and copies it to the ignored
+`apps/drivebeats-web/.mcp-ui/index.html`, which Next includes in the `/mcp`
+server artifact. The checked-in MP3s ship at hashed `/mcp-fixtures/` paths; the
+resource allows only the deployment origin for these assets. `pnpm dev` prepares the same bundle; run it again after editing
+the MCP App, or use `pnpm --filter @drivebeats/mcp-app dev` for its standalone
+preview. The sample player stays available anonymously. Configured OAuth links
+the same Google identity and reads existing cloud Playlists and favorites.
+See [task 2](docs/mcp/tasks/02-basic-mcp-app.md) for tool names, Inspector checks,
+and recorded real ChatGPT acceptance. See [account linking](docs/mcp/account-linking.md)
+for task 3 server configuration, consent, credential lifecycle and remote
+acceptance steps; full Library browsing and the shared player remain task 4.
 
 ## Deployment
 

@@ -30,8 +30,29 @@ const contentSecurityPolicy = [
 
 const workspaceRoot = resolve(__dirname, "../..");
 
+function consentCallbackOrigins() {
+  try {
+    const callbacks = (process.env.MCP_CLIENT_REDIRECT_URIS ?? "")
+      .split(",")
+      .map((value) => new URL(value.trim()));
+    if (
+      callbacks.some(
+        (url) =>
+          url.protocol !== "https:" || url.username || url.password || url.hash,
+      )
+    )
+      return [];
+    return [...new Set(callbacks.map((url) => url.origin))];
+  } catch {
+    return [];
+  }
+}
+
 const nextConfig: NextConfig = {
-  transpilePackages: ["@drivebeats/core"],
+  transpilePackages: ["@drivebeats/core", "@drivebeats/mcp-app"],
+  outputFileTracingIncludes: {
+    "/mcp": ["./.mcp-ui/index.html"],
+  },
   outputFileTracingRoot: workspaceRoot,
   turbopack: {
     root: workspaceRoot,
@@ -43,6 +64,15 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      {
+        source: "/mcp-fixtures/:file",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [
@@ -60,6 +90,20 @@ const nextConfig: NextConfig = {
           {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=(), payment=()",
+          },
+        ],
+      },
+      {
+        source: "/mcp/connect",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            // Chromium checks the external 303 callback after this page's form
+            // POST. Only the consent page may submit to configured callbacks.
+            value: contentSecurityPolicy.replace(
+              "form-action 'self'",
+              ["form-action 'self'", ...consentCallbackOrigins()].join(" "),
+            ),
           },
         ],
       },

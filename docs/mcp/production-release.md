@@ -149,6 +149,25 @@ the import page's `no-referrer` policy and API key origin restrictions need an
 independent follow-up. The user explicitly deferred Picker work while saved
 song playback is repaired.
 
+### Reconnect from the player footer
+
+The player now exposes Reconnect in its footer, including full-screen mode.
+For a connected account, the action serializes revoking the old plugin grant,
+calling the existing full-scope connection tool and loading saved music. After
+cancellation or when already signed out, retry connects directly without
+revoking again. The host continues to own OAuth; no token enters the widget.
+The account reset pauses audio, stops DJ/polling and clears local session data;
+saved cloud Playlists and favorites are untouched. Post-revocation authenticated
+cleanup is avoided because it could trigger a competing OAuth prompt.
+
+Root tests pass486 (9 client,42 MCP UI,435 web), lint/build pass and React Doctor
+reports no issues. An actual isolated Chromium browser with a simulated MCP
+host verified the compiled full-screen UI at320/428/1100px: no horizontal
+overflow, a44x44px minimum footer button, cancellation recovery and successful
+retry with one revocation and no background cleanup. These checks establish
+the UI/bridge behavior; the real host's Google dialog and saved-song playback
+remain pending user confirmation.
+
 Recovery validation: root `pnpm test` passes470 tests (9 client,26 MCP UI,
 435 web); `pnpm lint`, `pnpm build` and React Doctor pass. An isolated actual
 Chromium browser reproduced denied media in a simulated MCP host, displayed

@@ -94,7 +94,11 @@ function host(sampling = true) {
         let _meta: Record<string, unknown> = {};
         switch (name) {
           case "drivebeats_get_profile":
+          case "drivebeats_connect_account":
             structuredContent = { id: "account-one", name: "Alex" };
+            break;
+          case "drivebeats_disconnect":
+            structuredContent = { status: "disconnected" };
             break;
           case "drivebeats_open_session":
             structuredContent = session;
@@ -455,4 +459,35 @@ it("reports an expired import session without opening its selection link", async
   await bridge?.importMusic();
   expect(testHost.app.openLink).not.toHaveBeenCalled();
   expect(bridge?.getSnapshot().error).toContain("session expired");
+});
+
+it("reconnects from the player footer without chat and stops the old audio session", async () => {
+  const testHost = await connected();
+  if (!bridge) throw new Error("Missing music bridge.");
+  await bridge.player.play(track("first"), [track("first")]);
+  expect(bridge.player.getSnapshot().playing).toBe(true);
+  render(<Player bridge={bridge} />);
+  const before = testHost.app.callServerTool.mock.calls.length;
+  const reconnect = screen.getByRole("button", { name: "Reconnect" });
+  expect(reconnect.closest("footer")).not.toBeNull();
+  fireEvent.click(reconnect);
+  await vi.waitFor(() => {
+    expect(bridge?.account.getSnapshot().loading).toBe(false);
+    expect(bridge?.account.getSnapshot().status).toBe("connected");
+    expect(testHost.app.callServerTool).toHaveBeenCalledWith({
+      name: "drivebeats_connect_account",
+      arguments: {},
+    });
+  });
+  const requests = testHost.app.callServerTool.mock.calls
+    .slice(before)
+    .map(([params]) => params.name);
+  expect(requests.indexOf("drivebeats_disconnect")).toBeLessThan(
+    requests.indexOf("drivebeats_connect_account"),
+  );
+  expect(bridge.player.getSnapshot().playing).toBe(false);
+  expect(requests).not.toContain("drivebeats_create_playlist");
+  expect(requests).not.toContain("drivebeats_set_favorite");
+  expect(requests).not.toContain("drivebeats_close_session");
+  expect(screen.getByRole("button", { name: "Reconnect" })).toBeEnabled();
 });

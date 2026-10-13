@@ -697,7 +697,6 @@ export function createMusicBridge(app: App | null, audio: HTMLAudioElement) {
     if (profile?.id && profile.id !== accountId) void startAccount(profile.id);
     if (!profile && accountId) {
       const oldAccount = accountId;
-      const oldSession = session;
       revision += 1;
       accountId = null;
       session = null;
@@ -705,10 +704,8 @@ export function createMusicBridge(app: App | null, audio: HTMLAudioElement) {
       clearTimeout(timer);
       stopDj();
       player.reset();
-      if (oldSession)
-        void call("drivebeats_close_session", {
-          sessionId: oldSession.sessionId,
-        }).catch(() => undefined);
+      // Revocation already disables the old session. Calling an authenticated
+      // cleanup tool now can launch OAuth with the just-revoked credential.
       void clearCatalog(oldAccount).catch(() => undefined);
       try {
         localStorage.removeItem(receiptKey(oldAccount));

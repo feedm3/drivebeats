@@ -36,6 +36,7 @@ export interface AccountBridge {
   subscribe(listener: () => void): () => void;
   getSnapshot(): AccountState;
   connect(): Promise<boolean>;
+  reconnect(): Promise<boolean>;
   refresh(): Promise<boolean>;
   disconnect(): Promise<boolean>;
   prepareMedia(fileId: string): Promise<PreparedMedia | null>;
@@ -114,13 +115,14 @@ export function createAccountBridge(
   let disposed = false;
   let revision = 0;
   let acceptAccountResults = true;
+  let phase: "idle" | "disconnecting" | "connecting" = "idle";
   const listeners = new Set<() => void>();
   function update(changes: Partial<AccountState>) {
     if (disposed) return;
     state = { ...state, ...changes };
     for (const listener of listeners) listener();
   }
-  function receive(result: unknown): boolean {
+  function receive(result: unknown, directResult = false): boolean {
     if (disposed) return false;
     const envelope = record(result);
     const content = record(envelope?.structuredContent);
@@ -137,6 +139,8 @@ export function createAccountBridge(
     )
       return false;
     if (content.status === "disconnected" && !envelope?.isError) {
+      // A delayed host broadcast from an earlier revocation cannot clear a fresh grant.
+      if (!directResult && phase !== "disconnecting") return true;
       revision += 1;
       acceptAccountResults = false;
       update({
@@ -153,6 +157,7 @@ export function createAccountBridge(
       content.status === "scope_required"
     ) {
       revision += 1;
+      acceptAccountResults = false;
       update({
         status: content.status,
         profile: null,
@@ -170,9 +175,12 @@ export function createAccountBridge(
       return true;
     }
     if ("id" in content) {
-      if (!acceptAccountResults) return true;
+      // During account operations, only their resolved tool call may establish identity.
+      if (!directResult && (!acceptAccountResults || phase !== "idle"))
+        return true;
       const profile = profileFrom(content);
       if (!profile) return false;
+      acceptAccountResults = true;
       const changed = state.profile?.id !== profile.id;
       if (changed) revision += 1;
       update({
@@ -196,6 +204,19 @@ export function createAccountBridge(
     const requestRevision = revision;
     const result = await caller.callServerTool({ name, arguments: {} });
     if (disposed) return false;
+    if (name === CONNECT_TOOL && phase === "connecting") {
+      // The host may broadcast an auth challenge before its OAuth flow resolves.
+      // The result of this serialized connect call is authoritative for the new grant.
+      if (!receive(result, true)) {
+        update({
+          error: "DriveBeats returned unexpected account data. Try again.",
+        });
+        return false;
+      }
+      return (
+        state.status === "connected" && state.profile !== null && !state.error
+      );
+    }
     if (requestRevision !== revision) {
       // Some hosts broadcast the same response before resolving the UI call.
       const envelope = record(result);
@@ -209,7 +230,7 @@ export function createAccountBridge(
             content?.status === "disconnected")
       );
     }
-    if (receive(result)) {
+    if (receive(result, true)) {
       return name === DISCONNECT_TOOL
         ? state.status === "signed_out"
         : state.status === "connected" && !state.error;
@@ -234,6 +255,25 @@ export function createAccountBridge(
       update({ loading: false });
     }
   }
+  async function connectAccount() {
+    phase = "connecting";
+    acceptAccountResults = true;
+    try {
+      if (!(await call(CONNECT_TOOL))) return false;
+      return await call(CLOUD_LIBRARY_TOOL);
+    } finally {
+      phase = "idle";
+      if (!state.profile) acceptAccountResults = false;
+    }
+  }
+  async function disconnectAccount() {
+    phase = "disconnecting";
+    try {
+      return await call(DISCONNECT_TOOL);
+    } finally {
+      phase = "idle";
+    }
+  }
   return {
     subscribe(listener) {
       listeners.add(listener);
@@ -244,14 +284,21 @@ export function createAccountBridge(
       update({ available });
     },
     receive,
-    connect: () =>
+    connect: () => run(connectAccount),
+    reconnect: () =>
       run(async () => {
-        acceptAccountResults = true;
-        if (!(await call(CONNECT_TOOL))) return false;
-        return call(CLOUD_LIBRARY_TOOL);
+        // A canceled prior reconnect has already revoked its grant. Asking to
+        // disconnect again would start OAuth merely to revoke the new grant.
+        if (
+          state.status === "connected" &&
+          state.profile &&
+          !(await disconnectAccount())
+        )
+          return false;
+        return connectAccount();
       }),
     refresh: () => run(() => call(CLOUD_LIBRARY_TOOL)),
-    disconnect: () => run(() => call(DISCONNECT_TOOL)),
+    disconnect: () => run(disconnectAccount),
     async prepareMedia(fileId) {
       let prepared: PreparedMedia | null = null;
       await run(async () => {
@@ -329,7 +376,7 @@ export function createAccountBridge(
       disposed = true;
       revision += 1;
       listeners.clear();
-      state = { ...state, profile: null, library: null };
+      state = { ...state, profile: null, library: null, loading: false };
     },
   };
 }

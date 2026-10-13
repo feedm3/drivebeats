@@ -237,3 +237,260 @@ it("ignores delayed profile broadcasts after disconnect and account-mismatched c
   bridge.receive({ ...library, _meta: { accountId: "google-b" } });
   expect(bridge.getSnapshot().library?.favoriteCount).toBe(1);
 });
+describe("reconnect", () => {
+  it("revokes the current grant before linking a fresh account and keeps one operation lock", async () => {
+    const { bridge, caller } = connected();
+    await bridge.connect();
+    caller.callServerTool.mockClear();
+    const snapshots: { id: string | null; loading: boolean }[] = [];
+    bridge.subscribe(() =>
+      snapshots.push({
+        id: bridge.getSnapshot().profile?.id ?? null,
+        loading: bridge.getSnapshot().loading,
+      }),
+    );
+    expect(await bridge.reconnect()).toBe(true);
+    expect(caller.callServerTool.mock.calls.map(([args]) => args.name)).toEqual(
+      [DISCONNECT_TOOL, CONNECT_TOOL, CLOUD_LIBRARY_TOOL],
+    );
+    expect(
+      snapshots.some((snapshot) => snapshot.id === null && snapshot.loading),
+    ).toBe(true);
+    expect(snapshots.slice(0, -1).every((snapshot) => snapshot.loading)).toBe(
+      true,
+    );
+    expect(bridge.getSnapshot().profile?.id).toBe("google-a");
+    expect(bridge.getSnapshot().loading).toBe(false);
+  });
+  it("stops on denied revocation without requesting a new grant", async () => {
+    const { bridge, caller } = connected();
+    await bridge.connect();
+    caller.callServerTool.mockClear();
+    caller.callServerTool.mockResolvedValueOnce({
+      isError: true,
+      structuredContent: { status: "scope_required" },
+      _meta: { "mcp/www_authenticate": ["Bearer resource_metadata=example"] },
+    });
+    expect(await bridge.reconnect()).toBe(false);
+    expect(caller.callServerTool.mock.calls.map(([args]) => args.name)).toEqual(
+      [DISCONNECT_TOOL],
+    );
+    expect(bridge.getSnapshot().error).toContain("Reconnect");
+    bridge.receive(profile);
+    expect(bridge.getSnapshot().profile).toBeNull();
+  });
+  it("keeps cancellation recoverable and only reconnects after another deliberate attempt", async () => {
+    const { bridge, caller } = connected();
+    await bridge.connect();
+    caller.callServerTool.mockClear();
+    caller.callServerTool
+      .mockImplementationOnce(async () => ({
+        structuredContent: { status: "disconnected" },
+      }))
+      .mockResolvedValueOnce({
+        isError: true,
+        structuredContent: { status: "sign_in_required" },
+        _meta: { "mcp/www_authenticate": ["Bearer resource_metadata=example"] },
+      });
+    expect(await bridge.reconnect()).toBe(false);
+    expect(bridge.getSnapshot().status).toBe("sign_in_required");
+    expect(bridge.getSnapshot().error).toContain("If you canceled");
+    expect(bridge.getSnapshot().profile).toBeNull();
+    bridge.receive(profile);
+    expect(bridge.getSnapshot().profile).toBeNull();
+    expect(await bridge.reconnect()).toBe(true);
+    expect(bridge.getSnapshot().profile?.id).toBe("google-a");
+  });
+  it("suppresses double-clicks and other account operations while revocation is pending", async () => {
+    const { bridge, caller } = connected();
+    await bridge.connect();
+    caller.callServerTool.mockClear();
+    let resolve: ((value: unknown) => void) | undefined;
+    caller.callServerTool.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const pending = bridge.reconnect();
+    expect(await bridge.reconnect()).toBe(false);
+    expect(await bridge.connect()).toBe(false);
+    expect(await bridge.disconnect()).toBe(false);
+    expect(await bridge.refresh()).toBe(false);
+    expect(caller.callServerTool).toHaveBeenCalledTimes(1);
+    resolve?.({ structuredContent: { status: "disconnected" } });
+    expect(await pending).toBe(true);
+    expect(caller.callServerTool).toHaveBeenCalledTimes(3);
+  });
+  it("does not proceed to account linking after teardown or a transport failure during revocation", async () => {
+    const { bridge, caller } = connected();
+    await bridge.connect();
+    caller.callServerTool.mockClear();
+    let resolve: ((value: unknown) => void) | undefined;
+    caller.callServerTool.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const pending = bridge.reconnect();
+    bridge.dispose();
+    resolve?.({ structuredContent: { status: "disconnected" } });
+    expect(await pending).toBe(false);
+    expect(caller.callServerTool.mock.calls.map(([args]) => args.name)).toEqual(
+      [DISCONNECT_TOOL],
+    );
+    expect(bridge.getSnapshot().profile).toBeNull();
+    const retry = connected();
+    await retry.bridge.connect();
+    retry.caller.callServerTool.mockClear();
+    retry.caller.callServerTool.mockRejectedValueOnce(
+      new Error("private-revocation-detail"),
+    );
+    expect(await retry.bridge.reconnect()).toBe(false);
+    expect(
+      retry.caller.callServerTool.mock.calls.map(([args]) => args.name),
+    ).toEqual([DISCONNECT_TOOL]);
+    expect(retry.bridge.getSnapshot().error).not.toContain(
+      "private-revocation-detail",
+    );
+  });
+  it("ignores stale profile and disconnect broadcasts while a fresh connection is being granted", async () => {
+    const { bridge, caller } = connected();
+    await bridge.connect();
+    caller.callServerTool.mockClear();
+    let resolve: ((value: unknown) => void) | undefined;
+    caller.callServerTool
+      .mockImplementationOnce(async () => ({
+        structuredContent: { status: "disconnected" },
+      }))
+      .mockImplementationOnce(
+        () =>
+          new Promise((done) => {
+            resolve = done;
+          }),
+      );
+    const pending = bridge.reconnect();
+    await vi.waitFor(() =>
+      expect(caller.callServerTool).toHaveBeenCalledTimes(2),
+    );
+    bridge.receive(profile);
+    bridge.receive({ structuredContent: { status: "disconnected" } });
+    expect(bridge.getSnapshot().profile).toBeNull();
+    resolve?.(profile);
+    expect(await pending).toBe(true);
+    bridge.receive({ structuredContent: { status: "disconnected" } });
+    expect(bridge.getSnapshot().profile?.id).toBe("google-a");
+  });
+  it("accepts the resolved fresh profile after the host broadcasts an authentication challenge", async () => {
+    const { bridge, caller } = connected();
+    await bridge.connect();
+    let resolve: ((value: unknown) => void) | undefined;
+    caller.callServerTool
+      .mockImplementationOnce(async () => ({
+        structuredContent: { status: "disconnected" },
+      }))
+      .mockImplementationOnce(
+        () =>
+          new Promise((done) => {
+            resolve = done;
+          }),
+      );
+    const pending = bridge.reconnect();
+    await vi.waitFor(() => expect(resolve).toBeTypeOf("function"));
+    bridge.receive({
+      isError: true,
+      structuredContent: { status: "sign_in_required" },
+    });
+    resolve?.(profile);
+    expect(await pending).toBe(true);
+    expect(bridge.getSnapshot().status).toBe("connected");
+    expect(bridge.getSnapshot().library?.favoriteCount).toBe(1);
+  });
+});
+
+it("keeps reconnect identity protected until its cloud read finishes", async () => {
+  const { bridge, caller } = connected();
+  await bridge.connect();
+  let resolve: ((value: unknown) => void) | undefined;
+  caller.callServerTool
+    .mockImplementationOnce(async () => ({
+      structuredContent: { status: "disconnected" },
+    }))
+    .mockResolvedValueOnce(profile)
+    .mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+  const pending = bridge.reconnect();
+  await vi.waitFor(() => expect(resolve).toBeTypeOf("function"));
+  bridge.receive({
+    structuredContent: { id: "old-google-b", name: "Old account" },
+  });
+  expect(bridge.getSnapshot().profile?.id).toBe("google-a");
+  expect(bridge.getSnapshot().loading).toBe(true);
+  resolve?.(library);
+  expect(await pending).toBe(true);
+  expect(bridge.getSnapshot().library?.favoriteCount).toBe(1);
+});
+it("retries canceled reconnect without authorizing a second revocation against the revoked grant", async () => {
+  let grantAuthorized = true;
+  let canceled = false;
+  const caller = {
+    callServerTool: vi.fn(
+      async ({ name }: { name: string }): Promise<unknown> => {
+        if (name === DISCONNECT_TOOL) {
+          if (!grantAuthorized)
+            return {
+              isError: true,
+              structuredContent: { status: "sign_in_required" },
+            };
+          grantAuthorized = false;
+          return { structuredContent: { status: "disconnected" } };
+        }
+        if (name === CONNECT_TOOL) {
+          if (!grantAuthorized && !canceled) {
+            canceled = true;
+            return {
+              isError: true,
+              structuredContent: { status: "sign_in_required" },
+            };
+          }
+          grantAuthorized = true;
+          return profile;
+        }
+        return grantAuthorized
+          ? library
+          : {
+              isError: true,
+              structuredContent: { status: "sign_in_required" },
+            };
+      },
+    ),
+  };
+  const bridge = createAccountBridge(caller);
+  bridge.setAvailable(true);
+  await bridge.connect();
+  caller.callServerTool.mockClear();
+  expect(await bridge.reconnect()).toBe(false);
+  expect(bridge.getSnapshot().profile).toBeNull();
+  expect(grantAuthorized).toBe(false);
+  expect(await bridge.reconnect()).toBe(true);
+  expect(caller.callServerTool.mock.calls.map(([args]) => args.name)).toEqual([
+    DISCONNECT_TOOL,
+    CONNECT_TOOL,
+    CONNECT_TOOL,
+    CLOUD_LIBRARY_TOOL,
+  ]);
+  expect(bridge.getSnapshot().profile?.id).toBe("google-a");
+});
+it("links directly from the signed-out reconnect control when there is no current verified account", async () => {
+  const { bridge, caller } = connected();
+  expect(await bridge.reconnect()).toBe(true);
+  expect(caller.callServerTool.mock.calls.map(([args]) => args.name)).toEqual([
+    CONNECT_TOOL,
+    CLOUD_LIBRARY_TOOL,
+  ]);
+});

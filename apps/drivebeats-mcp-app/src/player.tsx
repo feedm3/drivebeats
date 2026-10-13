@@ -449,6 +449,20 @@ function MusicView({ bridge }: { bridge: MusicBridge }) {
           {state.error}
         </p>
       ) : null}
+      <footer className="player-footer">
+        <button
+          type="button"
+          disabled={!account.available || account.loading}
+          onClick={() => void bridge.account.reconnect()}
+        >
+          {account.loading ? "Updating connection…" : "Reconnect"}
+        </button>
+        <p className="footer-note">
+          Reconnect your Google account. Your saved Playlists and favorites are
+          kept.
+        </p>
+        {account.error ? <p className="error">{account.error}</p> : null}
+      </footer>
     </main>
   );
 }

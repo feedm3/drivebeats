@@ -87,12 +87,17 @@ export function AccountPanel({ bridge }: { bridge: AccountBridge }) {
               ? "Connect DriveBeats"
               : "Retry connection"}
           </button>
-          {!state.available ? (
+          {state.available ? (
+            <p className="footer-note">
+              On the connection page, you can copy the link to open it in
+              Firefox.
+            </p>
+          ) : (
             <p className="footer-note">
               Open DriveBeats in ChatGPT to connect your account. You can still
               play the samples.
             </p>
-          ) : null}
+          )}
         </>
       )}
       {state.error ? (

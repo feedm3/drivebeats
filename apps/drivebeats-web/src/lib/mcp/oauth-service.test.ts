@@ -11,13 +11,14 @@ import { createMcpGrant, getMcpGrant, revokeMcpGrant } from "@/db/mcp-grants";
 import {
   consumeMcpLinkRequest,
   getMcpLinkRequest,
+  saveMcpLinkRequest,
 } from "@/db/mcp-link-requests";
 import {
   consumeMcpRefreshToken,
   getMcpRefreshToken,
   saveMcpRefreshToken,
 } from "@/db/mcp-refresh-tokens";
-import { encryptMcpSecret } from "./auth";
+import { decryptMcpSecret, encryptMcpSecret } from "./auth";
 import {
   approveMcpAuthorization,
   completeMcpGoogleAuthorization,
@@ -445,5 +446,81 @@ describe("OAuth request boundaries", () => {
     };
     expect((await exchangeMcpToken(tokenRequest(refresh))).status).toBe(400);
     expect(saveMcpRefreshToken).not.toHaveBeenCalled();
+  });
+  it("shows a canonical copyable host request and a fixed Google continue link", async () => {
+    vi.stubEnv("GOOGLE_CLIENT_ID", "google-public-client");
+    const params = new URLSearchParams({
+      ...query,
+      state: 'reserved & quote " <script> host-state',
+    });
+    const response = await startMcpAuthorization(
+      new NextRequest(
+        `https://untrusted-host.example/api/mcp/oauth/authorize?${params}`,
+        {
+          headers: {
+            cookie: "auth_session=web-session; refresh_token=web-refresh",
+          },
+        },
+      ),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "text/html; charset=utf-8",
+    );
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.has("location")).toBe(false);
+    const html = await response.text();
+    const canonical = `${query.resource.replace("/mcp", "")}/api/mcp/oauth/authorize?${params}`;
+    expect(html).toContain(canonical.replaceAll("&", "&amp;"));
+    expect(html).not.toContain("untrusted-host.example");
+    expect(html).toContain('id="copy-link"');
+    expect(html).toContain(
+      'id="continue-google" href="https://accounts.google.com/o/oauth2/v2/auth?',
+    );
+    expect(html).not.toContain("web-refresh");
+    const cookie = response.headers.get("set-cookie") ?? "";
+    expect(cookie).toContain("__Host-mcp_link=");
+    expect(cookie).toContain("HttpOnly");
+    expect(cookie).toContain("Secure");
+    expect(cookie).not.toContain("auth_session");
+    expect(cookie).not.toContain("refresh_token");
+    const [pendingId, payload] = vi.mocked(saveMcpLinkRequest).mock.calls[0];
+    const pending = await decryptMcpSecret(payload, `link:${pendingId}`);
+    expect(pending.query).toEqual(Object.fromEntries(params));
+    expect(pending.state).not.toBe(params.get("state"));
+    expect(pending.googleRefreshToken).toBeUndefined();
+  });
+  it("opening copied request starts a fresh browser transaction preserving PKCE and host state", async () => {
+    vi.stubEnv("GOOGLE_CLIENT_ID", "google-public-client");
+    const params = new URLSearchParams(query);
+    const url = `https://drivebeats.example/api/mcp/oauth/authorize?${params}`;
+    const first = await startMcpAuthorization(new NextRequest(url));
+    const second = await startMcpAuthorization(new NextRequest(url));
+    expect(first.headers.get("set-cookie")).not.toBe(
+      second.headers.get("set-cookie"),
+    );
+    const calls = vi.mocked(saveMcpLinkRequest).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[0][0]).not.toBe(calls[1][0]);
+    for (const [pendingId, payload] of calls) {
+      const pending = await decryptMcpSecret(payload, `link:${pendingId}`);
+      expect(pending.query).toEqual(query);
+    }
+  });
+  it("rejects invalid callback before creating any pending link", async () => {
+    vi.stubEnv("GOOGLE_CLIENT_ID", "google-public-client");
+    const params = new URLSearchParams({
+      ...query,
+      redirect_uri: "https://attacker.example/callback",
+    });
+    const response = await startMcpAuthorization(
+      new NextRequest(
+        `https://drivebeats.example/api/mcp/oauth/authorize?${params}`,
+      ),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_request" });
+    expect(saveMcpLinkRequest).not.toHaveBeenCalled();
   });
 });

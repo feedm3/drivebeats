@@ -46,11 +46,23 @@ Add this exact Google authorized redirect URI for the backend origin:
 `<MCP_AUTH_ISSUER>/api/mcp/oauth/google`. This is a separate linking callback;
 the existing website `/api/auth/callback` remains configured.
 
+The production callback is `https://www.drivebeats.app/api/mcp/oauth/google`.
+The current preview callback is
+`https://drivebeats-mcp-preview-fabian.vercel.app/api/mcp/oauth/google`.
+Both were saved in the existing Google client and verified by reopening it.
+Registering the production callback does not deploy or activate production MCP.
+
 ## Consent and credentials
 
 The host discovers DriveBeats authorization metadata, requests the resource
 and scopes, and opens authorization outside the iframe. DriveBeats verifies
 the client, exact callback, resource and PKCE request before Google sign-in.
+The connection page offers Continue with Google and a selectable connection
+link with Copy link. If the host opens Chrome, copy that link into Firefox
+before continuing. The copied URL preserves the host's request; Firefox
+creates its own pending browser session. The embedded app cannot obtain the
+host's generated authorization URL directly. The landing page permits only its
+fixed copy script and sends no referrer to Google.
 Google returns identity and read-only authorization; DriveBeats then shows
 an explicit connection consent page. Cancel returns an OAuth denial without
 creating a linked grant.

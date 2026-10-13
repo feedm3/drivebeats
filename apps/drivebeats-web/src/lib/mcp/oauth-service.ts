@@ -46,6 +46,11 @@ import {
   MCP_GRANT_SECONDS,
 } from "./auth";
 
+import {
+  AUTHORIZATION_START_CSP,
+  renderMcpAuthorizationStartPage,
+} from "./authorization-start-page";
+
 const LINK_COOKIE = "__Host-mcp_link";
 const noStore = { "Cache-Control": "no-store", Pragma: "no-cache" };
 interface LinkRequest {
@@ -276,7 +281,8 @@ function setLinkCookie(response: NextResponse, id: string, maxAge = 600) {
     path: "/",
     maxAge,
   });
-  response.headers.set("Cache-Control", "no-store");
+  if (!response.headers.has("Cache-Control"))
+    response.headers.set("Cache-Control", "no-store");
   return response;
 }
 async function loadLink(id: string | undefined): Promise<LinkRequest | null> {
@@ -332,7 +338,24 @@ export async function startMcpAuthorization(request: NextRequest) {
       state,
       nonce,
     }).toString();
-    return setLinkCookie(NextResponse.redirect(url), id);
+    // Copying the original authorization request into another browser creates
+    // that browser's own pending cookie while preserving the host's PKCE/state.
+    const authorizationUrl = `${config.issuer}/api/mcp/oauth/authorize${request.nextUrl.search}`;
+    return setLinkCookie(
+      new NextResponse(
+        renderMcpAuthorizationStartPage(authorizationUrl, url.toString()),
+        {
+          headers: {
+            "Content-Type": "text/html; charset=utf-8",
+            "Content-Security-Policy": AUTHORIZATION_START_CSP,
+            "Referrer-Policy": "no-referrer",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+          },
+        },
+      ),
+      id,
+    );
   } catch {
     return NextResponse.json(
       { error: "invalid_request" },

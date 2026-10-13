@@ -58,3 +58,10 @@ differ from the sample audio deployment origin. Missing or invalid configuration
 disables the media adapter. This adapter does
 not start playback. Real ChatGPT account linking and selected Drive audio
 acceptance remain separate from local tests.
+
+Connect keeps authentication owned by the host. The MCP Apps SDK exposes an
+external-link request but does not expose the host-generated OAuth URL to this
+sandbox. The UI directs users to the backend connection page, where they can
+copy the actual request-bound connection URL into Firefox. It does not invent
+a separate OAuth state, display Google credential URLs or substitute an ordinary
+website login for the plugin connection.

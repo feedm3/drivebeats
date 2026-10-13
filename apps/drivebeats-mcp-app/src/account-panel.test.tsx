@@ -49,6 +49,9 @@ it("shows linked existing Playlists and disconnect recovery without replacing th
     <Player bridge={bridge} audioSources={FIXTURE_AUDIO_PATHS} />,
   );
   const audio = container.querySelector("audio");
+  expect(
+    screen.getByText(/copy the link to open it in Firefox/),
+  ).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Connect DriveBeats" }));
   expect(await screen.findByText("Road trip")).toBeInTheDocument();
   expect(screen.getByText("1 Playlist · 2 favorites")).toBeInTheDocument();

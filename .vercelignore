@@ -1,0 +1,5 @@
+# Local credential files are never deployment inputs.
+.env*
+**/.env*
+mise.local.toml
+**/mise.local.toml

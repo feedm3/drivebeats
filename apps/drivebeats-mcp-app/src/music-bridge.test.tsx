@@ -5,7 +5,13 @@ import {
 } from "@drivebeats/client/catalog";
 import { FOLDER_MIME } from "@drivebeats/core/types";
 import type { App } from "@modelcontextprotocol/ext-apps";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createMusicBridge, type MusicBridge } from "./music-bridge";
 import { Player } from "./player";
@@ -123,6 +129,11 @@ function host(sampling = true) {
           case "drivebeats_read_folder":
             structuredContent = {
               files: [track("first"), track("second"), track("third")],
+            };
+            break;
+          case "drivebeats_prepare_import":
+            _meta = {
+              importUrl: `https://drivebeats.example/mcp/import/${"b".repeat(43)}`,
             };
             break;
           case "drivebeats_prepare_media":
@@ -352,4 +363,40 @@ it("prevents the Stop DJ click from submitting the newly switched Start button a
   ).toBeInTheDocument();
   expect(bridge.getSnapshot().dj).toBe(false);
   expect(testHost.app.createSamplingMessage).toHaveBeenCalledOnce();
+});
+
+it("opens the existing music selection flow from a failed real-track preparation without claiming playback is restored", async () => {
+  const testHost = await connected();
+  if (!bridge) throw new Error("Missing music bridge.");
+  const original = testHost.app.callServerTool.getMockImplementation();
+  if (!original) throw new Error("Missing test host implementation.");
+  testHost.app.callServerTool.mockImplementation(async (params) =>
+    params.name === "drivebeats_prepare_media"
+      ? {
+          structuredContent: {
+            status: "error",
+            message:
+              "This Playable Track is unavailable. Reconnect or select an accessible track.",
+          },
+          isError: true,
+        }
+      : original(params),
+  );
+  expect(await bridge.player.play(track("first"), [track("first")])).toBe(
+    false,
+  );
+  render(<Player bridge={bridge} />);
+  const alert = screen.getByRole("alert", { name: "Playback error" });
+  expect(alert).toHaveTextContent("This Playable Track is unavailable");
+  fireEvent.click(within(alert).getByRole("button", { name: "Import music" }));
+  await vi.waitFor(() =>
+    expect(testHost.app.openLink).toHaveBeenCalledWith({
+      url: `https://drivebeats.example/mcp/import/${"b".repeat(43)}`,
+    }),
+  );
+  expect(testHost.app.callServerTool).toHaveBeenCalledWith({
+    name: "drivebeats_prepare_import",
+    arguments: { sessionId: "session-one" },
+  });
+  expect(bridge.player.getSnapshot().playing).toBe(false);
 });

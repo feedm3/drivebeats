@@ -25,6 +25,8 @@ export class McpMediaError extends Error {
 const hashCapability = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 const MEDIA_LIFETIME_MS = 5 * 60 * 1000;
+const TRACK_SELECTION_REQUIRED =
+  "Google Drive cannot access this track. Use Import music to select it in Google Picker, then try Play again. If it is missing there, choose another track.";
 
 async function selectedTrack(principal: McpPrincipal, fileId: string) {
   const library = await getCloudLibrarySyncPayload(principal.profile);
@@ -66,12 +68,11 @@ export async function prepareMcpMedia(
     redirect: "error",
   });
   if (!response.ok) {
-    console.warn("[DEBUG-drivebeats-media] metadata", {
-      status: response.status,
-    });
     throw new McpMediaError(
       404,
-      "This Playable Track is unavailable. Reconnect or select an accessible track.",
+      response.status === 404
+        ? TRACK_SELECTION_REQUIRED
+        : "This Playable Track is unavailable. Reconnect or select an accessible track.",
     );
   }
   const metadata = (await response.json()) as {
@@ -177,7 +178,9 @@ export async function readMcpMedia(request: Request, capability: string) {
   if (upstream.status !== 200 && upstream.status !== 206)
     throw new McpMediaError(
       404,
-      "This Playable Track is no longer accessible.",
+      upstream.status === 404
+        ? TRACK_SELECTION_REQUIRED
+        : "This Playable Track is no longer accessible.",
     );
   const headers = new Headers({
     "Content-Type": media.mimeType,

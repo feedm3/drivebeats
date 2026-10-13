@@ -104,6 +104,31 @@ contains no environment files or credentials.
 The user approved the exact activation sequence. All remote release actions
 below are completed; real production-account/player acceptance remains open.
 
+### Live playback investigation
+
+The user connected successfully and saw synced music, then reported a selected
+track remaining at `0:00 / 0:00`. A live player-state command independently
+confirmed the media preparation error with a 24-track queue. A provider metadata
+read for that same selected track repeatedly failed; temporary status-only
+instrumentation confirmed Google HTTP404. The active player's complete catalog
+reported zero imported roots. Cloud collection visibility is not proof of
+Google file access: these rows are read from Neon. Google404 also does not prove
+the file was deleted; it can mean the credential cannot access it.
+
+Recovery requires the user to choose an accessible real track through Import
+music/Google Picker and retry Play. Errors now direct the user to that selection,
+and the playback error area exposes the existing Import music action. No scopes
+were broadened and no Drive write was added. Temporary instrumentation was
+removed after collecting the status. Actual Drive audio playback remains
+unconfirmed until this recovery is exercised in the production host.
+
+Recovery validation: root `pnpm test` passes470 tests (9 client,26 MCP UI,
+435 web); `pnpm lint`, `pnpm build` and React Doctor pass. An isolated actual
+Chromium browser reproduced denied media in a simulated MCP host, displayed
+the new alert, and opened the existing Picker handoff from its recovery button.
+At320px the recovery target is at least44x44px; audio stays stopped until an
+accessible selection. This proves the recovery UI, not Google playback.
+
 - Applied migration0009 in one repeatable-read transaction to the verified
   `drivebeats` main database. Added29 coordination columns plus nullable media
   `session_id`, seven indexes and16 constraints. The three new tables were
@@ -137,10 +162,11 @@ below are completed; real production-account/player acceptance remains open.
 - Published plugin:
   [DriveBeats](https://chatgpt.com/plugins/plugins_6accdcd7dcd88191a0beba5e3f94eb63).
   Saved release verification does not imply the current desktop installation
-  refreshed. This chat still exposes the old preview tool inventory. At the
-  post-release read-only check, no production-client grant existed yet.
+  refreshed. At the initial post-release read-only check, no production-client
+  grant existed yet. The user subsequently reconnected; the production tool
+  inventory and authenticated profile now respond successfully.
 
-The user was asked to update/reopen DriveBeats, reconnect to production and
-select real music. Actual production linking, Picker selection, audible Drive
-playback, cross-session sync and target-host DJ refill are not yet confirmed.
+The user confirmed production connection and visible synced music. Picker
+selection, audible Drive playback, cross-session sync and target-host DJ refill
+are not yet confirmed; see the live playback investigation above.
 Task4 remains unchecked. The required real-host checklist above still applies.

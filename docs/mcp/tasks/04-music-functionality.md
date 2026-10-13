@@ -164,10 +164,13 @@ is not a substitute for that proof.
   `pluginrel_6ace3cb8f0088191ba50865726837c46`; source/file inventory and audience
   readback passed. Platform immutability requires retaining the legacy internal
   identifier, while all demo functionality/audio remains removed.
-- Actual user-side refresh/reconnect and real production music acceptance remain
-  pending. This chat still has preview tool bindings, and no production-client
-  account grant was present at the post-release check. User input requested for
-  reconnect/import; no new paid model provider or cloud-data deletion occurred.
+- The user reconnected successfully and confirmed visible synced music.
+  Production tools and authenticated profile now respond. Actual playback
+  failed at Google metadata HTTP404 while the imported Library had zero roots;
+  cloud metadata visibility does not establish Drive audio access. The player
+  now directs this error to Import music/Google Picker. The user must select an
+  accessible real track and retry; audible production playback remains open.
+  No new paid model provider or cloud-data deletion occurred.
 
 See [activation evidence](../production-release.md#activated-production-2026-10-13)
 for the exact target, transaction counts, deployment/release IDs and limits.

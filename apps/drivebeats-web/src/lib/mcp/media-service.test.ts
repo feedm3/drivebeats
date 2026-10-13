@@ -82,6 +82,15 @@ beforeEach(() => {
 });
 
 describe("MCP selected media boundary", () => {
+  it("directs a saved track denied by Google to explicit Picker selection without issuing media access", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 404 }));
+    await expect(prepareMcpMedia(principal, "track-a")).rejects.toMatchObject({
+      status: 404,
+      message:
+        "Google Drive cannot access this track. Use Import music to select it in Google Picker, then try Play again. If it is missing there, choose another track.",
+    });
+    expect(insertMcpMediaGrant).not.toHaveBeenCalled();
+  });
   it("checks account-selected membership before provider credentials or media are accessed", async () => {
     await expect(
       prepareMcpMedia(principal, "another-account-track"),

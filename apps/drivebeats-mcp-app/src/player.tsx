@@ -361,9 +361,16 @@ function MusicView({ bridge }: { bridge: MusicBridge }) {
               Playback Queue · {playback.queue.length} tracks
             </p>
             {playback.error ? (
-              <p className="error" role="alert">
-                {playback.error}
-              </p>
+              <div className="error" role="alert" aria-label="Playback error">
+                <p>{playback.error}</p>
+                <button
+                  type="button"
+                  disabled={!state.sessionId}
+                  onClick={() => void bridge.importMusic()}
+                >
+                  Import music
+                </button>
+              </div>
             ) : null}
             <form
               className="inline-form"

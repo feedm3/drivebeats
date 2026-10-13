@@ -65,11 +65,10 @@ async function providerRead(url: URL, accessToken: string) {
     signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) {
-    console.warn("[DEBUG-drivebeats-media] library", {
-      status: response.status,
-    });
     throw new McpLibraryError(
-      "Library item is unavailable. Reconnect or import an accessible item.",
+      response.status === 404
+        ? "Google Drive cannot access this item. Use Import music to select it in Google Picker again. If it is missing there, choose another item."
+        : "Library item is unavailable. Reconnect or import an accessible item.",
     );
   }
   return response.json();

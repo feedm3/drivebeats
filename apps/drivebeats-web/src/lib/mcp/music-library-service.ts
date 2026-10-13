@@ -64,10 +64,14 @@ async function providerRead(url: URL, accessToken: string) {
     redirect: "error",
     signal: AbortSignal.timeout(10_000),
   });
-  if (!response.ok)
+  if (!response.ok) {
+    console.warn("[DEBUG-drivebeats-media] library", {
+      status: response.status,
+    });
     throw new McpLibraryError(
       "Library item is unavailable. Reconnect or import an accessible item.",
     );
+  }
   return response.json();
 }
 

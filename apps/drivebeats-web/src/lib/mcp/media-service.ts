@@ -65,11 +65,15 @@ export async function prepareMcpMedia(
     cache: "no-store",
     redirect: "error",
   });
-  if (!response.ok)
+  if (!response.ok) {
+    console.warn("[DEBUG-drivebeats-media] metadata", {
+      status: response.status,
+    });
     throw new McpMediaError(
       404,
       "This Playable Track is unavailable. Reconnect or select an accessible track.",
     );
+  }
   const metadata = (await response.json()) as {
     id?: string;
     name?: string;

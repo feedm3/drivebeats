@@ -16,6 +16,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import shutil
 import stat
 import subprocess
@@ -104,7 +105,7 @@ class PublicAppServer:
         self.logs = []
         self.next_id = 0
         self.process = subprocess.Popen(
-            [binary, "app-server", "--stdio"], cwd=cwd, env=env,
+            [binary, "app-server", "--stdio", "--strict-config"], cwd=cwd, env=env,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, bufsize=1,
         )
@@ -127,7 +128,7 @@ class PublicAppServer:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             try:
-                response = self.output.get(timeout=min(1, deadline - time.monotonic()))
+                response = self.output.get(timeout=max(0.01, min(1, deadline - time.monotonic())))
             except queue.Empty:
                 continue
             if response.get("id") != request_id:
@@ -154,7 +155,10 @@ class PublicAppServer:
             self.process.wait(timeout=5)
 
     def parser_errors(self):
-        return [line.strip() for line in self.logs if "failed to parse plugin MCP" in line]
+        return [
+            re.sub(r"\x1b\[[0-9;]*m", "", line).strip()
+            for line in self.logs if "failed to parse plugin MCP" in line
+        ]
 
 
 def verify(binary, source, work, check_server):
@@ -196,6 +200,10 @@ def verify(binary, source, work, check_server):
     }))
     codex_state = work / "codex-state"
     codex_state.mkdir()
+    (codex_state / "config.toml").write_text(
+        'cli_auth_credentials_store = "file"\n'
+        'mcp_oauth_credentials_store = "file"\n'
+    )
     # Deliberately omit the user's environment, auth files and Codex config.
     env = {key: os.environ[key] for key in ["PATH", "LANG", "TMPDIR"] if key in os.environ}
     env.update({"CODEX_HOME": str(codex_state), "RUST_LOG": "codex_core_plugins=warn"})
@@ -221,7 +229,7 @@ def verify(binary, source, work, check_server):
             relative = presentation[field]
             if hashlib.sha256(contained_path(installed_path, relative).read_bytes()).hexdigest() != expected_icons[field]:
                 raise VerificationError(f"Installed {field} bytes differ from the release")
-        print(f"PASS: target loader discovers DriveBeats; logo and composerIcon resolve to matching packaged bytes ({manifest['version']})")
+        print(f"PASS: target loader discovers DriveBeats; logo and composerIcon resolve to matching packaged bytes ({manifest['version']})", flush=True)
         if check_server:
             statuses = server.request("mcpServerStatus/list", {"serverName": "drivebeats", "detail": "full", "limit": 10})["data"]
             if len(statuses) != 1:
@@ -232,7 +240,7 @@ def verify(binary, source, work, check_server):
             tools = set(status.get("tools", {}))
             if tools != EXPECTED_TOOLS:
                 raise VerificationError(f"Expected seven DriveBeats tools, received: {sorted(tools)}")
-            print("PASS: anonymous target-client handshake and all seven deployed tools load")
+            print("PASS: anonymous target-client handshake and all seven deployed tools load", flush=True)
     finally:
         server.close()
 

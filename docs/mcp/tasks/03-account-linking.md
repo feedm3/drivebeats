@@ -205,3 +205,69 @@ existing task 2 app/build dependencies are part of the release; the pre-existing
 Google callback and real-host results will be appended after their
 verification. The task remains unchecked until real account data and selected
 Drive reads are accepted.
+
+### Installed-host compatibility repair, 2026-10-13
+
+The installed desktop host could not activate release `0.2.0`. Desktop logs
+reported unknown extension fields and parsed zero tools. The actual bundled
+CLI, version `0.162.0-alpha.17.2`, initialized with MCP protocol `2025-06-18`,
+which the server's modern-only transport rejected. These were distinct package
+and transport compatibility failures. The evidence came from desktop logs,
+the installed plugin package/cache and isolated runs of that exact bundled
+CLI, rather than a different SDK client.
+
+- The server now supports the SDK's stateless legacy transport alongside
+  modern requests. Tool authorization declarations are mirrored correctly in
+  both JSON and SSE responses. An isolated actual-CLI run failed with the old
+  `0.2.0` package and passed with the corrected legacy-only `0.2.1` package.
+  The provided-client legacy OAuth declaration preserves the public client
+  and PKCE. Callback validation allows exact configured HTTPS callbacks and
+  one fixed loopback callback on port `46123`; it permits no arbitrary HTTP
+  origins or wildcard callbacks.
+- After the repair, root `pnpm test` passed **48 UI + 387 web = 435 tests**;
+  `pnpm lint` and `pnpm build` passed. Independent focused verification passed
+  39 tests. Commit `14ce7d9` was pushed on `codex/mcp-account-linking` using
+  authenticated HTTPS after SSH-agent authentication failed.
+- Preview deployment `dpl_78uX3TTqN5PekvAA2c9YgAcGMNGr` is READY and the
+  stable issuer alias resolves to it. The actual bundled CLI discovered all
+  seven deployed tools. Raw modern and legacy requests verified anonymous
+  fixtures and private authorization challenges against the same deployment.
+- The existing private plugin was updated through `0.2.1` to `0.2.2`, release
+  `pluginrel_6ace1a0342688191b982013b6e92e134`. Inventory/readback verified the
+  legacy-only package. The two old portable root configuration files were
+  removed from the current package and remain recoverable through prior
+  release configuration. Plugin identity and USER/PRIVATE scope are unchanged.
+- DriveBeats tools are now restored in this actual chat. Real
+  `drivebeats_list_fixture_tracks` and `drivebeats_open_fixture_player` calls
+  succeeded and exposed the Pulse and Afterglow samples. The real profile call returned the expected
+  `sign_in_required` response while signed out. This proves installed tool
+  activation and anonymous tool calls; it does not prove linked cloud access.
+- Native icon observations came from the user's screenshot, and Firefox
+  confirmed the `0.2.1` package folder. Release `0.2.2` uses a fresh binary path,
+  `assets/drivebeats-icon.png`, in both icon references; the bytes match the
+  intended existing logo and package loading passes. The displayed native
+  icon has not yet been verified after this release. Firefox was under active
+  user control, so no navigation was performed for that display check.
+- A token-endpoint mock exercised the actual native client's OAuth request:
+  PKCE, resource binding and the provided public client ID were correct, and
+  no dynamic client registration occurred. No real tokens were issued by that
+  check. Google callback Save remains pending the required user confirmation;
+  actual Google consent, return to ChatGPT, linked profile/cloud data, selected
+  Drive audio, refresh/reconnect/revocation and website/session preservation
+  remain unverified.
+
+The earlier zero-tool observation is resolved by the installed-host repair.
+Task 3 remains unchecked until the remaining real-account flow is verified;
+neither mocked OAuth requests nor restored anonymous tools satisfy that gate.
+
+The user subsequently confirmed the plugin detail page still displays `0.2.1`.
+Remote metadata and the actual desktop cache independently contain `0.2.2`;
+that installed cache passes the bundled CLI's icon-byte and seven-tool checks.
+Visible icon rendering therefore remains unresolved. No supported Plugin
+Management refresh or icon-repair operation is exposed.
+
+The global sidebar launch tool's title was changed from `Open DriveBeats` to
+`DriveBeats`. OpenAI's entrypoint contract derives its displayed title from
+`tools/list.title`; the resource and UI already used `DriveBeats`. Both modern
+and legacy discovery tests assert the requested label. Native metadata refresh
+and visible sidebar acceptance still require verification.

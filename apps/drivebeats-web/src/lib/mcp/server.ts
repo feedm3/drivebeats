@@ -85,7 +85,7 @@ export function createDrivebeatsMcpHandler(loadUi = readUiResource) {
       server.registerTool(
         "drivebeats_open_fixture_player",
         {
-          title: "Open DriveBeats",
+          title: "DriveBeats",
           description:
             "Open DriveBeats to listen to two sample tracks. This does not access a user's Library or Google Drive.",
           inputSchema: z.strictObject({}),

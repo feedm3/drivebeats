@@ -22,7 +22,9 @@ The installed desktop CLI `0.162.0-alpha.17.2` rejects the portable MCP server's
 client and incorrectly attempts dynamic registration.
 
 The private release therefore uses only `.codex-plugin/plugin.json`,
-`.mcp.json` and `assets/drivebeats.png`. The portable files remain repository
+`.mcp.json` and packaged PNG assets. Both presentation references use
+`assets/drivebeats-icon.png`; the previous asset remains in saved releases.
+The portable files remain repository
 references for clients supporting the current format; exclude them from this
 release archive and remove the old portable files from the saved release with
 Plugin Creator's guarded `delete_paths`. The legacy MCP config declares the

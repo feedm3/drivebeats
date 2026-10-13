@@ -7,11 +7,11 @@
     "displayName": "DriveBeats",
     "longDescription": "Connect the Google account you already use with DriveBeats to read saved Playlists, favorites and track metadata. Selected synced audio has scoped read access. The sample player stays available anonymously. Full Library browsing and shared music playback are planned next.",
     "shortDescription": "Music player",
-    "logo": "./assets/drivebeats.png",
-    "composerIcon": "./assets/drivebeats.png"
+    "logo": "./assets/drivebeats-icon.png",
+    "composerIcon": "./assets/drivebeats-icon.png"
   },
   "name": "drivebeats-fixture-player",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Connect your DriveBeats account to read synced Playlists and favorites, with selected audio access and original sample playback.",
   "author": {
     "name": "Fabian Dietenberger",

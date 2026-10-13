@@ -117,6 +117,7 @@ describe("DriveBeats modern MCP endpoint", () => {
       (tool: { name: string }) =>
         tool.name === "drivebeats_open_fixture_player",
     );
+    expect(launch.title).toBe("DriveBeats");
     expect(launch.inputSchema.additionalProperties).toBe(false);
     expect(launch._meta["openai/ui"].entrypoints).toEqual([{ type: "global" }]);
     expect(launch._meta.ui.resourceUri).toMatch(
@@ -217,6 +218,12 @@ describe("DriveBeats modern MCP endpoint", () => {
       await handler.fetch(legacyRequest("tools/list")),
     );
     expect(listed.result.tools).toHaveLength(7);
+    expect(
+      listed.result.tools.find(
+        (tool: { name: string }) =>
+          tool.name === "drivebeats_open_fixture_player",
+      ).title,
+    ).toBe("DriveBeats");
     expect(listed.result.tools[0].securitySchemes).toEqual([
       { type: "noauth" },
     ]);

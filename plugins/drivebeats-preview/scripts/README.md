@@ -14,4 +14,5 @@ Add `--check-server` after deployment to require an anonymous handshake and all
 seven tools. The default checks manifest loading and matching icon bytes only.
 The script uses a temporary marketplace and isolated Codex state. It does not
 use your credentials, run a model, start OAuth login, or change your installation.
+Both credential stores use temporary files instead of the system keychain.
 Passing these checks does not prove account linking or native icon rendering.

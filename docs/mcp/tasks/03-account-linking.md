@@ -348,3 +348,12 @@ request the full baseline, while tool declarations retain their minimum scopes.
 Actual desktop CLI package/discovery checks still pass. A fresh real profile
 call generated the updated reconnect prompt; the current library-only grant
 continues to require new explicit consent before profile access is available.
+
+After the user confirmed the new reconnect, actual host calls passed in the
+sequence **profile → cloud library → profile** without another authentication
+prompt. Both profile reads matched the linked identity; the library returned
+the existing Playlist and 24 favorites. Read-only grant metadata confirmed one
+active, unexpired connection containing `profile:read`, `library:read` and
+`media:read`. The Firefox handoff, real Google linking, existing cloud reads
+and replacement-scope loop are now verified. Selected media playback/read,
+revocation and ordinary website/session preservation remain separate checks.

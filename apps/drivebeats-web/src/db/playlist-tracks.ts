@@ -81,6 +81,11 @@ export async function insertPlaylistTracks(records: DbPlaylistTrackInsert[]) {
   if (records.length === 0) {
     return;
   }
+  await insertPlaylistTracksQuery(records);
+}
+
+export function insertPlaylistTracksQuery(records: DbPlaylistTrackInsert[]) {
+  if (records.length === 0) throw new Error("A track insert requires records");
 
   const sql = getSql();
   const values: unknown[] = [];
@@ -101,7 +106,7 @@ export async function insertPlaylistTracks(records: DbPlaylistTrackInsert[]) {
     return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9})`;
   });
 
-  await sql.query(
+  return sql.query(
     `
       INSERT INTO playlist_tracks (
         playlist_id,

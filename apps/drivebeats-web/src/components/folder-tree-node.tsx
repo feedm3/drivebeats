@@ -1,5 +1,6 @@
 "use client";
 
+import { FolderTreeRow } from "@drivebeats/client/views";
 import { ChevronRight, Folder, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { NowPlayingBars } from "@/components/now-playing-bars";
@@ -115,7 +116,7 @@ export function FolderTreeNode({
 
   return (
     <div>
-      <div
+      <FolderTreeRow
         className={cn(
           // Tree rows are stacked edge to edge, so the row grows with real
           // padding on touch (44px = 12 + 20 line-box + 12) instead of an
@@ -123,18 +124,10 @@ export function FolderTreeNode({
           "group flex cursor-pointer items-center gap-1 rounded-md py-1 pointer-coarse:py-3 pr-2 text-sm transition-colors hover:bg-accent/50",
           isSelected && "bg-primary/10 text-primary font-medium",
         )}
-        style={{ paddingLeft: depth * 16 + 4 }}
-        onClick={handleSelect}
-        role="treeitem"
-        aria-expanded={isExpanded}
-        aria-selected={isSelected}
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            handleSelect();
-          }
-        }}
+        depth={depth}
+        onSelect={handleSelect}
+        expanded={isExpanded}
+        selected={isSelected}
       >
         {/* The expander grows to the full row height on touch but keeps its
             20px width: a 44px-wide hit area would reach across the folder
@@ -172,7 +165,7 @@ export function FolderTreeNode({
         <span className={cn("truncate", isPlayingAncestor && "text-primary")}>
           {name}
         </span>
-      </div>
+      </FolderTreeRow>
       {isExpanded && children && children.length > 0 && (
         <div className="animate-in fade-in duration-150">
           {children.map((child) => (

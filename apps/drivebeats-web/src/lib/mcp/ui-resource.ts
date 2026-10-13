@@ -8,45 +8,42 @@ export const UI_MIME_TYPE = "text/html;profile=mcp-app";
 export function createUiResource(html: string, resourceDomains: string[] = []) {
   const version = createHash("sha256").update(html).digest("hex");
   return {
-    uri: `ui://drivebeats/fixture-player-${version}.html`,
+    uri: `ui://drivebeats/player-${version}.html`,
     html,
     resourceDomains,
   };
+}
+
+function validateOrigin(origin: string, allowLocal = false) {
+  const url = new URL(origin);
+  const local =
+    allowLocal &&
+    url.protocol === "http:" &&
+    ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  if (url.origin !== origin || (url.protocol !== "https:" && !local)) {
+    throw new Error("The player origin must be HTTPS or permitted local HTTP.");
+  }
+  return origin;
 }
 
 export function renderUiResource(
   template: string,
   origin: string,
   mediaOrigin: string | null = null,
+  websiteOrigin = SITE_URL,
 ) {
-  const url = new URL(origin);
-  const isLocalHttp =
-    url.protocol === "http:" &&
-    ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
-  if (url.origin !== origin || (url.protocol !== "https:" && !isLocalHttp)) {
-    throw new Error("The fixture audio origin must be HTTPS or local HTTP.");
-  }
-  const placeholder = "__DRIVEBEATS_FIXTURE_ORIGIN__";
-  if (!template.includes(placeholder)) {
-    throw new Error("The packaged UI is missing its audio origin.");
-  }
-  if (mediaOrigin) {
-    const mediaUrl = new URL(mediaOrigin);
-    if (mediaUrl.protocol !== "https:" || mediaUrl.origin !== mediaOrigin)
-      throw new Error("The media issuer must be an HTTPS origin.");
-  }
+  validateOrigin(origin, true);
+  if (mediaOrigin) validateOrigin(mediaOrigin);
+  validateOrigin(websiteOrigin, true);
   if (!template.includes("<head>"))
     throw new Error("The packaged UI is missing its head element.");
-  const mediaConfig = JSON.stringify({ origin: mediaOrigin });
-  const html = template
-    .replaceAll(placeholder, origin)
-    .replace(
-      "<head>",
-      `<head><script id="drivebeats-media-read" type="application/json">${mediaConfig}</script>`,
-    );
-  return createUiResource(html, [
-    ...new Set([origin, ...(mediaOrigin ? [mediaOrigin] : [])]),
-  ]);
+  const config = (value: unknown) =>
+    JSON.stringify(value).replaceAll("<", "\\u003c");
+  const html = template.replace(
+    "<head>",
+    `<head><script id="drivebeats-media-read" type="application/json">${config({ origin: mediaOrigin })}</script><script id="drivebeats-import-selection" type="application/json">${config({ origin: websiteOrigin })}</script>`,
+  );
+  return createUiResource(html, mediaOrigin ? [mediaOrigin] : []);
 }
 
 export async function readUiResource(request?: Request) {

@@ -2,10 +2,10 @@
   "mcpServers": {
     "drivebeats": {
       "type": "http",
-      "url": "https://drivebeats-mcp-preview-fabian.vercel.app/mcp",
+      "url": "https://www.drivebeats.app/mcp",
       "headers": {},
       "oauth": {
-        "clientId": "drivebeats-chatgpt-preview",
+        "clientId": "drivebeats-chatgpt",
         "callbackUrl": "http://127.0.0.1:46123/callback",
         "callbackPort": 46123
       }

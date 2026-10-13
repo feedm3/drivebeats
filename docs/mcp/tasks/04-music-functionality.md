@@ -1,6 +1,6 @@
 # Task 4 Shared music functionality
 
-Read [execution context](../context.md) and [task 3 notes](03-account-linking.md#execution-notes). Requires real linked-account/Drive-read proof. Implement 4a → 4b → 4c → 4d as reviewable slices. An assignment to one slice requires earlier dependencies but does not silently authorize later slices.
+Read [execution context](../context.md) and [task 3 notes](03-account-linking.md#execution-notes). Real linked-account/cloud reads are recorded in task 3; real selected-media acceptance remains open. Implement 4a → 4b → 4c → 4d as reviewable slices. An assignment to one slice requires earlier dependencies but does not silently authorize later slices.
 
 ## Existing modules
 
@@ -66,4 +66,82 @@ Task 4 completes only when all slices pass. Missing host capabilities/credential
 
 ## Execution notes
 
-Not started. Record 4a/4b/4c/4d separately, actual interfaces, import/session method, tool contracts, operation-ID handling, model invocation/budget, live outcomes and remaining limitations.
+Implemented on 2026-10-13 with three implementation subagents, independent
+cross-reviews, supervisor integration and browser verification. **Live
+production acceptance remains open; the task and acceptance checkboxes remain
+unchecked.** Source implementation is separate from deployment and real-host
+acceptance.
+
+### Slice status
+
+| Slice | Implemented and locally verified | Remaining real acceptance |
+| --- | --- | --- |
+| 4a Library | Shared `@drivebeats/client` breadcrumbs, filename highlighting, folder rows, search controls and shuffle rules consumed by both apps. Plugin has full account-scoped complete-generation IndexedDB catalog, filename search, pagination, provider-verified import boundary, external first-party Picker and encrypted local import receipts. Durable session mailbox exposes local search/browse to MCP. | Actual external Google Picker selection/return/restoration in ChatGPT, unsaved nested real track search, account/import isolation on real Drive. |
+| 4b Player/collections | Stable browser Audio, real scoped media adapter, normal controls, no-repeat shuffle, synced collections and ID3 metadata reads, atomic Playlist-with-tracks creation, owned favorite removal, expiry/gesture/teardown handling. Existing website adapters retained. | Audible real Google Drive playback, another-session sync refresh, website sign-in/refresh/logout, disconnect data preservation, authorized disposable-account cloud deletion. |
+| 4c Chat actions | 24 total production tools with authenticated session targeting, provider ancestry validation, durable claims, stable UUID operation IDs, stale/duplicate/closed command handling, queued/applied/failed/unavailable results. Data tools omit render resources. | Actual natural-language ChatGPT search/save/playback chain, real target selection and follow-up/unsupported requests. |
+| 4d DJ Mode | Explicit start/stop, supported MCP Apps host sampling, bounded verified candidate metadata/recent history, ahead-of-time selections, timed refill/error fallback, manual override and late-result guards. No additional paid provider or API key. | Real target-host sampling capability and another automatic selection in a real listening session; leave incomplete if host support is absent. |
+
+### Contracts and paths
+
+See [music functionality](../music-functionality.md) for the complete request,
+result, timeout, persistence, permission and DJ contracts.
+
+- Portable audio types/rules remain in `packages/drivebeats-core`; audio helpers
+  now share the same filename/MIME support between web/server and plugin catalog.
+  Shared client views/catalog/player/shuffle live in `packages/drivebeats-client`.
+- Production UI uses `music-bridge.ts`, `player.tsx`, the existing account bridge,
+  and a stable external Audio element. All fixture runtime modules, sample tools,
+  checked-in MP3s, immutable fixture headers and sample asset build steps removed.
+  Synthetic data/media exist only in tests and temporary browser verification.
+- Backend: `lib/mcp/{music-tools,music-library-service,music-session-service,import-selection-service}.ts`,
+  table-owned `db/mcp-music-{sessions,commands,imports}.ts`, shared cloud service
+  atomic create and per-table query builders. New forward migration0009 adds
+  three temporary coordination tables and optional media session binding.
+- Import: `/mcp/import/[capability]` plus `/api/mcp/import/[capability]`; the
+  ordinary website's existing Picker hook is reused without modifying its
+  imports. Selection account/Origin/body/provider/type/trashed checks precede
+  atomic capability consumption. Pending selection has a capped10-minute lease.
+- Release source: `plugins/drivebeats`, version1.0.0, production endpoint and
+  four baseline scopes. Existing private plugin ID/audience/icon/default prompt
+  preserved in the prepared update; the demo package name is removed. The exact
+  compatibility archive passes the actual desktop loader. Remote release is
+  still version0.2.2 targeting preview until activation.
+- GitHub validation now also runs on pushes to main, matching the authorized
+  direct-main publication workflow.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| Root automated tests | Final `pnpm test` passes **468 tests: 9 client + 25 MCP UI + 434 web**, plus core typecheck. |
+| Root lint/build | `pnpm lint` and `pnpm build` pass. Existing Biome config deprecation, unrelated broken skill symlink and oversized logo warnings remain; Vite warns about dropping a Next client directive in its browser-only bundle. |
+| Important contracts | Complete/failed/canceled/overlapping catalogs; generic MIME supported filenames; bounded search pages and query/generation-bound cursors; duplicate queues/shuffle state; stale/cross-account commands; claim/retry/expiry; auth scopes; provider ancestry and batch validation; Playlist transaction; owned favorite removal; expired receipt recovery; unavailable host; pending creates; manual/late DJ results; actual Stop click cannot restart DJ through form submission. |
+| Native local SQL | Applied actual migrations0008/0009 and exercised actual transpiled DB queries in temporary PGlite0.5.9: ownership, single-use imports, pending-import lease, revision guards, duplicate insert, claims, invalid/stale/closed/expired acknowledgements and cleanup. Advisory-lock function was stubbed; cross-connection PostgreSQL concurrency remains unverified. Nothing was applied to remote Neon. |
+| Local production HTTP | Compiled Next server with temporary ephemeral auth keys: modern discovery/list with24 production tools, anonymous shell, full four-scope auth challenge, bundled player/CSP and signed-out import/consent recovery passed. No provider/database call or real linking implied. |
+| Browser player | Isolated Chromium and compiled UI inside a simulated standard MCP Apps host: **20 checks passed**, including unsaved nested full-Library search/ack, expired-action failure, actual generated WAV decode/time advance, play/pause/next/seek/volume/shuffle/repeat, stable Audio after tool result, saved collection distinction, two host-sampling invocations with automatic refill, explicit DJ stop, closure pause and no overflow at320/428/1100px. Separate measurement found all button/input/select targets at least44x44px. Synthetic media/data stayed in `/private/tmp`, outside production source. |
+| Browser auth/web | Actual local first-party signed-out Import page, separate-tab website sign-in link, expired consent recovery and ordinary website signed-out redirect verified. Website Vercel Analytics script404/MIME errors are local hosting artifacts; not MCP bridge errors. Actual Google sign-in remains unverified. |
+| React Doctor | No error findings. Fixed confirmed indexed lookup, missing stable empty catalog and account-reset issues; three MCP maintainability warnings remain. Sequential catalog reads intentionally bound provider request concurrency. No installation/configuration changes, score API or supply-chain scan. |
+| Desktop package | Compatibility-only1.0.0 ZIP passes actual bundled desktop CLI manifest/server/icon byte checks in isolated temporary state. No installed-plugin update or real OAuth inferred. |
+| Remote read-only | Correct Vercel project/root verified through CLI; five MCP variables are preview-only. Neon confirms0009 absent. Plugin Creator confirms original USER/PRIVATE plugin,0.2.2 release and four-file inventory. |
+
+### Review fixes
+
+Independent review and browser verification corrected non-atomic Playlist
+creation, stale imports/catalog claims, data-tool render remounts, old shuffle
+cycles/duplicate queue loops, delayed authoritative closure, inaccurate previous
+track acknowledgement, account-switch navigation leakage, removing saved
+favorites outside imports, expired receipts, ambiguous Playlist retry IDs,
+manual/late DJ selections, byte-bound pagination and Stop-DJ form resubmission.
+The supervisor also aligned the plugin catalog with the website's supported
+filename fallback for generic provider MIME types.
+
+### Remaining production work
+
+[Production activation](../production-release.md) records the concrete migration,
+production configuration, guarded private-plugin update and real acceptance
+sequence. Production MCP configuration, migration0009 and saved-plugin update
+require approval under AGENTS.md. The user separately authorized committing
+and pushing main. Remote deployment/CI evidence is appended after publication.
+No real Google Picker/Drive media, multi-session sync/logout/deletion or actual
+ChatGPT DJ sampling has been accepted in this task. Local browser/SQL simulation
+is not a substitute for that proof.

@@ -1,19 +1,8 @@
-import { FIXTURE_TRACKS } from "@drivebeats/mcp-app/fixtures";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { registerMusicTools } from "./music-tools";
 import { registerPrivateTools } from "./private-tools";
 import { readUiResource, UI_MIME_TYPE } from "./ui-resource";
-
-const fixtureOutputSchema = z.object({
-  tracks: z.array(
-    z.object({
-      id: z.string(),
-      title: z.string(),
-      artist: z.string(),
-      durationSeconds: z.number().positive(),
-    }),
-  ),
-});
 
 const readOnlyAnnotations = {
   readOnlyHint: true,
@@ -31,7 +20,7 @@ export function createDrivebeatsMcpHandler(loadUi = readUiResource) {
         {
           capabilities: { tools: {}, resources: {} },
           instructions:
-            "DriveBeats offers anonymous sample tracks. Connect your account to read your verified profile, synced Playlists and favorites. Private operations require a DriveBeats grant. Audio starts only from the user's player controls.",
+            "DriveBeats plays user-selected Google Drive audio. Connect your account and import folders or tracks in the player. Library search, playback and temporary queues target one active session; saved Playlists and favorites sync with the website. Reuse operation IDs on retries. Google Drive is strictly read-only.",
         },
       );
 
@@ -40,7 +29,8 @@ export function createDrivebeatsMcpHandler(loadUi = readUiResource) {
         ui.uri,
         {
           title: "DriveBeats",
-          description: "Listen to two original instrumental samples.",
+          description:
+            "Browse your imported Library and listen to your Playable Tracks.",
           mimeType: UI_MIME_TYPE,
           _meta: {
             ui: {
@@ -69,27 +59,13 @@ export function createDrivebeatsMcpHandler(loadUi = readUiResource) {
         }),
       );
 
-      const fixtureResult = async () => ({
-        content: [
-          {
-            type: "text" as const,
-            text: `Sample tracks: ${FIXTURE_TRACKS.map(
-              (track) =>
-                `${track.title} by ${track.artist} (${track.durationSeconds} seconds)`,
-            ).join("; ")}. Select Play in DriveBeats to listen.`,
-          },
-        ],
-        structuredContent: { tracks: FIXTURE_TRACKS },
-      });
-
       server.registerTool(
-        "drivebeats_open_fixture_player",
+        "drivebeats_open_player",
         {
           title: "DriveBeats",
           description:
-            "Open DriveBeats to listen to two sample tracks. This does not access a user's Library or Google Drive.",
+            "Open DriveBeats to connect your account, import your Library and play your selected Google Drive audio.",
           inputSchema: z.strictObject({}),
-          outputSchema: fixtureOutputSchema,
           annotations: readOnlyAnnotations,
           _meta: {
             ui: { resourceUri: ui.uri },
@@ -97,28 +73,23 @@ export function createDrivebeatsMcpHandler(loadUi = readUiResource) {
             securitySchemes: [{ type: "noauth" }],
           },
         },
-        fixtureResult,
-      );
-
-      server.registerTool(
-        "drivebeats_list_fixture_tracks",
-        {
-          title: "List sample tracks",
-          description:
-            "Read the two sample tracks available in DriveBeats. No private music or account data is available.",
-          inputSchema: z.strictObject({}),
-          outputSchema: fixtureOutputSchema,
-          annotations: readOnlyAnnotations,
-          _meta: { securitySchemes: [{ type: "noauth" }] },
-        },
-        fixtureResult,
+        async () => ({
+          content: [
+            {
+              type: "text" as const,
+              text: "Open DriveBeats, connect your account and import your Library. Select Play to enable audio.",
+            },
+          ],
+          structuredContent: { status: "ready" },
+        }),
       );
 
       registerPrivateTools(server, context.requestInfo, ui.uri);
+      registerMusicTools(server, context.requestInfo);
 
       return server;
     },
-    { legacy: "stateless", maxRequestBodySize: 16 * 1024 },
+    { legacy: "stateless", maxRequestBodySize: 128 * 1024 },
   );
   return {
     ...handler,

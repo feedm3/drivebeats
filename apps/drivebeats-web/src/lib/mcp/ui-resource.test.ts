@@ -13,8 +13,7 @@ const missingArtifact = Object.assign(
   new Error(`ENOENT: no such file or directory, open '${artifactPath}'`),
   { code: "ENOENT", path: artifactPath },
 );
-const config = JSON.stringify({ origin: "__DRIVEBEATS_FIXTURE_ORIGIN__" });
-const template = `<html><head><script id="drivebeats-fixture-audio" type="application/json">${config}</script><script type="module">startPlayer()</script></head></html>`;
+const template = `<html><head><script type="module">startPlayer()</script></head></html>`;
 
 beforeEach(() => {
   vi.stubEnv("MCP_AUTH_ISSUER", "");
@@ -23,24 +22,21 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 
-describe("deployment-specific fixture HTML", () => {
-  it("injects the independent canonical media origin and permits only its exact origin alongside preview fixtures", async () => {
-    vi.stubEnv("VERCEL_URL", "fixture-preview.vercel.app");
+describe("production player HTML", () => {
+  it("injects the independent canonical media origin and permits only its exact origin without sample assets", async () => {
+    vi.stubEnv("VERCEL_URL", "player-preview.vercel.app");
     vi.stubEnv("MCP_AUTH_ISSUER", "https://www.drivebeats.app");
     vi.mocked(readFile).mockResolvedValue(template);
     const ui = await readUiResource(
-      new Request("https://fixture-preview.vercel.app/mcp"),
+      new Request("https://player-preview.vercel.app/mcp"),
     );
     expect(ui.html).toContain(
       '<script id="drivebeats-media-read" type="application/json">{"origin":"https://www.drivebeats.app"}</script>',
     );
-    expect(ui.html).toContain('"origin":"https://fixture-preview.vercel.app"');
-    expect(ui.resourceDomains).toEqual([
-      "https://fixture-preview.vercel.app",
-      "https://www.drivebeats.app",
-    ]);
+    expect(ui.html).toContain('"origin":"https://www.drivebeats.app"');
+    expect(ui.resourceDomains).toEqual(["https://www.drivebeats.app"]);
     expect(ui.uri).not.toBe(
-      renderUiResource(template, "https://fixture-preview.vercel.app").uri,
+      renderUiResource(template, "https://player-preview.vercel.app").uri,
     );
   });
   it("disables private media when unconfigured and rejects unsafe media origins", () => {
@@ -61,15 +57,15 @@ describe("deployment-specific fixture HTML", () => {
     }
   });
   it("uses the fixed Vercel origin, hashes the rendered bytes, and declares the same CSP origin", async () => {
-    vi.stubEnv("VERCEL_URL", "fixture-preview.vercel.app");
+    vi.stubEnv("VERCEL_URL", "player-preview.vercel.app");
     vi.mocked(readFile).mockResolvedValue(template);
     const ui = await readUiResource(new Request("http://localhost:3101/mcp"));
-    expect(ui.html).toContain('"origin":"https://fixture-preview.vercel.app"');
+    expect(ui.html).toContain('"origin":"https://www.drivebeats.app"');
     expect(ui.html).not.toContain("__DRIVEBEATS_FIXTURE_ORIGIN__");
     const hash = createHash("sha256").update(ui.html).digest("hex");
-    expect(ui.uri).toBe(`ui://drivebeats/fixture-player-${hash}.html`);
-    expect(ui.resourceDomains).toEqual(["https://fixture-preview.vercel.app"]);
-    expect(ui.uri).not.toBe(
+    expect(ui.uri).toBe(`ui://drivebeats/player-${hash}.html`);
+    expect(ui.resourceDomains).toEqual([]);
+    expect(ui.uri).toBe(
       renderUiResource(template, "https://another-preview.vercel.app").uri,
     );
   });
@@ -78,8 +74,8 @@ describe("deployment-specific fixture HTML", () => {
     vi.stubEnv("VERCEL_URL", "");
     vi.mocked(readFile).mockResolvedValue(template);
     const ui = await readUiResource(new Request("http://localhost:3101/mcp"));
-    expect(ui.html).toContain('"origin":"http://localhost:3101"');
-    expect(ui.resourceDomains).toEqual(["http://localhost:3101"]);
+    expect(ui.html).toContain('"origin":null');
+    expect(ui.resourceDomains).toEqual([]);
   });
 
   it.each([
@@ -91,10 +87,10 @@ describe("deployment-specific fixture HTML", () => {
     expect(() => renderUiResource(template, origin)).toThrow();
   });
 
-  it("rejects an artifact that is missing fixture configuration", () => {
+  it("rejects an artifact that is missing the head element", () => {
     expect(() =>
       renderUiResource("<html></html>", "https://preview.example"),
-    ).toThrow("missing its audio origin");
+    ).toThrow("missing its head element");
   });
 });
 

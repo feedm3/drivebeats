@@ -7,13 +7,14 @@ export interface McpMediaGrant {
   fileId: string;
   mimeType: string;
   expiresAt: Date;
+  sessionId?: string | null;
 }
 
 export async function insertMcpMediaGrant(grant: McpMediaGrant) {
   await getSql().query(
     `INSERT INTO mcp_media_grants
-      (capability_hash, grant_id, google_user_id, file_id, mime_type, expires_at)
-      VALUES ($1, $2, $3, $4, $5, $6)`,
+      (capability_hash, grant_id, google_user_id, file_id, mime_type, expires_at, session_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [
       grant.capabilityHash,
       grant.grantId,
@@ -21,6 +22,7 @@ export async function insertMcpMediaGrant(grant: McpMediaGrant) {
       grant.fileId,
       grant.mimeType,
       grant.expiresAt.toISOString(),
+      grant.sessionId ?? null,
     ],
   );
 }
@@ -29,7 +31,7 @@ export async function getMcpMediaGrant(
   capabilityHash: string,
 ): Promise<McpMediaGrant | null> {
   const rows = (await getSql().query(
-    `SELECT capability_hash, grant_id, google_user_id, file_id, mime_type, expires_at
+    `SELECT capability_hash, grant_id, google_user_id, file_id, mime_type, expires_at, session_id
       FROM mcp_media_grants WHERE capability_hash = $1 AND expires_at > NOW()`,
     [capabilityHash],
   )) as {
@@ -39,6 +41,7 @@ export async function getMcpMediaGrant(
     file_id: string;
     mime_type: string;
     expires_at: string;
+    session_id: string | null;
   }[];
   const row = rows[0];
   return row
@@ -49,6 +52,7 @@ export async function getMcpMediaGrant(
         fileId: row.file_id,
         mimeType: row.mime_type,
         expiresAt: new Date(row.expires_at),
+        sessionId: row.session_id,
       }
     : null;
 }

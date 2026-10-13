@@ -37,7 +37,7 @@ const principal: McpPrincipal = {
     name: "Account A",
     picture: null,
   },
-  scopes: ["profile:read", "library:read", "media:read"],
+  scopes: ["profile:read", "library:read", "library:write", "media:read"],
 };
 const handlers: ReturnType<typeof createDrivebeatsMcpHandler>[] = [];
 function createHandler() {
@@ -124,7 +124,7 @@ describe("Private MCP tool contracts", () => {
         );
         expect(result.isError).toBe(true);
         expect(result._meta["mcp/www_authenticate"][0]).toContain(
-          'scope="profile:read library:read media:read"',
+          'scope="profile:read library:read library:write media:read"',
         );
       }
       expect(getCloudLibrarySyncPayload).not.toHaveBeenCalled();
@@ -141,10 +141,11 @@ describe("Private MCP tool contracts", () => {
     expect(authenticateMcpRequest).toHaveBeenCalledWith(expect.any(Request), [
       "profile:read",
       "library:read",
+      "library:write",
       "media:read",
     ]);
     expect(result._meta["mcp/www_authenticate"][0]).toContain(
-      'scope="profile:read library:read media:read"',
+      'scope="profile:read library:read library:write media:read"',
     );
     const { result: discovery } = await (
       await createHandler().fetch(request("tools/list"))
@@ -157,7 +158,7 @@ describe("Private MCP tool contracts", () => {
     expect(tool.securitySchemes).toEqual([
       {
         type: "oauth2",
-        scopes: ["profile:read", "library:read", "media:read"],
+        scopes: ["profile:read", "library:read", "library:write", "media:read"],
       },
     ]);
   });
@@ -289,6 +290,6 @@ describe("Private MCP tool contracts", () => {
       JSON.stringify([result.content, result.structuredContent]),
     ).not.toContain("secret-capability");
     expect(result._meta.mediaUrl).toContain("secret-capability");
-    expect(prepareMcpMedia).toHaveBeenCalledWith(principal, "a");
+    expect(prepareMcpMedia).toHaveBeenCalledWith(principal, "a", undefined);
   });
 });

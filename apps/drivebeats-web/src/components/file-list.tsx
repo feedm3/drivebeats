@@ -1,5 +1,6 @@
 "use client";
 
+import { HighlightedName } from "@drivebeats/client/views";
 import { Folder, Music4, Search } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AddToPlaylistPopover } from "@/components/add-to-playlist-popover";
@@ -21,10 +22,7 @@ import {
 } from "@/components/ui/table";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { createPlaylistTrack } from "@/lib/audio";
-import {
-  filterFilesBySearch,
-  getHighlightedTextParts,
-} from "@/lib/file-search";
+import { filterFilesBySearch } from "@/lib/file-search";
 import { resolveTrackMetadata } from "@/lib/track-metadata";
 import { cn } from "@/lib/utils";
 import { useId3MetadataStore } from "@/stores/id3-metadata-store";
@@ -115,35 +113,6 @@ function sortFilesByName(
     const comparedId = a.id.localeCompare(b.id);
     return direction === "asc" ? comparedId : -comparedId;
   });
-}
-
-function HighlightedName({
-  name,
-  searchQuery,
-  className,
-}: {
-  name: string;
-  searchQuery: string;
-  className?: string;
-}) {
-  const parts = getHighlightedTextParts(name, searchQuery);
-
-  return (
-    <span className={cn("block truncate font-medium", className)}>
-      {parts.map((part) =>
-        part.isMatch ? (
-          <mark
-            key={`${part.start}-${part.value}`}
-            className="rounded-sm bg-primary/12 px-0.5 text-foreground"
-          >
-            {part.value}
-          </mark>
-        ) : (
-          <span key={`${part.start}-${part.value}`}>{part.value}</span>
-        ),
-      )}
-    </span>
-  );
 }
 
 function MobileFileMetadata({

@@ -11,7 +11,6 @@ coverage/
 .next/
 dist/
 .mcp-ui/
-/apps/drivebeats-web/public/mcp-fixtures/
 out/
 
 # misc

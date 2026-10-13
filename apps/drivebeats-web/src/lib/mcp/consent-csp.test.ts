@@ -33,7 +33,17 @@ describe("OAuth consent form CSP", () => {
         "form-action 'self' https://chatgpt.com",
       ),
     );
-    expect(rules?.at(-1)?.source).toBe("/mcp/connect");
+    expect(
+      rules
+        ?.filter((rule) =>
+          rule.headers.some(
+            (header) =>
+              header.key === "Content-Security-Policy" &&
+              header.value.includes("https://chatgpt.com"),
+          ),
+        )
+        .map((rule) => rule.source),
+    ).toEqual(["/mcp/connect"]);
   });
 
   it.each([

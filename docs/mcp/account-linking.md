@@ -22,7 +22,7 @@ Keep both keys server-only. Never paste credentials into chat, tool output,
 plugin headers, URLs or client configuration. Access tokens use a 15-minute
 lifetime; grants expire after 30 days. Changing the signing key invalidates
 issued access tokens. Changing the encryption key requires reconnecting grants
-encrypted with the previous key; this prototype does not implement a key ring.
+encrypted with the previous key; the server does not implement a key ring.
 
 The chosen registration method is a preconfigured public client using
 authorization code and PKCE `S256`, with token endpoint authentication `none`.
@@ -34,7 +34,7 @@ mode; use the exact callback displayed by the actual connection instead of
 assuming it. [OpenAI authentication](https://developers.openai.com/plugins/build/auth).
 
 The installed desktop CLI `0.162.0-alpha.17.2` requires the compatible package
-described in [the preview plugin guide](../../plugins/drivebeats-preview/README.md).
+described in [the plugin source guide](../../plugins/drivebeats/README.md).
 Its `.mcp.json` declares the same public client with `oauth.clientId` and a
 fixed `oauth.callbackUrl`/`callbackPort`. The loopback callback is permitted
 only when explicitly included in the server allowlist; other loopback ports,

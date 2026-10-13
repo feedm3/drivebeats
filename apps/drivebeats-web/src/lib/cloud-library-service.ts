@@ -1,3 +1,4 @@
+import { getSql } from "@/db/client";
 import {
   deleteAllNonFavoriteTracks,
   deleteNonFavoriteTrack,
@@ -8,6 +9,7 @@ import {
   deletePlaylistTrack,
   getNextPlaylistTrackPosition,
   insertPlaylistTracks,
+  insertPlaylistTracksQuery,
   listTrackFileIdsByPlaylist,
   listTracksByPlaylistIds,
   reorderPlaylistTracks,
@@ -15,6 +17,7 @@ import {
 import {
   countPlaylistsByUser,
   deletePlaylist,
+  insertPlaylistQuery,
   listOwnedPlaylistIdsByUser,
   listPlaylistsByUser,
   renamePlaylist,
@@ -36,6 +39,7 @@ import {
   MAX_PLAYLISTS_PER_USER,
   MAX_TRACKS_PER_PLAYLIST,
   PLAYLIST_COUNT_LIMIT_CODE,
+  PLAYLIST_TRACK_LIMIT_CODE,
   PlaylistLimitError,
 } from "@/lib/playlist-limits";
 import type { Playlist, PlaylistTrack } from "@/types";
@@ -161,6 +165,46 @@ export async function createPlaylistRecord(
   } catch (error) {
     throw getPlaylistLimitError(error) ?? error;
   }
+}
+
+export async function createPlaylistWithTracksRecord(
+  user: AuthUser,
+  playlist: Pick<Playlist, "id" | "name">,
+  tracks: PlaylistTrack[],
+) {
+  const uniqueTracks = [
+    ...new Map(
+      tracks.map((track) => [track.fileId, normalizeTrack(track)]),
+    ).values(),
+  ];
+  if (uniqueTracks.length > MAX_TRACKS_PER_PLAYLIST)
+    throw new PlaylistLimitError(PLAYLIST_TRACK_LIMIT_CODE);
+  await ensureUserRecord(user);
+  // Database triggers enforce count and per-Playlist limits under the user lock.
+  // Either both the Playlist and its ordered tracks commit, or neither does.
+  const queries = [
+    insertPlaylistQuery({
+      id: playlist.id,
+      googleUserId: user.id,
+      name: playlist.name,
+    }),
+  ];
+  if (uniqueTracks.length)
+    queries.push(
+      insertPlaylistTracksQuery(
+        uniqueTracks.map((track, position) => ({
+          ...track,
+          playlistId: playlist.id,
+          position,
+        })),
+      ),
+    );
+  try {
+    await getSql().transaction(queries);
+  } catch (error) {
+    throw getPlaylistLimitError(error) ?? error;
+  }
+  return { trackCount: uniqueTracks.length };
 }
 
 export async function renamePlaylistRecord(

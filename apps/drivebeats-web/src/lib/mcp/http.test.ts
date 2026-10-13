@@ -74,7 +74,7 @@ describe("MCP HTTP boundary", () => {
       "oauth-protected-resource/mcp",
     );
     expect(response.headers.get("www-authenticate")).toContain(
-      'scope="profile:read library:read media:read"',
+      'scope="profile:read library:read library:write media:read"',
     );
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(fetch).not.toHaveBeenCalled();

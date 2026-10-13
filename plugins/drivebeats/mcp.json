@@ -3,7 +3,7 @@
   "mcpServers": {
     "drivebeats": {
       "type": "streamable-http",
-      "url": "https://drivebeats-mcp-preview-fabian.vercel.app/mcp",
+      "url": "https://www.drivebeats.app/mcp",
       "headers": {},
       "extensions": {
         "com.openai": {
@@ -11,11 +11,16 @@
             "type": "mixed",
             "client": {
               "mode": "provided",
-              "clientId": "drivebeats-chatgpt-preview",
+              "clientId": "drivebeats-chatgpt",
               "tokenEndpointAuthMethod": "none"
             },
-            "baseScopes": ["profile:read", "library:read", "media:read"],
-            "resource": "https://drivebeats-mcp-preview-fabian.vercel.app/mcp"
+            "baseScopes": [
+              "profile:read",
+              "library:read",
+              "library:write",
+              "media:read"
+            ],
+            "resource": "https://www.drivebeats.app/mcp"
           }
         }
       }

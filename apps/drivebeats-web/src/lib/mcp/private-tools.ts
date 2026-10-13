@@ -10,6 +10,7 @@ import {
   type McpPrincipal,
 } from "./auth";
 import { McpMediaError, prepareMcpMedia } from "./media-service";
+import { createMcpMusicImport } from "./music-session-service";
 
 const readOnly = {
   readOnlyHint: true,
@@ -94,8 +95,8 @@ export function registerPrivateTools(
   function metadata(scopes: string[], appOnly = false) {
     return {
       securitySchemes: [{ type: "oauth2", scopes }],
-      ...(resourceUri
-        ? { ui: { resourceUri, ...(appOnly ? { visibility: ["app"] } : {}) } }
+      ...(appOnly && resourceUri
+        ? { ui: { resourceUri, visibility: ["app"] } }
         : {}),
     };
   }
@@ -134,7 +135,7 @@ export function registerPrivateTools(
     {
       title: "Connect DriveBeats account",
       description:
-        "Connect your account with read access to your profile, synced Playlists, favorites and selected audio. Called when you choose Connect in DriveBeats.",
+        "Connect your account to browse and play selected music, save requested Playlists and update favorites. Called when you choose Connect in DriveBeats.",
       inputSchema: z.strictObject({}),
       outputSchema: profileSchema,
       annotations: readOnly,
@@ -170,20 +171,55 @@ export function registerPrivateTools(
     {
       title: "Prepare a selected Playable Track",
       description:
-        "Prepare a short-lived read of a Playable Track already in your synced Playlists or favorites. The player starts audio only after a tap.",
-      inputSchema: z.strictObject({ fileId: z.string().min(1).max(256) }),
+        "Prepare a short-lived read of a Playable Track in your imported Library or synced collections. Audio requires an enabled player.",
+      inputSchema: z.strictObject({
+        fileId: z.string().min(1).max(256),
+        sessionId: z.uuid().optional(),
+      }),
       annotations: { ...readOnly, idempotentHint: false, openWorldHint: true },
       _meta: metadata(["media:read"], true),
     },
-    async ({ fileId }) =>
+    async ({ fileId, sessionId }) =>
       protectedOperation(["media:read"], async (principal) => {
-        const { mediaUrl, ...track } = await prepareMcpMedia(principal, fileId);
+        const { mediaUrl, ...track } = await prepareMcpMedia(
+          principal,
+          fileId,
+          sessionId,
+        );
         return {
           ...textResult(
             { status: "ready", ...track },
             `Ready to play ${track.fileName}. Select Play in DriveBeats.`,
           ),
           _meta: { mediaUrl },
+        };
+      })(),
+  );
+
+  server.registerTool(
+    "drivebeats_prepare_import",
+    {
+      title: "Choose music to import",
+      description:
+        "Open Google Picker on DriveBeats to deliberately select Imported Folders or Standalone Tracks for this player. Google Drive stays read-only.",
+      inputSchema: z.strictObject({ sessionId: z.uuid() }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+      _meta: metadata(["library:read"], true),
+    },
+    async ({ sessionId }) =>
+      protectedOperation(["library:read"], async (principal) => {
+        const selection = await createMcpMusicImport(principal, sessionId);
+        return {
+          ...textResult(
+            { status: "ready", expiresAt: selection.expiresAt },
+            "Choose music on DriveBeats, then return to this player.",
+          ),
+          _meta: { importUrl: selection.url },
         };
       })(),
   );

@@ -6,15 +6,14 @@ import {
   screen,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { createFixtureBridge } from "./fixture-bridge";
-import { FIXTURE_AUDIO_PATHS } from "./fixture-tracks";
-import { Player } from "./player";
+import { createAccountBridge } from "./account-bridge";
+import { AccountPanel } from "./account-panel";
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
-it("shows linked existing Playlists and disconnect recovery without replacing the Audio element", async () => {
+it("shows linked existing Playlists and disconnect recovery and disconnect recovery", async () => {
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
   const host = {
     addEventListener: vi.fn(),
@@ -43,35 +42,29 @@ it("shows linked existing Playlists and disconnect recovery without replacing th
       }),
     ),
   };
-  const bridge = createFixtureBridge(host);
-  await bridge.connect();
-  const { container } = render(
-    <Player bridge={bridge} audioSources={FIXTURE_AUDIO_PATHS} />,
-  );
-  const audio = container.querySelector("audio");
+  const bridge = createAccountBridge(host);
+  bridge.setAvailable(true);
+  render(<AccountPanel bridge={bridge} />);
   expect(
     screen.getByText(/copy the link to open it in Firefox/),
   ).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Connect DriveBeats" }));
   expect(await screen.findByText("Road trip")).toBeInTheDocument();
   expect(screen.getByText("1 Playlist · 2 favorites")).toBeInTheDocument();
-  expect(container.querySelector("audio")).toBe(audio);
   fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
   expect(
     await screen.findByRole("button", { name: "Connect DriveBeats" }),
   ).toBeInTheDocument();
   expect(screen.queryByText("Road trip")).not.toBeInTheDocument();
-  expect(container.querySelector("audio")).toBe(audio);
   await act(async () => bridge.dispose());
 });
-it("keeps standalone sample playback available while account connection requires ChatGPT", () => {
+it("requires ChatGPT for account connection", () => {
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
-  const bridge = createFixtureBridge(null);
-  render(<Player bridge={bridge} audioSources={FIXTURE_AUDIO_PATHS} />);
+  const bridge = createAccountBridge(null);
+  render(<AccountPanel bridge={bridge} />);
   expect(
     screen.getByRole("button", { name: "Connect DriveBeats" }),
   ).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
   expect(
     screen.getByText(/Open DriveBeats in ChatGPT to connect/),
   ).toBeInTheDocument();

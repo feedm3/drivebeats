@@ -7,7 +7,7 @@ Examples:
 
 Only public plugin CLI and app-server methods are used. No model, OAuth login,
 or user credentials are needed. --check-server additionally contacts the MCP
-endpoint anonymously and requires all seven DriveBeats tools to load.
+endpoint anonymously and requires all production DriveBeats tools to load.
 """
 
 import argparse
@@ -28,8 +28,25 @@ import zipfile
 
 
 EXPECTED_TOOLS = {
-    "drivebeats_open_fixture_player",
-    "drivebeats_list_fixture_tracks",
+    "drivebeats_open_player",
+    "drivebeats_prepare_import",
+    "drivebeats_open_session",
+    "drivebeats_heartbeat_session",
+    "drivebeats_poll_session",
+    "drivebeats_acknowledge_command",
+    "drivebeats_close_session",
+    "drivebeats_read_item",
+    "drivebeats_read_folder",
+    "drivebeats_list_sessions",
+    "drivebeats_search_library",
+    "drivebeats_browse_folder",
+    "drivebeats_get_playback_state",
+    "drivebeats_play_track",
+    "drivebeats_pause_playback",
+    "drivebeats_skip_track",
+    "drivebeats_queue_tracks",
+    "drivebeats_create_playlist",
+    "drivebeats_set_favorite",
     "drivebeats_get_profile",
     "drivebeats_connect_account",
     "drivebeats_get_cloud_library",
@@ -163,12 +180,12 @@ class PublicAppServer:
 
 def verify(binary, source, work, check_server):
     market = work / "market"
-    package = market / "plugins/drivebeats-fixture-player"
+    package = market / "plugins/drivebeats"
     copy_package(source, package)
     portable = package / "plugin.json"
     manifest = read_json(portable if portable.exists() else package / ".codex-plugin/plugin.json")
     name = manifest["name"]
-    if name != "drivebeats-fixture-player":
+    if name != "drivebeats":
         raise VerificationError(f"Unexpected plugin name: {name}")
     presentation = (
         manifest.get("extensions", {}).get("com.openai", {}).get("interface", {})
@@ -196,7 +213,7 @@ def verify(binary, source, work, check_server):
     marketplace_file.parent.mkdir(parents=True)
     marketplace_file.write_text(json.dumps({
         "name": "drivebeats-release-check",
-        "plugins": [{"name": name, "source": {"source": "local", "path": "./plugins/drivebeats-fixture-player"}}],
+        "plugins": [{"name": name, "source": {"source": "local", "path": "./plugins/drivebeats"}}],
     }))
     codex_state = work / "codex-state"
     codex_state.mkdir()
@@ -239,8 +256,8 @@ def verify(binary, source, work, check_server):
                 raise VerificationError(status["toolsError"])
             tools = set(status.get("tools", {}))
             if tools != EXPECTED_TOOLS:
-                raise VerificationError(f"Expected seven DriveBeats tools, received: {sorted(tools)}")
-            print("PASS: anonymous target-client handshake and all seven deployed tools load", flush=True)
+                raise VerificationError(f"Expected production DriveBeats tools, received: {sorted(tools)}")
+            print("PASS: anonymous target-client handshake and all production deployed tools load", flush=True)
     finally:
         server.close()
 

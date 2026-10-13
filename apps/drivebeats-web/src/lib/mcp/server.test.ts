@@ -14,7 +14,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-function buildHandler(html = "<html><body>Fixture player</body></html>") {
+function buildHandler(html = "<html><body>DriveBeats player</body></html>") {
   const handler = createDrivebeatsMcpHandler(async () =>
     createUiResource(html),
   );
@@ -76,9 +76,12 @@ async function readLegacyResult(response: Response) {
 
 describe("DriveBeats modern MCP endpoint", () => {
   it("links the rendered HTML version and matching exact-origin media CSP in discovery and resource reads", async () => {
-    const template =
-      '<html><head><script id="drivebeats-fixture-audio" type="application/json">{"origin":"__DRIVEBEATS_FIXTURE_ORIGIN__"}</script></head></html>';
-    const ui = renderUiResource(template, "https://preview.vercel.app");
+    const template = "<html><head></head><body>DriveBeats</body></html>";
+    const ui = renderUiResource(
+      template,
+      "https://preview.vercel.app",
+      "https://preview.vercel.app",
+    );
     const handler = createDrivebeatsMcpHandler(async () => ui);
     handlers.push(handler);
     const { result: toolList } = await (
@@ -101,7 +104,7 @@ describe("DriveBeats modern MCP endpoint", () => {
       resources.resources[0]._meta.ui.csp,
     );
   });
-  it("discovers without initialization and exposes strict fixture tools and sidebar entrypoint", async () => {
+  it("discovers without initialization and exposes strict production tools and sidebar entrypoint", async () => {
     const handler = buildHandler();
     const discovery = await handler.fetch(modernRequest("server/discover"));
     expect(discovery.status).toBe(200);
@@ -112,16 +115,20 @@ describe("DriveBeats modern MCP endpoint", () => {
 
     const response = await handler.fetch(modernRequest("tools/list"));
     const { result } = await response.json();
-    expect(result.tools).toHaveLength(7);
+    expect(result.tools.length).toBeGreaterThan(15);
+    expect(
+      result.tools.some((tool: { name: string }) =>
+        tool.name.includes("fixture"),
+      ),
+    ).toBe(false);
     const launch = result.tools.find(
-      (tool: { name: string }) =>
-        tool.name === "drivebeats_open_fixture_player",
+      (tool: { name: string }) => tool.name === "drivebeats_open_player",
     );
     expect(launch.title).toBe("DriveBeats");
     expect(launch.inputSchema.additionalProperties).toBe(false);
     expect(launch._meta["openai/ui"].entrypoints).toEqual([{ type: "global" }]);
     expect(launch._meta.ui.resourceUri).toMatch(
-      /^ui:\/\/drivebeats\/fixture-player-[a-f0-9]{64}\.html$/,
+      /^ui:\/\/drivebeats\/player-[a-f0-9]{64}\.html$/,
     );
     expect(launch.annotations).toEqual({
       readOnlyHint: true,
@@ -131,32 +138,27 @@ describe("DriveBeats modern MCP endpoint", () => {
     });
   });
 
-  it("returns fixture data for both UI and model calls without account input", async () => {
+  it("opens a production player shell without private account data", async () => {
     const handler = buildHandler();
-    for (const name of [
-      "drivebeats_open_fixture_player",
-      "drivebeats_list_fixture_tracks",
-    ]) {
-      const response = await handler.fetch(
-        modernRequest("tools/call", { name, arguments: {} }),
-      );
-      expect(response.status).toBe(200);
-      const { result } = await response.json();
-      expect(result.isError).not.toBe(true);
-      expect(result.structuredContent.tracks).toHaveLength(2);
-      expect(result.structuredContent.tracks[0]).toMatchObject({
-        id: "pulse",
-        title: "Pulse",
-        durationSeconds: 6,
-      });
-      expect(result.content[0].text).toContain("Select Play");
-      expect(JSON.stringify(result)).not.toMatch(/access_token|drive\.google/);
-    }
+    const response = await handler.fetch(
+      modernRequest("tools/call", {
+        name: "drivebeats_open_player",
+        arguments: {},
+      }),
+    );
+    expect(response.status).toBe(200);
+    const { result } = await response.json();
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toEqual({ status: "ready" });
+    expect(result.content[0].text).toContain("Select Play");
+    expect(JSON.stringify(result)).not.toMatch(
+      /access_token|drive\.google|sample tracks|fixture/,
+    );
   });
 
   it("reads the linked UI as a versioned MCP App resource with no remote CSP access", async () => {
     const html =
-      "<html><body><script>console.log('fixture')</script></body></html>";
+      "<html><body><script>console.log('player')</script></body></html>";
     const handler = buildHandler(html);
     const listed = await handler.fetch(modernRequest("resources/list"));
     const { result: resources } = await listed.json();
@@ -180,7 +182,7 @@ describe("DriveBeats modern MCP endpoint", () => {
     const handler = buildHandler();
     const invalid = await handler.fetch(
       modernRequest("tools/call", {
-        name: "drivebeats_list_fixture_tracks",
+        name: "drivebeats_open_player",
         arguments: { userId: "arbitrary-user", trackId: "private-track" },
       }),
     );
@@ -217,11 +219,10 @@ describe("DriveBeats modern MCP endpoint", () => {
     const listed = await readLegacyResult(
       await handler.fetch(legacyRequest("tools/list")),
     );
-    expect(listed.result.tools).toHaveLength(7);
+    expect(listed.result.tools.length).toBeGreaterThan(15);
     expect(
       listed.result.tools.find(
-        (tool: { name: string }) =>
-          tool.name === "drivebeats_open_fixture_player",
+        (tool: { name: string }) => tool.name === "drivebeats_open_player",
       ).title,
     ).toBe("DriveBeats");
     expect(listed.result.tools[0].securitySchemes).toEqual([
@@ -234,15 +235,15 @@ describe("DriveBeats modern MCP endpoint", () => {
       { type: "oauth2", scopes: ["profile:read"] },
     ]);
     expect(profile._meta.securitySchemes).toEqual(profile.securitySchemes);
-    const fixture = await readLegacyResult(
+    const player = await readLegacyResult(
       await handler.fetch(
         legacyRequest("tools/call", {
-          name: "drivebeats_list_fixture_tracks",
+          name: "drivebeats_open_player",
           arguments: {},
         }),
       ),
     );
-    expect(fixture.result.structuredContent.tracks).toHaveLength(2);
+    expect(player.result.structuredContent).toEqual({ status: "ready" });
     const unauthenticated = await readLegacyResult(
       await handler.fetch(
         legacyRequest("tools/call", {
@@ -253,7 +254,7 @@ describe("DriveBeats modern MCP endpoint", () => {
     );
     expect(unauthenticated.result.isError).toBe(true);
     expect(unauthenticated.result._meta["mcp/www_authenticate"][0]).toContain(
-      'scope="profile:read library:read media:read"',
+      'scope="profile:read library:read library:write media:read"',
     );
   });
 
@@ -284,7 +285,7 @@ describe("DriveBeats modern MCP endpoint", () => {
       new Request("http://localhost/mcp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: " ".repeat(16 * 1024 + 1),
+        body: " ".repeat(128 * 1024 + 1),
       }),
     );
     expect(response.status).toBe(413);

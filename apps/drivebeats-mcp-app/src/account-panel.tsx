@@ -5,7 +5,13 @@ function countLabel(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
-export function AccountPanel({ bridge }: { bridge: AccountBridge }) {
+export function AccountPanel({
+  bridge,
+  onRefresh,
+}: {
+  bridge: AccountBridge;
+  onRefresh?: () => Promise<void>;
+}) {
   const state = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
   const connected = state.status === "connected" && state.profile;
   const disabled = state.loading || !state.available;
@@ -54,7 +60,7 @@ export function AccountPanel({ bridge }: { bridge: AccountBridge }) {
               className="next-button"
               type="button"
               disabled={disabled}
-              onClick={() => void bridge.refresh()}
+              onClick={() => void (onRefresh ? onRefresh() : bridge.refresh())}
             >
               Refresh saved music
             </button>
@@ -94,8 +100,7 @@ export function AccountPanel({ bridge }: { bridge: AccountBridge }) {
             </p>
           ) : (
             <p className="footer-note">
-              Open DriveBeats in ChatGPT to connect your account. You can still
-              play the samples.
+              Open DriveBeats in ChatGPT to connect your account.
             </p>
           )}
         </>

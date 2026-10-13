@@ -59,6 +59,20 @@ export async function upsertPlaylist(params: {
   );
 }
 
+// Return the Neon query without awaiting it so a multi-table service can include
+// this insert in one transaction. A reused ID must never update another Playlist.
+export function insertPlaylistQuery(params: {
+  id: string;
+  googleUserId: string;
+  name: string;
+}) {
+  return getSql().query(
+    `INSERT INTO playlists (id, user_google_id, name, created_at, updated_at)
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    [params.id, params.googleUserId, params.name],
+  );
+}
+
 export async function renamePlaylist(params: {
   id: string;
   googleUserId: string;

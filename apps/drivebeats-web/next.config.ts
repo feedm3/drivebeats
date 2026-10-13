@@ -44,7 +44,11 @@ function consentCallbackOrigins() {
 }
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@drivebeats/core", "@drivebeats/mcp-app"],
+  transpilePackages: [
+    "@drivebeats/core",
+    "@drivebeats/client",
+    "@drivebeats/mcp-app",
+  ],
   outputFileTracingIncludes: {
     "/mcp": ["./.mcp-ui/index.html"],
   },
@@ -59,15 +63,6 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
-      {
-        source: "/mcp-fixtures/:file",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
       {
         source: "/(.*)",
         headers: [
@@ -100,6 +95,13 @@ const nextConfig: NextConfig = {
               ["form-action 'self'", ...consentCallbackOrigins()].join(" "),
             ),
           },
+        ],
+      },
+      {
+        source: "/mcp/import/:capability",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store" },
+          { key: "Referrer-Policy", value: "no-referrer" },
         ],
       },
     ];

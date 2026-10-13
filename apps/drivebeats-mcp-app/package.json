@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./ui": "./dist/index.html",
-    "./fixtures": "./src/fixture-tracks.ts"
+    "./ui": "./dist/index.html"
   },
   "scripts": {
     "dev": "vite",
@@ -16,7 +15,9 @@
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "2.0.3",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "@drivebeats/client": "workspace:*",
+    "@drivebeats/core": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",

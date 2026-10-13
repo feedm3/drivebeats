@@ -59,7 +59,9 @@ async function fetchPickedFileMetadata(fileIds: string[], accessToken: string) {
   );
 }
 
-export function useDriveImport() {
+export function useDriveImport(
+  onSelected?: (files: DriveFile[]) => Promise<void>,
+) {
   const getValidAccessToken = useAuthStore(
     (state) => state.getValidAccessToken,
   );
@@ -163,7 +165,11 @@ export function useDriveImport() {
                 selectedFileIds,
                 accessToken,
               );
-              upsertItems(files);
+              if (onSelected) {
+                await onSelected(files);
+              } else {
+                upsertItems(files);
+              }
 
               const importedCount = files.length;
               if (importedCount > 0) {

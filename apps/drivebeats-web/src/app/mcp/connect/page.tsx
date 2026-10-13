@@ -9,7 +9,9 @@ export const metadata: Metadata = {
 const scopeDescriptions: Record<string, string> = {
   "profile:read":
     "Read your DriveBeats name and email to identify your account.",
-  "library:read": "Read your saved Playlists, favorites and track metadata.",
+  "library:read":
+    "Read your imported Library, saved Playlists, favorites and track metadata.",
+  "library:write": "Save Playlists and update favorites when you request it.",
   "media:read":
     "Read audio from Playable Tracks you select from your saved music.",
 };

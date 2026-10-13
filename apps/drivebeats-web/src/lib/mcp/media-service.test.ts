@@ -5,6 +5,8 @@ import { getMcpMediaGrant, insertMcpMediaGrant } from "@/db/mcp-media-grants";
 import { getCloudLibrarySyncPayload } from "@/lib/cloud-library-service";
 import { getMcpGoogleAccessToken, type McpPrincipal } from "./auth";
 import { handleMcpMediaRequest, prepareMcpMedia } from "./media-service";
+import { validateImportedTrack } from "./music-library-service";
+import { McpMusicSessionError } from "./music-session-service";
 
 vi.mock("@/db/mcp-grants", () => ({ getMcpGrant: vi.fn() }));
 vi.mock("@/db/mcp-media-grants", () => ({
@@ -14,6 +16,7 @@ vi.mock("@/db/mcp-media-grants", () => ({
 vi.mock("@/lib/cloud-library-service", () => ({
   getCloudLibrarySyncPayload: vi.fn(),
 }));
+vi.mock("./music-library-service", () => ({ validateImportedTrack: vi.fn() }));
 vi.mock("./auth", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./auth")>()),
   getMcpGoogleAccessToken: vi.fn(),
@@ -87,6 +90,41 @@ describe("MCP selected media boundary", () => {
     expect(getMcpGoogleAccessToken).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
     expect(insertMcpMediaGrant).not.toHaveBeenCalled();
+  });
+  it("authorizes an imported track outside saved Playlists through its verified session", async () => {
+    vi.mocked(validateImportedTrack).mockResolvedValue({
+      fileId: "track-a",
+      fileName: "a.mp3",
+      mimeType: "audio/mpeg",
+    });
+    vi.mocked(getCloudLibrarySyncPayload).mockResolvedValue({
+      playlists: [],
+      favorites: [],
+    });
+    const sessionId = "9b62121e-d0d0-4c0e-96de-e80b1a547a9c";
+    await prepareMcpMedia(principal, "track-a", sessionId);
+    expect(validateImportedTrack).toHaveBeenCalledWith(
+      principal,
+      sessionId,
+      "track-a",
+    );
+    expect(getCloudLibrarySyncPayload).not.toHaveBeenCalled();
+    expect(insertMcpMediaGrant).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId }),
+    );
+  });
+  it("rechecks session membership before streaming and rejects closed sessions", async () => {
+    const stored = await getMcpMediaGrant("hash");
+    if (!stored) throw new Error("Missing grant");
+    const sessionId = "9b62121e-d0d0-4c0e-96de-e80b1a547a9c";
+    vi.mocked(getMcpMediaGrant).mockResolvedValue({ ...stored, sessionId });
+    vi.mocked(validateImportedTrack).mockRejectedValue(
+      new McpMusicSessionError(404, "The player session closed."),
+    );
+    const result = await handleMcpMediaRequest(request(), capability);
+    expect(result.status).toBe(404);
+    expect(getMcpGoogleAccessToken).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
   it("checks scope and verified subject consistency at the media service entry", async () => {
     await expect(

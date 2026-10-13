@@ -10,6 +10,8 @@ import {
   McpAuthError,
   type McpPrincipal,
 } from "./auth";
+import { validateImportedTrack } from "./music-library-service";
+import { McpMusicSessionError } from "./music-session-service";
 
 export class McpMediaError extends Error {
   constructor(
@@ -38,12 +40,18 @@ async function selectedTrack(principal: McpPrincipal, fileId: string) {
   return track;
 }
 
-export async function prepareMcpMedia(principal: McpPrincipal, fileId: string) {
+export async function prepareMcpMedia(
+  principal: McpPrincipal,
+  fileId: string,
+  sessionId?: string,
+) {
   if (!principal.scopes.includes("media:read"))
     throw new McpAuthError("insufficient_scope", 403);
   if (principal.profile.id !== principal.googleUserId)
     throw new McpAuthError("invalid_token", 401);
-  const track = await selectedTrack(principal, fileId);
+  const track = sessionId
+    ? await validateImportedTrack(principal, sessionId, fileId)
+    : await selectedTrack(principal, fileId);
   const accessToken = await getMcpGoogleAccessToken(principal);
   const metadataUrl = new URL(
     `${GOOGLE_APIS.driveFilesUrl}/${encodeURIComponent(fileId)}`,
@@ -97,6 +105,7 @@ export async function prepareMcpMedia(principal: McpPrincipal, fileId: string) {
     fileId,
     mimeType,
     expiresAt,
+    sessionId: sessionId ?? null,
   });
   return {
     fileId,
@@ -136,7 +145,9 @@ export async function readMcpMedia(request: Request, capability: string) {
     profile: grant.profile,
     scopes: grant.scopes,
   };
-  await selectedTrack(principal, media.fileId);
+  if (media.sessionId)
+    await validateImportedTrack(principal, media.sessionId, media.fileId);
+  else await selectedTrack(principal, media.fileId);
   const range = request.headers.get("range");
   if (range && !/^bytes=(\d+-\d*|-\d+)$/.test(range))
     throw new McpMediaError(416, "Unsupported media range.");
@@ -184,7 +195,8 @@ export async function handleMcpMediaRequest(
   try {
     return await readMcpMedia(request, capability);
   } catch (error) {
-    const known = error instanceof McpMediaError;
+    const known =
+      error instanceof McpMediaError || error instanceof McpMusicSessionError;
     return Response.json(
       {
         error: known

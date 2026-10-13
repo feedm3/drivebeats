@@ -16,12 +16,15 @@ it("shows verified identity and requested access with bound consent choices", as
       email: "alex@example.test",
       picture: null,
     },
-    scopes: ["profile:read", "library:read", "media:read"],
+    scopes: ["profile:read", "library:read", "library:write", "media:read"],
     csrf: "request-bound-csrf",
   });
   const { container } = render(await McpConnectPage());
   expect(screen.getByText("alex@example.test")).toBeInTheDocument();
-  expect(screen.getByText(/Read your saved Playlists/)).toBeInTheDocument();
+  expect(screen.getByText(/Read your imported Library/)).toBeInTheDocument();
+  expect(
+    screen.getByText(/Save Playlists and update favorites/),
+  ).toBeInTheDocument();
   expect(container.querySelector("form")).toHaveAttribute(
     "action",
     "/api/mcp/oauth/authorize",

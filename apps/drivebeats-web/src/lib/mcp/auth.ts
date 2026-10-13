@@ -12,6 +12,7 @@ import { isMcpClientCallback } from "./client-callbacks";
 export const MCP_SCOPES = [
   "profile:read",
   "library:read",
+  "library:write",
   "media:read",
 ] as const;
 export const MCP_ACCESS_SECONDS = 15 * 60;

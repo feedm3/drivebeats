@@ -1,0 +1,25 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "author": {
+    "email": "fabian@dietenberger.me",
+    "name": "Fabian Dietenberger"
+  },
+  "description": "Browse and play music selected from Google Drive, save Playlists and favorites, and control your active player with ChatGPT.",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "capabilities": ["Read", "Write", "Interactive"],
+        "category": "Entertainment",
+        "defaultPrompt": "Open DriveBeats and help me connect my account or read my saved Playlists and favorites.",
+        "developerName": "Fabian Dietenberger",
+        "displayName": "DriveBeats",
+        "longDescription": "Connect the Google account you use with DriveBeats. Deliberately select Imported Folders and Standalone Tracks, browse and search your Library, and play your music. Saved Playlists and favorites sync with the website. ChatGPT can control one active player and save requested collections. DJ Mode uses host model sampling when available. Google Drive access is read-only.",
+        "shortDescription": "Music player",
+        "logo": "./assets/drivebeats-icon.png",
+        "composerIcon": "./assets/drivebeats-icon.png"
+      }
+    }
+  },
+  "name": "drivebeats",
+  "version": "1.0.0"
+}

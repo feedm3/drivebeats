@@ -271,3 +271,11 @@ The global sidebar launch tool's title was changed from `Open DriveBeats` to
 `tools/list.title`; the resource and UI already used `DriveBeats`. Both modern
 and legacy discovery tests assert the requested label. Native metadata refresh
 and visible sidebar acceptance still require verification.
+
+Commit `c1e3fa8` was pushed and deployed to preview as
+`dpl_76bnRf5pCCggzQxA29LhQgoPnka5`; canonical alias readback confirms that exact
+deployment. Real modern and legacy `tools/list` responses now expose the
+global launch title `DriveBeats` and all seven tools. The actual bundled CLI
+passes against release `0.2.2` and this deployment. The final title change also
+passed all 435 root tests, lint and build. The remaining working-tree glossary
+edit belongs to the user and was excluded from these commits.

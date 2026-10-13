@@ -103,9 +103,10 @@ result, timeout, persistence, permission and DJ contracts.
   atomic capability consumption. Pending selection has a capped10-minute lease.
 - Release source: `plugins/drivebeats`, version1.0.0, production endpoint and
   four baseline scopes. Existing private plugin ID/audience/icon/default prompt
-  preserved in the prepared update; the demo package name is removed. The exact
-  compatibility archive passes the actual desktop loader. Remote release is
-  still version0.2.2 targeting preview until activation.
+  preserved in the prepared update; the backend requires retaining its immutable
+  internal package identifier. No demo runtime remains. The exact
+  compatibility archive passes the actual desktop loader. At the initial pre-activation check, the remote release was
+  version0.2.2 targeting preview; activation results are appended below.
 - GitHub validation now also runs on pushes to main, matching the authorized
   direct-main publication workflow.
 
@@ -121,7 +122,7 @@ result, timeout, persistence, permission and DJ contracts.
 | Browser player | Isolated Chromium and compiled UI inside a simulated standard MCP Apps host: **20 checks passed**, including unsaved nested full-Library search/ack, expired-action failure, actual generated WAV decode/time advance, play/pause/next/seek/volume/shuffle/repeat, stable Audio after tool result, saved collection distinction, two host-sampling invocations with automatic refill, explicit DJ stop, closure pause and no overflow at320/428/1100px. Separate measurement found all button/input/select targets at least44x44px. Synthetic media/data stayed in `/private/tmp`, outside production source. |
 | Browser auth/web | Actual local first-party signed-out Import page, separate-tab website sign-in link, expired consent recovery and ordinary website signed-out redirect verified. Website Vercel Analytics script404/MIME errors are local hosting artifacts; not MCP bridge errors. Actual Google sign-in remains unverified. |
 | React Doctor | No error findings. Fixed confirmed indexed lookup, missing stable empty catalog and account-reset issues; three MCP maintainability warnings remain. Sequential catalog reads intentionally bound provider request concurrency. No installation/configuration changes, score API or supply-chain scan. |
-| Desktop package | Compatibility-only1.0.0 ZIP passes actual bundled desktop CLI manifest/server/icon byte checks in isolated temporary state. No installed-plugin update or real OAuth inferred. |
+| Desktop package | Compatibility-only1.0.0 ZIP passes actual bundled desktop CLI manifest/server/icon byte checks in isolated temporary state. No actual installed-plugin refresh or real OAuth inferred. |
 | Remote read-only | Correct Vercel project/root verified through CLI; five MCP variables are preview-only. Neon confirms0009 absent. Plugin Creator confirms original USER/PRIVATE plugin,0.2.2 release and four-file inventory. |
 
 ### Review fixes
@@ -139,9 +140,34 @@ filename fallback for generic provider MIME types.
 
 [Production activation](../production-release.md) records the concrete migration,
 production configuration, guarded private-plugin update and real acceptance
-sequence. Production MCP configuration, migration0009 and saved-plugin update
-require approval under AGENTS.md. The user separately authorized committing
-and pushing main. Remote deployment/CI evidence is appended after publication.
+sequence. Production MCP configuration, migration0009 and saved-plugin update were
+authorized and completed as recorded below. The user separately authorized
+committing and pushing main.
 No real Google Picker/Drive media, multi-session sync/logout/deletion or actual
 ChatGPT DJ sampling has been accepted in this task. Local browser/SQL simulation
 is not a substitute for that proof.
+
+
+### Approved production activation, 2026-10-13
+
+- Migration0009 applied to the existing Neon main database; current music/user
+  counts unchanged in the same transaction. Schema readback verified all new
+  columns/indexes/constraints and media binding.
+- Five production MCP variables configured, preserving preview; independent
+  server-only secret keys generated without local export.
+- Reviewed implementation1970b85 is deployed as
+  `dpl_JAUJ71pEUhhZZ1TxPZyeU3SAYsGQ`; canonical production alias readback passed.
+  GitHub main validation run38405424850 passed.
+- Production independent HTTP checks21/21 and actual desktop CLI compatibility
+  archive/deployed24-tool checks passed.
+- Existing private plugin saved as1.0.0, release
+  `pluginrel_6ace3cb8f0088191ba50865726837c46`; source/file inventory and audience
+  readback passed. Platform immutability requires retaining the legacy internal
+  identifier, while all demo functionality/audio remains removed.
+- Actual user-side refresh/reconnect and real production music acceptance remain
+  pending. This chat still has preview tool bindings, and no production-client
+  account grant was present at the post-release check. User input requested for
+  reconnect/import; no new paid model provider or cloud-data deletion occurred.
+
+See [activation evidence](../production-release.md#activated-production-2026-10-13)
+for the exact target, transaction counts, deployment/release IDs and limits.

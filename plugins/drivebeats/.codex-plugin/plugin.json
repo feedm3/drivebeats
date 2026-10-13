@@ -10,7 +10,7 @@
     "logo": "./assets/drivebeats-icon.png",
     "composerIcon": "./assets/drivebeats-icon.png"
   },
-  "name": "drivebeats",
+  "name": "drivebeats-fixture-player",
   "version": "1.0.0",
   "description": "Browse and play music selected from Google Drive, save Playlists and favorites, and control your active player with ChatGPT.",
   "author": {

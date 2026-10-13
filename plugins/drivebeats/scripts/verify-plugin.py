@@ -185,7 +185,7 @@ def verify(binary, source, work, check_server):
     portable = package / "plugin.json"
     manifest = read_json(portable if portable.exists() else package / ".codex-plugin/plugin.json")
     name = manifest["name"]
-    if name != "drivebeats":
+    if name != "drivebeats-fixture-player":
         raise VerificationError(f"Unexpected plugin name: {name}")
     presentation = (
         manifest.get("extensions", {}).get("com.openai", {}).get("interface", {})

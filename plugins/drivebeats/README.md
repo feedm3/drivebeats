@@ -1,6 +1,8 @@
 # DriveBeats production plugin source
 
-Prepared release: **1.0.0**, package name `drivebeats`, display name DriveBeats.
+Prepared release: **1.0.0**, display name DriveBeats. The immutable internal package identifier remains
+`drivebeats-fixture-player`: the account plugin service rejects renaming an
+existing plugin. This compatibility identifier carries no demo behavior.
 Update the existing personal/private plugin ID
 `plugins_6accdcd7dcd88191a0beba5e3f94eb63`; preserve its ownership and audience.
 The production MCP endpoint is `https://www.drivebeats.app/mcp`, with the

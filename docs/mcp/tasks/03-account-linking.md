@@ -279,3 +279,36 @@ global launch title `DriveBeats` and all seven tools. The actual bundled CLI
 passes against release `0.2.2` and this deployment. The final title change also
 passed all 435 root tests, lint and build. The remaining working-tree glossary
 edit belongs to the user and was excluded from these commits.
+
+### Browser choice and saved Google callbacks, 2026-10-13
+
+The user saved both the stable preview linking callback and
+`https://www.drivebeats.app/api/mcp/oauth/google` in the existing Google OAuth
+client. Reopening that exact client in Firefox confirmed both saved entries
+alongside the unchanged website callbacks. Production callback registration
+prepares future deployment; production MCP has not been activated.
+
+Commit `9b10b03` adds a hosted connection page with Continue with Google and a
+visible, copyable original authorization request. Opening that URL in Firefox
+creates its own pending cookie while retaining ChatGPT's state, PKCE challenge,
+client and resource. The embedded player explains where to copy it because the
+MCP Apps SDK does not expose the host-owned authorization URL. The page escapes
+URLs, permits only its fixed copy script by CSP hash, disables caching and sends
+no referrer to Google. Root tests passed **48 UI + 394 web = 442 tests**, lint
+and build passed, and independent focused OAuth review passed 37 tests.
+React Doctor reported 92/100 with only the existing account-panel complexity
+warning. The commit was pushed; deployed and browser results follow below.
+
+The canonical preview now points to READY deployment
+`dpl_8iJPxzgQGJRtdBUm3y7vR2WqLytH` (source `9b10b03`). Live HTTP checks verified
+the final script-hash CSP, no-referrer/no-store headers, canonical request URL,
+both host callbacks and the fixed Google continuation. Modern and legacy
+discovery and the bundled desktop CLI still load all seven tools.
+
+The real in-app browser rendered the page with a synthetic authorization
+request. Its visible connection URL exactly matched the original request;
+clicking Copy link displayed success with no console errors. At 320px and
+428px, document width matched viewport width and both controls were at least
+44px high. Clipboard byte readback could not be confirmed through this browser
+adapter, which returned an empty clipboard despite the success status. Actual
+paste into Firefox and real host linking remain pending the user's test.

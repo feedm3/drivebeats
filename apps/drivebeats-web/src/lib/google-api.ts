@@ -93,8 +93,8 @@ async function fetchGoogleDriveRead(
   const params = new URLSearchParams(target.search);
   const fileId = target.pathname.slice("/drive/v3/files".length + 1);
   if (fileId) params.set("fileId", decodeURIComponent(fileId));
-  const response = await fetch(`/api/drive/read?${params}`, {
-    headers: getGoogleAuthHeaders(accessToken),
+  const response = await fetch(`/api/auth/drive/read?${params}`, {
+    headers: { "X-DriveBeats-Read": "1" },
     signal,
     cache: "no-store",
   });

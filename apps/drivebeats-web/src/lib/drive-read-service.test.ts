@@ -95,6 +95,10 @@ describe("Drive read streaming", () => {
     expect(response.headers.get("Accept-Ranges")).toBe("bytes");
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(response.headers.get("Content-Disposition")).toBe("attachment");
+    expect(response.headers.get("Content-Security-Policy")).toBe(
+      "sandbox; default-src 'none'",
+    );
     for (const header of ["Set-Cookie", "Location", "Content-Length"]) {
       expect(response.headers.has(header)).toBe(false);
     }
@@ -105,6 +109,34 @@ describe("Drive read streaming", () => {
     source?.close();
     expect(await reader?.read()).toMatchObject({ done: true });
   });
+
+  it.each(["text/html", "image/svg+xml"])(
+    "never serves a Drive file as an active %s document on the app origin",
+    async (contentType) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn<typeof fetch>().mockResolvedValue(
+          new Response("<script>unsafe()</script>", {
+            headers: { "Content-Type": contentType },
+          }),
+        ),
+      );
+      const response = await relayDriveRead(
+        new URL("https://www.googleapis.com/drive/v3/files/track?alt=media"),
+        "Bearer test-token",
+        new AbortController().signal,
+      );
+      expect(response.headers.get("Content-Type")).toBe(
+        "application/octet-stream",
+      );
+      expect(response.headers.get("Content-Disposition")).toBe("attachment");
+      expect(response.headers.get("Content-Security-Policy")).toBe(
+        "sandbox; default-src 'none'",
+      );
+      expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      expect(await response.text()).toBe("<script>unsafe()</script>");
+    },
+  );
 
   it("preserves Google permission failures instead of disguising them as a successful read", async () => {
     vi.stubGlobal(

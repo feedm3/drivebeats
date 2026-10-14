@@ -48,13 +48,20 @@ export async function relayDriveRead(
   const headers = new Headers({
     "Cache-Control": "private, no-store",
     "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "sandbox; default-src 'none'",
   });
-  for (const name of [
+  const isMedia = target.searchParams.get("alt") === "media";
+  const contentType = upstream.headers.get("Content-Type");
+  headers.set(
     "Content-Type",
-    "Content-Range",
-    "Accept-Ranges",
-    "Retry-After",
-  ]) {
+    isMedia
+      ? contentType?.toLowerCase().startsWith("audio/")
+        ? contentType
+        : "application/octet-stream"
+      : "application/json; charset=utf-8",
+  );
+  if (isMedia) headers.set("Content-Disposition", "attachment");
+  for (const name of ["Content-Range", "Accept-Ranges", "Retry-After"]) {
     const value = upstream.headers.get(name);
     if (value) headers.set(name, value);
   }

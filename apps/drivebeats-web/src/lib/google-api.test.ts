@@ -36,10 +36,13 @@ describe("Drive read transport", () => {
       pageSize: "1000",
     });
     expect((await listGoogleDriveFiles("private-token", params)).ok).toBe(true);
-    expect(fetchMock.mock.calls[1][0]).toBe(`/api/drive/read?${params}`);
+    expect(fetchMock.mock.calls[1][0]).toBe(`/api/auth/drive/read?${params}`);
     expect(fetchMock.mock.calls[1][1]).toMatchObject({
-      headers: { Authorization: "Bearer private-token" },
+      headers: { "X-DriveBeats-Read": "1" },
     });
+    expect(JSON.stringify(fetchMock.mock.calls[1][1])).not.toContain(
+      "private-token",
+    );
     expect(fetchMock.mock.calls[1][0]).not.toContain("private-token");
 
     expect(
@@ -52,7 +55,7 @@ describe("Drive read transport", () => {
       fetchMock.mock.calls[2][0],
       "https://drivebeats.test",
     );
-    expect(audioUrl.pathname).toBe("/api/drive/read");
+    expect(audioUrl.pathname).toBe("/api/auth/drive/read");
     expect(audioUrl.searchParams.get("fileId")).toBe("selected-track");
     expect(audioUrl.searchParams.get("alt")).toBe("media");
   });
@@ -128,7 +131,7 @@ describe("Drive read transport", () => {
       listGoogleDriveFiles("token", new URLSearchParams(), controller.signal),
     ).rejects.toThrow("Cancelled");
     expect(fetchMock.mock.calls[2]).toEqual([
-      "/api/drive/read?",
+      "/api/auth/drive/read?",
       expect.objectContaining({ signal: controller.signal }),
     ]);
     now.mockReturnValue(1000 + 5 * 60 * 1000);

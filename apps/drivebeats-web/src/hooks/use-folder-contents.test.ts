@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockListGoogleDriveFiles = vi.fn();
@@ -12,12 +13,15 @@ vi.mock("@/lib/audio", () => ({
 
 const mockGetValidAccessToken = vi.fn().mockResolvedValue("test-token");
 const mockLogout = vi.fn();
+let activeUserId: string | null = "account-one";
 vi.mock("@/stores/auth-store", () => ({
   useAuthStore: Object.assign(() => ({}), {
     getState: () => ({
       getValidAccessToken: mockGetValidAccessToken,
       logout: mockLogout,
       isLoggingOut: false,
+      user: activeUserId ? { id: activeUserId } : null,
+      authStatus: "authenticated",
     }),
   }),
 }));
@@ -191,5 +195,236 @@ describe("useFolderContents cache hydration", () => {
     expect(onFiles).toHaveBeenNthCalledWith(2, [
       { id: "fresh", name: "fresh.mp3", mimeType: "audio/mpeg" },
     ]);
+  });
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+describe("shared folder reads and request ownership", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    activeUserId = "account-one";
+    mockGetValidAccessToken.mockResolvedValue("test-token");
+    mockGetFiles.mockReturnValue(null);
+    mockIsStale.mockReturnValue(false);
+  });
+
+  it("shares one pending browser request across two hook instances and caches once", async () => {
+    const response = deferred<ReturnType<typeof makeResponse>>();
+    mockListGoogleDriveFiles.mockReturnValueOnce(response.promise);
+    const { renderHook } = await import("@testing-library/react");
+    const { useFolderContents } = await import("./use-folder-contents");
+    const first = renderHook(() => useFolderContents());
+    const second = renderHook(() => useFolderContents());
+    const firstRead = first.result.current.fetchFromApi("shared-folder");
+    const secondRead = second.result.current.fetchFromApi("shared-folder");
+    await Promise.resolve();
+    expect(mockListGoogleDriveFiles).toHaveBeenCalledTimes(1);
+    const files = [{ id: "track", name: "Track.mp3", mimeType: "audio/mpeg" }];
+    response.resolve(makeResponse(files));
+    expect(await firstRead).toEqual(files);
+    expect(await secondRead).toEqual(files);
+    expect(mockSetFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a shared read alive when one consumer navigates away", async () => {
+    const response = deferred<ReturnType<typeof makeResponse>>();
+    mockListGoogleDriveFiles.mockReturnValueOnce(response.promise);
+    const { renderHook } = await import("@testing-library/react");
+    const { useFolderContents } = await import("./use-folder-contents");
+    const { result } = renderHook(() => useFolderContents());
+    const controller = new AbortController();
+    const obsolete = result.current.fetchFromApi("shared-folder", {
+      signal: controller.signal,
+    });
+    const active = result.current.fetchFromApi("shared-folder");
+    await Promise.resolve();
+    const sharedSignal = mockListGoogleDriveFiles.mock.calls[0][2];
+    controller.abort();
+    expect(sharedSignal.aborted).toBe(false);
+    const files = [{ id: "track", name: "Track.mp3", mimeType: "audio/mpeg" }];
+    response.resolve(makeResponse(files));
+    expect(await obsolete).toBeNull();
+    expect(await active).toEqual(files);
+    expect(mockListGoogleDriveFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it("aborts the browser read when its last active consumer leaves and allows a fresh read", async () => {
+    mockListGoogleDriveFiles.mockImplementationOnce(
+      (_token, _params, signal: AbortSignal) =>
+        new Promise((_resolve, reject) =>
+          signal.addEventListener(
+            "abort",
+            () => reject(new DOMException("Cancelled", "AbortError")),
+            { once: true },
+          ),
+        ),
+    );
+    const { renderHook } = await import("@testing-library/react");
+    const { useFolderContents } = await import("./use-folder-contents");
+    const { result } = renderHook(() => useFolderContents());
+    const controller = new AbortController();
+    const old = result.current.fetchFromApi("cancelled-folder", {
+      signal: controller.signal,
+    });
+    await Promise.resolve();
+    const sharedSignal = mockListGoogleDriveFiles.mock.calls[0][2];
+    controller.abort();
+    expect(sharedSignal.aborted).toBe(true);
+    mockListGoogleDriveFiles.mockResolvedValueOnce(makeResponse([]));
+    const fresh = result.current.fetchFromApi("cancelled-folder");
+    expect(await old).toBeNull();
+    expect(await fresh).toEqual([]);
+    expect(mockListGoogleDriveFiles).toHaveBeenCalledTimes(2);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it.each(["network", "401"])(
+    "suppresses obsolete %s errors and session effects after navigation",
+    async (failure) => {
+      const response = deferred<ReturnType<typeof makeResponse>>();
+      mockListGoogleDriveFiles.mockReturnValueOnce(response.promise);
+      const { renderHook } = await import("@testing-library/react");
+      const { useFolderContents } = await import("./use-folder-contents");
+      const { result } = renderHook(() => useFolderContents());
+      let current = true;
+      const read = result.current.fetchFromApi("old-folder", {
+        canCommit: () => current,
+      });
+      await Promise.resolve();
+      current = false;
+      if (failure === "network")
+        response.reject(new TypeError("Failed to fetch"));
+      else response.resolve({ ...makeResponse([]), ok: false, status: 401 });
+      expect(await read).toBeNull();
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(mockLogout).not.toHaveBeenCalled();
+      expect(mockSetFiles).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not cache or return one account's delayed listing after another account becomes active", async () => {
+    const response = deferred<ReturnType<typeof makeResponse>>();
+    mockListGoogleDriveFiles.mockReturnValueOnce(response.promise);
+    const { renderHook } = await import("@testing-library/react");
+    const { useFolderContents } = await import("./use-folder-contents");
+    const { result } = renderHook(() => useFolderContents());
+    const old = result.current.fetchFromApi("shared-folder");
+    await Promise.resolve();
+    activeUserId = "account-two";
+    mockListGoogleDriveFiles.mockResolvedValueOnce(
+      makeResponse([{ id: "second-account", name: "New.mp3" }]),
+    );
+    const fresh = result.current.fetchFromApi("shared-folder");
+    response.resolve(
+      makeResponse([{ id: "private-first-account", name: "Old.mp3" }]),
+    );
+    expect(await old).toBeNull();
+    expect(await fresh).toEqual([{ id: "second-account", name: "New.mp3" }]);
+    expect(mockSetFiles).toHaveBeenCalledExactlyOnceWith("shared-folder", [
+      { id: "second-account", name: "New.mp3" },
+    ]);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("does not start a Google read if the account changes while acquiring its token", async () => {
+    const token = deferred<string>();
+    mockGetValidAccessToken.mockReturnValueOnce(token.promise);
+    const { renderHook } = await import("@testing-library/react");
+    const { useFolderContents } = await import("./use-folder-contents");
+    const { result } = renderHook(() => useFolderContents());
+    const old = result.current.fetchFromApi("old-account-folder");
+    activeUserId = "account-two";
+    token.resolve("old-account-token");
+    expect(await old).toBeNull();
+    expect(mockListGoogleDriveFiles).not.toHaveBeenCalled();
+    expect(mockSetFiles).not.toHaveBeenCalled();
+  });
+
+  it("does not log out a new account when an old account's read returns 401", async () => {
+    const response = deferred<ReturnType<typeof makeResponse>>();
+    mockListGoogleDriveFiles.mockReturnValueOnce(response.promise);
+    const { renderHook } = await import("@testing-library/react");
+    const { useFolderContents } = await import("./use-folder-contents");
+    const { result } = renderHook(() => useFolderContents());
+    const old = result.current.fetchFromApi("old-account-folder");
+    await Promise.resolve();
+    activeUserId = "account-two";
+    response.resolve({ ...makeResponse([]), ok: false, status: 401 });
+    expect(await old).toBeNull();
+    expect(mockLogout).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("notifies only active consumers once when a shared read fails", async () => {
+    const response = deferred<ReturnType<typeof makeResponse>>();
+    mockListGoogleDriveFiles.mockReturnValueOnce(response.promise);
+    const { renderHook } = await import("@testing-library/react");
+    const { useFolderContents } = await import("./use-folder-contents");
+    const { result } = renderHook(() => useFolderContents());
+    let current = true;
+    const obsolete = result.current.fetchFromApi("failing-folder", {
+      canCommit: () => current,
+    });
+    const active = result.current.fetchFromApi("failing-folder");
+    const otherActive = result.current.fetchFromApi("failing-folder");
+    await Promise.resolve();
+    current = false;
+    response.reject(new TypeError("Failed to fetch"));
+    await Promise.all([obsolete, active, otherActive]);
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+      "Network error. Check your connection.",
+    );
+    expect(mockLogout).not.toHaveBeenCalled();
+    expect(mockListGoogleDriveFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not publish a response whose JSON finishes after an account change", async () => {
+    const body = deferred<{ files: unknown[] }>();
+    mockListGoogleDriveFiles.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => body.promise,
+    });
+    const { renderHook } = await import("@testing-library/react");
+    const { useFolderContents } = await import("./use-folder-contents");
+    const { result } = renderHook(() => useFolderContents());
+    const old = result.current.fetchFromApi("delayed-body");
+    await Promise.resolve();
+    await Promise.resolve();
+    activeUserId = "account-two";
+    body.resolve({ files: [{ id: "private", name: "Private.mp3" }] });
+    expect(await old).toBeNull();
+    expect(mockSetFiles).not.toHaveBeenCalled();
+  });
+
+  it("skips a folder read that became obsolete while cache hydration was pending", async () => {
+    const hydration = deferred<void>();
+    mockHydrate.mockReturnValueOnce(hydration.promise);
+    const { renderHook } = await import("@testing-library/react");
+    const { useFolderContents } = await import("./use-folder-contents");
+    const { result } = renderHook(() => useFolderContents());
+    let current = true;
+    const onFiles = vi.fn();
+    const onLoadingChange = vi.fn();
+    const read = result.current.fetchFolderContents("old-folder", {
+      onFiles,
+      onLoadingChange,
+      canCommit: () => current,
+    });
+    current = false;
+    hydration.resolve();
+    await read;
+    expect(mockListGoogleDriveFiles).not.toHaveBeenCalled();
+    expect(onFiles).not.toHaveBeenCalled();
+    expect(onLoadingChange).not.toHaveBeenCalled();
   });
 });

@@ -7,6 +7,7 @@ import { NowPlayingBars } from "@/components/now-playing-bars";
 import { useFolderContents } from "@/hooks/use-folder-contents";
 import { sortFoldersNatural } from "@/lib/sort";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import { useFolderTreeStore } from "@/stores/folder-tree-store";
 import { usePlayerStore } from "@/stores/player-store";
@@ -46,35 +47,49 @@ export function FolderTreeNode({
   const isPlayingAncestor =
     currentTrack && playingFolderStack.some((f) => f.id === id);
 
-  const loadChildren = useCallback(async () => {
-    // Persisted listings hydrate asynchronously; without waiting, a cold start
-    // would refetch folders that are already cached on this device.
-    await useFolderCacheStore.getState().hydrate();
+  const loadChildren = useCallback(
+    async (signal: AbortSignal) => {
+      const userId = useAuthStore.getState().user?.id ?? null;
+      const canCommit = () =>
+        !signal.aborted &&
+        !useAuthStore.getState().isLoggingOut &&
+        (useAuthStore.getState().user?.id ?? null) === userId;
+      // Persisted listings hydrate asynchronously; without waiting, a cold start
+      // would refetch folders that are already cached on this device.
+      await useFolderCacheStore.getState().hydrate();
 
-    const cached = useFolderCacheStore.getState().getFiles(id);
-    if (cached) {
-      setChildren(
-        sortFoldersNatural(
-          cached.files.filter((f) => f.mimeType === FOLDER_MIME),
-        ),
-      );
-      return;
-    }
-    setLoading(true);
-    const files = await fetchFromApi(id);
-    if (files) {
-      setChildren(
-        sortFoldersNatural(files.filter((f) => f.mimeType === FOLDER_MIME)),
-      );
-    }
-    setLoading(false);
-  }, [id, fetchFromApi]);
+      if (!canCommit()) return;
+      const cached = useFolderCacheStore.getState().getFiles(id);
+      if (cached) {
+        setChildren(
+          sortFoldersNatural(
+            cached.files.filter((f) => f.mimeType === FOLDER_MIME),
+          ),
+        );
+        return;
+      }
+      setLoading(true);
+      const files = await fetchFromApi(id, { signal, canCommit });
+      if (!canCommit()) return;
+      if (files) {
+        setChildren(
+          sortFoldersNatural(files.filter((f) => f.mimeType === FOLDER_MIME)),
+        );
+      }
+      setLoading(false);
+    },
+    [id, fetchFromApi],
+  );
 
   // Load children when expanded
   useEffect(() => {
-    if (isExpanded && children === null) {
-      loadChildren();
+    if (!isExpanded || children !== null) {
+      setLoading(false);
+      return;
     }
+    const controller = new AbortController();
+    void loadChildren(controller.signal);
+    return () => controller.abort();
   }, [isExpanded, children, loadChildren]);
 
   // Re-sync from cache when cache entry changes (e.g. after refresh)
@@ -91,12 +106,9 @@ export function FolderTreeNode({
     (e: React.MouseEvent) => {
       e.stopPropagation();
       if (!hasChildren) return;
-      if (!isExpanded && children === null) {
-        loadChildren();
-      }
       toggle(id);
     },
-    [id, isExpanded, hasChildren, children, loadChildren, toggle],
+    [id, hasChildren, toggle],
   );
 
   const path = useMemo(
@@ -106,13 +118,8 @@ export function FolderTreeNode({
 
   const handleSelect = useCallback(() => {
     onSelect(path);
-    if (!isExpanded) {
-      if (children === null) {
-        loadChildren();
-      }
-    }
     toggle(id);
-  }, [path, onSelect, isExpanded, toggle, id, children, loadChildren]);
+  }, [path, onSelect, toggle, id]);
 
   return (
     <div>

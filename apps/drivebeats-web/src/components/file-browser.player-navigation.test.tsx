@@ -154,6 +154,45 @@ describe("FileBrowser player navigation", () => {
     fetchFolderContents.mockReset();
   });
 
+  it("cancels an obsolete folder read when navigating to another folder or Library", async () => {
+    fetchFolderContents.mockImplementation(async () => {});
+    const { rerender } = render(
+      <FileBrowser
+        externalFolderStack={albumStack}
+        onFolderNavigate={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(fetchFolderContents).toHaveBeenCalledTimes(1));
+    const first = fetchFolderContents.mock.calls[0][1];
+    expect(first.signal.aborted).toBe(false);
+    expect(first.canCommit()).toBe(true);
+    const nextStack = [
+      ...rootStack,
+      { id: "other-album", name: "Other Album" },
+    ];
+    rerender(
+      <FileBrowser
+        externalFolderStack={nextStack}
+        onFolderNavigate={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(fetchFolderContents).toHaveBeenCalledTimes(2));
+    expect(first.signal.aborted).toBe(true);
+    expect(first.canCommit()).toBe(false);
+    const second = fetchFolderContents.mock.calls[1][1];
+    expect(second.signal.aborted).toBe(false);
+    expect(second.canCommit()).toBe(true);
+    rerender(
+      <FileBrowser
+        externalFolderStack={rootStack}
+        onFolderNavigate={vi.fn()}
+      />,
+    );
+    expect(second.signal.aborted).toBe(true);
+    expect(second.canCommit()).toBe(false);
+    expect(screen.getByTestId("file-list")).toHaveTextContent("Music");
+  });
+
   it("shows the containing folder instead of retaining Library Search results", async () => {
     fetchFolderContents.mockImplementation(
       async (

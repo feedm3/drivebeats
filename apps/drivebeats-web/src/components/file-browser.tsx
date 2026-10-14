@@ -134,11 +134,12 @@ export function FileBrowser({
   }, []);
 
   const navigateToFolder = useCallback(
-    async (folderId: string) => {
+    async (folderId: string, signal: AbortSignal) => {
       const requestId = navigationRequestRef.current + 1;
       navigationRequestRef.current = requestId;
       const canCommit = () =>
         isMountedRef.current &&
+        !signal.aborted &&
         navigationRequestRef.current === requestId &&
         currentFolderIdRef.current === folderId;
 
@@ -148,6 +149,7 @@ export function FileBrowser({
         },
         onLoadingChange: setLoading,
         canCommit,
+        signal,
       });
     },
     [fetchFolderContents],
@@ -160,7 +162,9 @@ export function FileBrowser({
       return;
     }
 
-    navigateToFolder(currentFolderId);
+    const controller = new AbortController();
+    void navigateToFolder(currentFolderId, controller.signal);
+    return () => controller.abort();
   }, [currentFolderId, importedRootEntries, navigateToFolder]);
 
   const [refreshingFolder, setRefreshingFolder] = useState(false);
@@ -174,7 +178,10 @@ export function FileBrowser({
     const folderId = currentFolderIdRef.current;
     setRefreshingFolder(true);
     try {
-      const data = await fetchFromApi(folderId);
+      const data = await fetchFromApi(folderId, {
+        canCommit: () =>
+          isMountedRef.current && currentFolderIdRef.current === folderId,
+      });
       if (
         data &&
         isMountedRef.current &&

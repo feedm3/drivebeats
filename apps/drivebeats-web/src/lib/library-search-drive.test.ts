@@ -18,7 +18,70 @@ function response(body: GoogleDriveFilesListResponse) {
   });
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((finish) => {
+    resolve = finish;
+  });
+  return { promise, resolve };
+}
+
 describe("Drive Library Search acquisition", () => {
+  it("finishes every audio page before starting folders and waits for folders before publishing", async () => {
+    const firstAudioPage = deferred<Response>();
+    const lastAudioBody = deferred<GoogleDriveFilesListResponse>();
+    const folderPage = deferred<Response>();
+    const listFiles = vi.fn(async (_token: string, params: URLSearchParams) => {
+      if (params.get("q")?.includes(FOLDER_MIME)) {
+        return folderPage.promise;
+      }
+      if (!params.has("pageToken")) return firstAudioPage.promise;
+      const lastPage = response({});
+      vi.spyOn(lastPage, "json").mockReturnValue(lastAudioBody.promise);
+      return lastPage;
+    });
+    let settled = false;
+    const pending = buildLibrarySearchCatalogFromDrive({
+      accessToken: "token",
+      importedFolders: [importedFolder],
+      standaloneTracks: [],
+      listFiles,
+    });
+    void pending.then(() => {
+      settled = true;
+    });
+
+    expect(listFiles).toHaveBeenCalledTimes(1);
+    expect(listFiles.mock.calls[0][1].get("q")).not.toContain(FOLDER_MIME);
+    firstAudioPage.resolve(response({ nextPageToken: "audio-2", files: [] }));
+    await vi.waitFor(() => expect(listFiles).toHaveBeenCalledTimes(2));
+    expect(listFiles.mock.calls[1][1].get("pageToken")).toBe("audio-2");
+    expect(listFiles.mock.calls[1][1].get("q")).not.toContain(FOLDER_MIME);
+    expect(settled).toBe(false);
+
+    lastAudioBody.resolve({
+      files: [
+        {
+          id: "track",
+          name: "Track.mp3",
+          mimeType: "audio/mpeg",
+          parents: ["music"],
+        },
+      ],
+      incompleteSearch: false,
+    });
+    await vi.waitFor(() => expect(listFiles).toHaveBeenCalledTimes(3));
+    expect(listFiles.mock.calls[2][1].get("q")).toContain(FOLDER_MIME);
+    expect(settled).toBe(false);
+    folderPage.resolve(
+      response({ files: [importedFolder], incompleteSearch: false }),
+    );
+
+    await expect(pending).resolves.toEqual([
+      expect.objectContaining({ id: "track" }),
+    ]);
+  });
+
   it("paginates complete audio and folder listings before building the catalog", async () => {
     const listFiles = vi.fn(
       async (_token: string, params: URLSearchParams, signal?: AbortSignal) => {
@@ -98,6 +161,45 @@ describe("Drive Library Search acquisition", () => {
         listFiles,
       }),
     ).rejects.toThrow("incomplete");
+    expect(listFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start folders or publish a partial catalog after an audio request fails", async () => {
+    const listFiles = vi.fn(
+      async () => new Response("Drive unavailable", { status: 503 }),
+    );
+
+    await expect(
+      buildLibrarySearchCatalogFromDrive({
+        accessToken: "token",
+        importedFolders: [importedFolder],
+        standaloneTracks: [],
+        listFiles,
+      }),
+    ).rejects.toThrow("503");
+    expect(listFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start folders or publish a result when an in-flight audio read is cancelled", async () => {
+    const controller = new AbortController();
+    const audioPage = deferred<Response>();
+    const listFiles = vi.fn(async () => audioPage.promise);
+    const pending = buildLibrarySearchCatalogFromDrive({
+      accessToken: "token",
+      importedFolders: [importedFolder],
+      standaloneTracks: [],
+      listFiles,
+      signal: controller.signal,
+    });
+    const rejected = expect(pending).rejects.toMatchObject({
+      name: "AbortError",
+    });
+
+    controller.abort();
+    audioPage.resolve(response({ files: [], incompleteSearch: false }));
+
+    await rejected;
+    expect(listFiles).toHaveBeenCalledTimes(1);
   });
 
   it("honors cancellation before publishing a result", async () => {

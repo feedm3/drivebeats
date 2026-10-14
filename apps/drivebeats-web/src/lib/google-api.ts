@@ -62,45 +62,62 @@ function getGoogleAuthHeaders(accessToken: string) {
   };
 }
 
-let driveReadRelayUntil = 0;
-const DRIVE_READ_RELAY_MS = 5 * 60 * 1000;
+function waitForDriveReadRetry(delay: number, signal?: AbortSignal) {
+  signal?.throwIfAborted();
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      reject(signal?.reason ?? new DOMException("Cancelled", "AbortError"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delay);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 async function fetchGoogleDriveRead(
   url: string,
   accessToken: string,
   signal?: AbortSignal,
 ) {
-  if (Date.now() >= driveReadRelayUntil) {
+  for (let attempt = 0; ; attempt++) {
+    signal?.throwIfAborted();
+    let response: Response | undefined;
+    let delay = 200 * 2 ** attempt;
     try {
-      return await fetch(url, {
+      response = await fetch(url, {
         headers: getGoogleAuthHeaders(accessToken),
         signal,
       });
+      if (![429, 500, 502, 503, 504].includes(response.status) || attempt === 2)
+        return response;
+      const retryAfter = response.headers.get("Retry-After");
+      if (retryAfter) {
+        const seconds = Number(retryAfter);
+        const requestedDelay = Number.isFinite(seconds)
+          ? seconds * 1000
+          : Date.parse(retryAfter) - Date.now();
+        // Leave longer rate limits to the caller instead of holding a tool
+        // request open or retrying sooner than Google asks.
+        if (!Number.isFinite(requestedDelay) || requestedDelay > 1000)
+          return response;
+        delay = Math.max(delay, requestedDelay);
+      }
     } catch (error) {
-      // Some embedded browsers cancel authenticated cross-origin reads after
-      // preflight. Keep normal browsers direct, and never retry cancellations
-      // or HTTP permission errors through another transport.
+      signal?.throwIfAborted();
       if (
-        typeof window === "undefined" ||
-        navigator.onLine === false ||
-        signal?.aborted ||
-        !(error instanceof TypeError)
+        !(error instanceof TypeError) ||
+        attempt === 2 ||
+        (typeof navigator !== "undefined" && navigator.onLine === false)
       )
         throw error;
     }
+    if (response?.body) await response.body.cancel().catch(() => {});
+    await waitForDriveReadRetry(delay, signal);
   }
-  const target = new URL(url);
-  const params = new URLSearchParams(target.search);
-  const fileId = target.pathname.slice("/drive/v3/files".length + 1);
-  if (fileId) params.set("fileId", decodeURIComponent(fileId));
-  const response = await fetch(`/api/auth/drive/read?${params}`, {
-    headers: { "X-DriveBeats-Read": "1" },
-    signal,
-    cache: "no-store",
-  });
-  if (response.ok && Date.now() >= driveReadRelayUntil)
-    driveReadRelayUntil = Date.now() + DRIVE_READ_RELAY_MS;
-  return response;
 }
 
 function getGoogleDriveFileUrl(

@@ -22,8 +22,8 @@ export default function PrivacyPolicyPage() {
         <p>
           DriveBeats lets you stream audio files (MP3, FLAC, WAV, AAC, OGG)
           stored in your Google Drive. It also lets you sync playlists and
-          favorites between devices. We do not store your audio files on our
-          servers.
+          favorites between devices. It does not upload or re-host your audio
+          files on our servers.
         </p>
 
         <h2 className="text-lg font-semibold text-foreground">
@@ -106,11 +106,9 @@ export default function PrivacyPolicyPage() {
 
         <h2 className="text-lg font-semibold text-foreground">Data sharing</h2>
         <p>
-          Your Google Drive files usually stream directly from Google to your
-          browser. If your browser cannot make that connection, DriveBeats
-          passes those read-only requests and audio streams through its server
-          without storing the audio. We don&apos;t sell your data, share it with
-          data brokers, or use it for advertising.
+          Your Google Drive files are requested directly from Google and stream
+          to your browser. We don&apos;t sell your data, share it with data
+          brokers, or use it for advertising.
         </p>
         <p>
           Limited data is shared with service providers that operate the app,

@@ -94,15 +94,19 @@ export async function buildLibrarySearchCatalogFromDrive({
 }: BuildLibrarySearchCatalogFromDriveInput): Promise<LibrarySearchTrack[]> {
   abortIfNeeded(signal);
 
-  const [audioFiles, folders] = await Promise.all([
-    listEveryPage(accessToken, supportedAudioQuery(), listFiles, signal),
-    listEveryPage(
-      accessToken,
-      `trashed = false and mimeType = '${FOLDER_MIME}'`,
-      listFiles,
-      signal,
-    ),
-  ]);
+  const audioFiles = await listEveryPage(
+    accessToken,
+    supportedAudioQuery(),
+    listFiles,
+    signal,
+  );
+  abortIfNeeded(signal);
+  const folders = await listEveryPage(
+    accessToken,
+    `trashed = false and mimeType = '${FOLDER_MIME}'`,
+    listFiles,
+    signal,
+  );
 
   abortIfNeeded(signal);
   return buildLibrarySearchCatalog({

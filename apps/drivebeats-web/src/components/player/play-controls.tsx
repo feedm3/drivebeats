@@ -22,6 +22,8 @@ export function PlayControls() {
   const playlist = usePlayerStore((s) => s.playlist);
   const currentIndex = usePlayerStore((s) => s.currentIndex);
   const queuedTracks = usePlayerStore((s) => s.queuedTracks);
+  const playbackSequence = usePlayerStore((s) => s.playbackSequence);
+  const playbackCursor = usePlayerStore((s) => s.playbackCursor);
 
   const hasNext = hasNextTrack({
     currentIndex,
@@ -30,6 +32,8 @@ export function PlayControls() {
     shuffleCycle,
     repeat,
     queuedTracks,
+    playbackSequence,
+    playbackCursor,
   });
 
   return (

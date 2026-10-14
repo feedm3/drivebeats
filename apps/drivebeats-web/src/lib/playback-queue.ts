@@ -7,6 +7,59 @@ export interface PlaybackQueueEntry {
   folderStack: FolderEntry[];
 }
 
+export interface PlaybackSequenceEntry extends PlaybackQueueEntry {
+  sourceIndex: number | null;
+}
+
+export function createPlaybackSequence(
+  playlist: DriveFile[],
+  folderStacks: FolderEntry[][],
+  currentIndex: number,
+  shuffleCycle?: ShuffleCycle | null,
+) {
+  const sourceEntries = playlist.map((track, sourceIndex) => ({
+    entryId: `source:${sourceIndex}:${track.id}`,
+    track,
+    folderStack: folderStacks[sourceIndex] ?? [],
+    sourceIndex,
+  }));
+  if (!shuffleCycle)
+    return { playbackSequence: sourceEntries, playbackCursor: currentIndex };
+  const currentId = playlist[currentIndex]?.id;
+  const ids = [
+    ...new Set([
+      ...shuffleCycle.playedIds.filter((id) => id !== currentId),
+      ...(currentId ? [currentId] : []),
+      ...shuffleCycle.remainingIds,
+    ]),
+  ];
+  const playbackSequence = ids.flatMap((id) => {
+    const entry = sourceEntries.find((item) => item.track.id === id);
+    return entry ? [entry] : [];
+  });
+  return {
+    playbackSequence,
+    playbackCursor: playbackSequence.findIndex(
+      (entry) => entry.sourceIndex === currentIndex,
+    ),
+  };
+}
+
+export function getPlaybackQueueTracks(state: {
+  playbackSequence: PlaybackSequenceEntry[];
+  playbackCursor: number;
+}) {
+  return state.playbackSequence.map((entry, index) => ({
+    ...entry,
+    status: (index < state.playbackCursor
+      ? "played"
+      : index === state.playbackCursor
+        ? "current"
+        : "upcoming") as "played" | "current" | "upcoming",
+    removable: entry.sourceIndex === null && index > state.playbackCursor,
+  }));
+}
+
 export interface UpcomingTrack {
   entryId: string | null;
   track: DriveFile;
@@ -14,6 +67,8 @@ export interface UpcomingTrack {
 }
 
 export function getUpcomingTracks(state: {
+  playbackSequence?: PlaybackSequenceEntry[];
+  playbackCursor?: number;
   queuedTracks: PlaybackQueueEntry[];
   playlist: DriveFile[];
   currentIndex: number;
@@ -28,6 +83,13 @@ export function getUpcomingTracks(state: {
   nextShuffleFileId?: string | null;
   repeat: "off" | "one" | "all";
 }): UpcomingTrack[] {
+  if (state.playbackSequence?.length)
+    return state.playbackSequence
+      .slice((state.playbackCursor ?? -1) + 1)
+      .map((entry) => ({
+        ...entry,
+        entryId: entry.sourceIndex === null ? entry.entryId : null,
+      }));
   const baseFolderStack =
     state.queuedPlaybackContext?.baseFolderStack ?? state.playingFolderStack;
   const continuation = state.shuffle

@@ -168,6 +168,8 @@ describe("DriveBeats WebMCP actions", () => {
         entryId: entry.entryId,
         baseFolderStack: [],
       },
+      playbackSequence: [{ ...entry, sourceIndex: null }],
+      playbackCursor: 0,
       isPlaying: false,
       lastPlaybackFailure: {
         code: "unsupported_audio",
@@ -181,13 +183,21 @@ describe("DriveBeats WebMCP actions", () => {
       ok: true,
       playback: { isPlaying: false, queuedTrackCount: 0 },
     });
-    expect(usePlayerStore.getState().queuedTracks).toEqual([]);
+    expect(usePlayerStore.getState().playbackSequence).toEqual([
+      { ...entry, sourceIndex: null },
+    ]);
+    expect(usePlayerStore.getState().playbackCursor).toBe(0);
   });
 
   it("can start a prepared queue through next without a current track", async () => {
-    await run("drivebeats_queue_tracks", {
-      trackIds: [track.id],
-      position: "end",
+    expect(
+      await run("drivebeats_queue_tracks", {
+        trackIds: [track.id],
+        position: "end",
+      }),
+    ).toMatchObject({
+      ok: true,
+      playback: { playerOpen: true, isPlaying: false, queueCursor: null },
     });
     const playerAudio = audio();
     Object.defineProperty(playerAudio, "paused", { value: false });
@@ -220,6 +230,98 @@ describe("DriveBeats WebMCP actions", () => {
       await run("drivebeats_control_playback", { action: "next" }),
     ).toMatchObject({ ok: false, error: { code: "track_not_found" } });
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it("validates retained session history before navigating to a previous track", async () => {
+    const previous = vi.fn();
+    usePlayerStore.setState({
+      currentTrack: track,
+      playlist: [track],
+      playbackSequence: [
+        {
+          entryId: "old-occurrence",
+          track: { ...track, id: "outside-library" },
+          folderStack: [],
+          sourceIndex: null,
+        },
+        {
+          entryId: "current-occurrence",
+          track,
+          folderStack: [],
+          sourceIndex: 0,
+        },
+      ],
+      playbackCursor: 1,
+      previous,
+    });
+    expect(
+      await run("drivebeats_control_playback", { action: "previous" }),
+    ).toMatchObject({ ok: false, error: { code: "track_not_found" } });
+    expect(previous).not.toHaveBeenCalled();
+  });
+
+  it("does not navigate after another control moves the session cursor during validation", async () => {
+    const next = vi.fn();
+    usePlayerStore.setState({
+      currentTrack: track,
+      playlist: [track],
+      playbackSequence: [
+        { entryId: "first", track, folderStack: [], sourceIndex: 0 },
+        { entryId: "second", track, folderStack: [], sourceIndex: null },
+      ],
+      playbackCursor: 0,
+      next,
+    });
+    vi.mocked(fetchCloudLibrarySync).mockImplementation(async () => {
+      usePlayerStore.setState({ playbackCursor: 1 });
+      return { playlists: [], favorites: [] };
+    });
+
+    expect(
+      await run("drivebeats_control_playback", { action: "next" }),
+    ).toMatchObject({ ok: false, error: { code: "player_changed" } });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("reports the full retained session length and current occurrence", async () => {
+    usePlayerStore.setState({
+      currentTrack: track,
+      playlist: [track],
+      playbackSequence: [
+        { entryId: "first", track, folderStack: [], sourceIndex: 0 },
+        { entryId: "second", track, folderStack: [], sourceIndex: null },
+        { entryId: "third", track, folderStack: [], sourceIndex: null },
+      ],
+      playbackCursor: 1,
+    });
+    expect(await run("drivebeats_status")).toMatchObject({
+      ok: true,
+      playback: { queueLength: 3, queueCursor: 1 },
+    });
+  });
+
+  it("rewinds a paused first occurrence without falsely reporting a playback failure", async () => {
+    const playerAudio = audio();
+    playerAudio.currentTime = 2;
+    usePlayerStore.setState({
+      audio: playerAudio,
+      currentTrack: track,
+      playlist: [track],
+      currentIndex: 0,
+      currentTime: 2,
+      playbackSequence: [
+        { entryId: "first", track, folderStack: [], sourceIndex: 0 },
+      ],
+      playbackCursor: 0,
+      isPlaying: false,
+    });
+
+    expect(
+      await run("drivebeats_control_playback", { action: "previous" }),
+    ).toMatchObject({
+      ok: true,
+      playback: { isPlaying: false, positionSeconds: 0, queueCursor: 0 },
+    });
   });
 
   it("does not queue old-account tracks when the account changes during validation", async () => {

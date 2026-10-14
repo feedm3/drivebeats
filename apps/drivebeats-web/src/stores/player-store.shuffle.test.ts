@@ -253,10 +253,13 @@ describe("shuffle playback cycles", () => {
     const previousId = currentId();
     await usePlayerStore.getState().next();
     const cycle = structuredClone(usePlayerStore.getState().shuffleCycle);
+    const forwardId = currentId();
     await usePlayerStore.getState().previous();
 
     expect(currentId()).toBe(previousId);
     expect(usePlayerStore.getState().shuffleCycle).toEqual(cycle);
+    await usePlayerStore.getState().next();
+    expect(currentId()).toBe(forwardId);
     await usePlayerStore.getState().next();
     expect(cycle?.remainingIds).toContain(currentId());
     await usePlayerStore.getState().next();
@@ -331,7 +334,13 @@ describe("shuffle playback cycles", () => {
     expect(usePlayerStore.getState().shuffleCycle).toEqual(cycle);
     expect(usePlayerStore.getState().shuffleHistory).toEqual(history);
     expect(usePlayerStore.getState().pendingTrackId).toBeNull();
-    await usePlayerStore.getState().next();
+    await usePlayerStore
+      .getState()
+      .playQueueEntry(
+        usePlayerStore.getState().playbackSequence[
+          usePlayerStore.getState().playbackCursor
+        ].entryId,
+      );
     expect(currentId()).toBe(nextId);
     expect(usePlayerStore.getState().shuffleCycle?.remainingIds).not.toContain(
       nextId,
@@ -373,7 +382,7 @@ describe("shuffle playback cycles", () => {
       await usePlayerStore.getState().previous();
       expect(currentId()).toBe("a");
       await usePlayerStore.getState().next();
-      expect(currentId()).not.toBe(target);
+      expect(currentId()).toBe(target);
     } finally {
       vi.runAllTimers();
       vi.useRealTimers();
@@ -512,7 +521,7 @@ describe("shuffle playback cycles", () => {
 
     const expected = tracks
       .map((track) => track.id)
-      .filter((id) => id !== current && id !== target);
+      .filter((id) => id !== tracks[0].id && id !== current && id !== target);
     expect(currentId()).toBe(target);
     expect(
       new Set(usePlayerStore.getState().shuffleCycle?.remainingIds),

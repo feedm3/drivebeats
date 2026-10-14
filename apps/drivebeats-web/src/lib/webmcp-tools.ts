@@ -152,7 +152,7 @@ function playback() {
         ? publicTrack(state.currentTrack)
         : null,
     trackDetailsAvailable,
-    playerOpen: Boolean(state.currentTrack),
+    playerOpen: Boolean(state.currentTrack || state.queuedTracks.length),
     state: state.isLoading
       ? "loading"
       : isPlaying
@@ -179,8 +179,15 @@ function playback() {
     muted: state.isMuted,
     shuffle: state.shuffle,
     repeat: state.repeat,
-    queueLength: state.playlist.length,
-    queuedTrackCount: state.queuedTracks.length,
+    queueLength: state.playbackSequence.length || state.playlist.length,
+    queueCursor: state.playbackCursor >= 0 ? state.playbackCursor : null,
+    queuedTrackCount: state.playbackSequence.length
+      ? state.playbackSequence
+          .slice(state.playbackCursor + 1)
+          .filter((entry) => entry.sourceIndex === null).length
+      : state.queuedTracks.filter(
+          (entry) => entry.entryId !== state.queuedPlaybackContext?.entryId,
+        ).length,
   };
 }
 async function library(userId: string, signal?: AbortSignal) {
@@ -638,7 +645,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
     ),
     tool(
       "drivebeats_queue_tracks",
-      "Queue track IDs from Library Search or saved collections without starting or interrupting playback. Position next plays them before the remaining collection; end appends them after existing manually queued tracks. Tracks retain the supplied order, even during shuffle. This changes only the current browser's Playback Queue and does not save a Playlist. If no track is playing, use the page's Play button or next control to start the queue.",
+      "Queue track IDs from Library Search or saved collections without starting or interrupting playback. Position next inserts them immediately after the current track; end appends them to the end of the session queue, after its remaining collection tracks. Tracks retain the supplied order, even during shuffle. Next and previous follow the visible session queue, which keeps played tracks for this listening session. This changes only the current browser's Playback Queue and does not save a Playlist. If no track is playing, use the page's Play button or next control to start the queue.",
       z.object({
         trackIds: z.array(id).min(1).max(1000),
         position: z.enum(["next", "end"]),
@@ -679,7 +686,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
     ),
     tool(
       "drivebeats_control_playback",
-      "Control the current page's player: pause, resume, next, previous, seek in seconds, volume from 0 to 1, shuffle enabled, or repeat off/one/all. Resume preserves the existing queue. If audio permission blocks playback, ask the user to tap Play in DriveBeats and check status. Busy results require waiting for the current action.",
+      "Control the current page's player: pause, resume, next, previous, seek in seconds, volume from 0 to 1, shuffle enabled, or repeat off/one/all. Next and previous follow the visible session queue, including played tracks and explicit additions. Previous rewinds the current track when more than three seconds have played. Resume preserves the existing queue. If audio permission blocks playback, ask the user to tap Play in DriveBeats and check status. Busy results require waiting for the current action.",
       z.discriminatedUnion("action", [
         z.object({ action: z.enum(["pause", "resume", "next", "previous"]) }),
         z.object({
@@ -705,7 +712,8 @@ export function createDriveBeatsTools(): WebMcpTool[] {
         if (requiresTrack) {
           const before = usePlayerStore.getState();
           const hasPreparedQueue =
-            before.queuedTracks.length > 0 &&
+            (before.playbackSequence.length > 0 ||
+              before.queuedTracks.length > 0) &&
             ["resume", "next"].includes(input.action);
           if (
             (!before.currentTrack && !hasPreparedQueue) ||
@@ -719,12 +727,15 @@ export function createDriveBeatsTools(): WebMcpTool[] {
             ...(before.currentTrack ? [before.currentTrack.id] : []),
             ...before.playlist.map((track) => track.id),
             ...before.queuedTracks.map((entry) => entry.track.id),
+            ...before.playbackSequence.map((entry) => entry.track.id),
           ]);
           const current = usePlayerStore.getState();
           if (
             current.currentTrack !== before.currentTrack ||
             current.playlist !== before.playlist ||
-            current.queuedTracks !== before.queuedTracks
+            current.queuedTracks !== before.queuedTracks ||
+            current.playbackSequence !== before.playbackSequence ||
+            current.playbackCursor !== before.playbackCursor
           )
             throw new ToolError(
               "player_changed",
@@ -733,7 +744,12 @@ export function createDriveBeatsTools(): WebMcpTool[] {
           if (
             (before.currentTrack && !available.has(before.currentTrack.id)) ||
             before.playlist.some((track) => !available.has(track.id)) ||
-            before.queuedTracks.some((entry) => !available.has(entry.track.id))
+            before.queuedTracks.some(
+              (entry) => !available.has(entry.track.id),
+            ) ||
+            before.playbackSequence.some(
+              (entry) => !available.has(entry.track.id),
+            )
           )
             throw new ToolError(
               "track_not_found",
@@ -744,15 +760,11 @@ export function createDriveBeatsTools(): WebMcpTool[] {
         const expectsPlayback =
           input.action === "resume" ||
           (input.action === "previous" &&
-            (player.audio?.currentTime ?? 0) <= 3) ||
-          (input.action === "next" &&
-            hasNextTrack({
-              ...player,
-              queuedTracks: player.queuedTracks.filter(
-                (entry) =>
-                  entry.entryId !== player.queuedPlaybackContext?.entryId,
-              ),
-            }));
+            (player.audio?.currentTime ?? 0) <= 3 &&
+            (player.playbackSequence.length
+              ? player.playbackCursor > 0
+              : player.currentIndex > 0)) ||
+          (input.action === "next" && hasNextTrack(player));
         if (["resume", "next", "previous"].includes(input.action)) {
           return guardedPlayback(userId, signal, async () => {
             if (input.action === "resume") {

@@ -173,7 +173,9 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
         state.shuffle !== prev.shuffle ||
         state.shuffleCycle !== prev.shuffleCycle ||
         state.repeat !== prev.repeat ||
-        state.queuedTracks !== prev.queuedTracks
+        state.queuedTracks !== prev.queuedTracks ||
+        state.playbackSequence !== prev.playbackSequence ||
+        state.playbackCursor !== prev.playbackCursor
       ) {
         syncMediaSessionNextAction();
       }

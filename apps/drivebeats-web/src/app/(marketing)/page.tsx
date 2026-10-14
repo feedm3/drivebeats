@@ -195,7 +195,7 @@ function AiMusicSection() {
               className="size-6 shrink-0 stroke-current"
               aria-hidden="true"
             />
-            Browser support &amp; other options
+            Tips for using ChatGPT
             <ChevronDown
               className="size-6 shrink-0 stroke-current group-open:rotate-180"
               aria-hidden="true"
@@ -203,39 +203,25 @@ function AiMusicSection() {
           </summary>
           <div className="flex flex-col gap-4 pt-4">
             <p className="max-w-[56ch] text-pretty text-base text-muted-foreground">
-              ChatGPT uses WebMCP site tools to work with your open DriveBeats
-              page. Check Site tools in the browser’s address bar to see the
-              available tools. Support depends on your app, model, and workspace
-              settings. If site tools are unavailable, use the player controls
-              as usual. Your browser may ask you to tap Play before audio
-              starts.
+              Keep DriveBeats open inside the ChatGPT app on your computer while
+              you chat. If your music doesn’t start, tap Play in DriveBeats.
             </p>
             <p className="max-w-[56ch] text-pretty text-base text-muted-foreground">
-              Tool results are shared with the AI provider you use. They can
-              include track filenames and IDs, playlist information, and
-              playback status.
+              This feature isn’t available to everyone in ChatGPT yet. If it
+              can’t help, you can still choose tracks and play them yourself in
+              DriveBeats.
             </p>
             <p className="max-w-[56ch] text-pretty text-base text-muted-foreground">
-              Other AI assistants can use DriveBeats when both the assistant and
-              its browser support WebMCP. Chrome’s experimental setup is for
-              testing; enabling its flag alone does not connect an AI assistant.
+              When you ask ChatGPT for help, it receives information about your
+              music, such as track names, playlists, and what’s playing.
+              DriveBeats doesn’t send your audio files to ChatGPT.
             </p>
             <div className="flex flex-wrap gap-x-6 gap-y-2">
               <a
-                href="https://learn.chatgpt.com/docs/webmcp"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/privacy-policy"
                 className="inline-flex min-h-12 items-center text-base font-medium underline underline-offset-4 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
-                About ChatGPT site tools
-              </a>
-              <a
-                href="https://developer.chrome.com/docs/ai/webmcp#local-webmcp"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex min-h-12 items-center text-base font-medium underline underline-offset-4 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              >
-                Chrome testing guide
+                Read our privacy policy
               </a>
             </div>
           </div>

@@ -171,7 +171,11 @@ async function attemptAudioPlay(audio: HTMLAudioElement) {
   return didStart;
 }
 
-async function reloadCurrentSourceAndPlay(audio: HTMLAudioElement) {
+async function reloadCurrentSourceAndPlay(
+  audio: HTMLAudioElement,
+  isCurrentRequest: () => boolean,
+) {
+  if (!isCurrentRequest()) return false;
   const source = audio.currentSrc || audio.src;
   if (!source) return false;
 
@@ -201,13 +205,13 @@ async function reloadCurrentSourceAndPlay(audio: HTMLAudioElement) {
     PLAY_ATTEMPT_TIMEOUT_MS,
   );
 
-  if (!metadataLoaded) {
+  if (!metadataLoaded || !isCurrentRequest()) {
     return false;
   }
 
   restorePlaybackPosition();
   const played = await attemptAudioPlay(audio);
-  if (!played) {
+  if (!played || !isCurrentRequest()) {
     return false;
   }
 
@@ -350,6 +354,7 @@ interface PlayerState {
   setIsPlaying: (p: boolean) => void;
   restoreTrack: () => Promise<void>;
   resetPlayback: () => void;
+  cancelPlaybackRequest: () => void;
   clearCache: () => void;
   prefetchNextTrack: () => void;
 }
@@ -407,17 +412,23 @@ export const usePlayerStore = create<PlayerState>()(
         if (!audio.src) {
           if (!currentTrack) return false;
           const played = await get().loadTrack(currentTrack.id, true);
+          if (requestId !== playTrackRequestId) return false;
           if (played) confirmPlayback();
           return played;
         }
 
         const played = await attemptAudioPlay(audio);
+        if (requestId !== playTrackRequestId) return false;
         if (
           !played &&
           isIosStandalonePwa() &&
           document.visibilityState === "visible"
         ) {
-          const recovered = await reloadCurrentSourceAndPlay(audio);
+          const recovered = await reloadCurrentSourceAndPlay(
+            audio,
+            () => requestId === playTrackRequestId,
+          );
+          if (requestId !== playTrackRequestId) return false;
           set({ isPlaying: recovered && !audio.paused });
           if (recovered) confirmPlayback();
           return recovered;
@@ -535,6 +546,7 @@ export const usePlayerStore = create<PlayerState>()(
           // IndexedDB unavailable, fall through to Drive fetch
         }
 
+        if (controller.signal.aborted) return false;
         set({ isLoading: true });
         try {
           const authStore = useAuthStore.getState();
@@ -876,6 +888,15 @@ export const usePlayerStore = create<PlayerState>()(
         if (!currentTrack) return;
         if (audio?.src) return;
         await get().loadTrack(currentTrack.id, false);
+      },
+
+      cancelPlaybackRequest: () => {
+        playTrackRequestId++;
+        navigationOperation = null;
+        fetchAbortController?.abort();
+        fetchAbortController = null;
+        get().pause();
+        set({ pendingTrackId: null, isLoading: false });
       },
 
       resetPlayback: () => {

@@ -145,6 +145,39 @@ describe("runCloudLibrarySync", () => {
     window.localStorage.clear();
   });
 
+  it("only reports cached hydration for the session that successfully read it", async () => {
+    const { runCloudLibrarySync } = await loadRunner();
+    expect(await runCloudLibrarySync({ force: true })).toBe(true);
+    expect(await runCloudLibrarySync()).toBe(true);
+    expect(mockFetchCloudLibrarySync).toHaveBeenCalledOnce();
+    Object.defineProperty(navigator, "onLine", {
+      value: false,
+      configurable: true,
+    });
+    expect(await runCloudLibrarySync()).toBe(true);
+    authState.user = { id: "user-2" };
+    expect(await runCloudLibrarySync()).toBe(false);
+    expect(mockFetchCloudLibrarySync).toHaveBeenCalledOnce();
+  });
+
+  it("does not bootstrap a previous account's local collections after the account changes during fetch", async () => {
+    window.localStorage.removeItem(CLOUD_BOOTSTRAP_KEY);
+    playlistState.playlists = [
+      { id: "old-local", name: "Old account", tracks: [] },
+    ];
+    const response = Promise.withResolvers<CloudLibrarySyncPayload>();
+    mockFetchCloudLibrarySync.mockReturnValue(response.promise);
+    const { runCloudLibrarySync } = await loadRunner();
+    const sync = runCloudLibrarySync({ force: true });
+    await flushSyncStart();
+    authState.user = { id: "user-2" };
+    response.resolve(payload());
+    expect(await sync).toBe(false);
+    expect(mockBootstrapCloudLibrarySync).not.toHaveBeenCalled();
+    expect(mockReplacePlaylistsFromCloud).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(CLOUD_BOOTSTRAP_KEY)).toBeNull();
+  });
+
   it("skips a sync that happens inside the throttle window", async () => {
     const { runCloudLibrarySync } = await loadRunner();
 

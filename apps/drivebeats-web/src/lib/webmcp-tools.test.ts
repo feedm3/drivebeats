@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchCloudLibrarySync } from "@/lib/cloud-library-api";
+import {
+  bootstrapCloudLibrarySync,
+  fetchCloudLibrarySync,
+} from "@/lib/cloud-library-api";
+import { resetCloudLibrarySyncState } from "@/lib/cloud-library-sync-runner";
 import type { LibrarySearchTrack } from "@/lib/library-search-catalog";
 import { createDriveBeatsTools } from "@/lib/webmcp-tools";
 import { useAuthStore } from "@/stores/auth-store";
@@ -12,6 +16,7 @@ import { usePlaylistStore } from "@/stores/playlist-store";
 vi.mock("@/lib/cloud-library-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/cloud-library-api")>()),
   fetchCloudLibrarySync: vi.fn(),
+  bootstrapCloudLibrarySync: vi.fn(),
 }));
 const track: LibrarySearchTrack = {
   id: "imported",
@@ -56,6 +61,14 @@ function audio() {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  resetCloudLibrarySyncState();
+  localStorage.setItem("drivebeats-cloud-bootstrap-v1", "1");
+  Object.defineProperty(navigator, "onLine", {
+    value: true,
+    configurable: true,
+  });
+  vi.mocked(fetchCloudLibrarySync).mockReset();
+  vi.mocked(bootstrapCloudLibrarySync).mockReset();
   signIn();
   useImportedDriveStore.setState({ rootFolders: [], rootFiles: [track] });
   useLibrarySearchStore.setState({
@@ -84,6 +97,136 @@ beforeEach(() => {
 });
 
 describe("DriveBeats WebMCP actions", () => {
+  it("advertises defaulted search and collection arguments as optional inputs", () => {
+    for (const name of [
+      "drivebeats_search_library",
+      "drivebeats_list_collections",
+    ]) {
+      const tool = createDriveBeatsTools().find((item) => item.name === name);
+      expect(tool?.inputSchema.required ?? []).toEqual([]);
+    }
+  });
+
+  it("preserves and bootstraps never-uploaded local playlists before reading cloud collections", async () => {
+    localStorage.removeItem("drivebeats-cloud-bootstrap-v1");
+    const localPlaylist = {
+      id: "legacy-local",
+      name: "Local music",
+      tracks: [],
+    };
+    usePlaylistStore.setState({ playlists: [localPlaylist] });
+    vi.mocked(fetchCloudLibrarySync)
+      .mockResolvedValueOnce({ playlists: [], favorites: [] })
+      .mockResolvedValueOnce({ playlists: [localPlaylist], favorites: [] });
+    vi.mocked(bootstrapCloudLibrarySync).mockResolvedValue();
+
+    expect(await run("drivebeats_list_collections")).toMatchObject({
+      ok: true,
+      collections: expect.arrayContaining([
+        { id: "legacy-local", name: "Local music", trackCount: 0 },
+      ]),
+    });
+    expect(bootstrapCloudLibrarySync).toHaveBeenCalledWith(
+      expect.objectContaining({ playlists: [localPlaylist] }),
+    );
+    expect(usePlaylistStore.getState().playlists).toEqual([localPlaylist]);
+  });
+
+  it("reuses a verified cloud read for consecutive player controls", async () => {
+    usePlayerStore.setState({
+      currentTrack: track,
+      playlist: [track],
+      duration: 100,
+    });
+    expect(await run("drivebeats_list_collections")).toMatchObject({
+      ok: true,
+    });
+    await run("drivebeats_control_playback", { action: "seek", seconds: 10 });
+    await run("drivebeats_control_playback", { action: "seek", seconds: 20 });
+    expect(fetchCloudLibrarySync).toHaveBeenCalledOnce();
+    expect(usePlayerStore.getState().currentTime).toBe(20);
+  });
+
+  it("keeps verified playback controls available without rebuilding a stale catalog or fetching offline", async () => {
+    usePlayerStore.setState({
+      currentTrack: track,
+      playlist: [track],
+      duration: 100,
+    });
+    expect(await run("drivebeats_list_collections")).toMatchObject({
+      ok: true,
+    });
+    useLibrarySearchStore.setState({ ensureReady: vi.fn(async () => false) });
+    Object.defineProperty(navigator, "onLine", {
+      value: false,
+      configurable: true,
+    });
+    expect(
+      await run("drivebeats_control_playback", { action: "seek", seconds: 20 }),
+    ).toMatchObject({ ok: true });
+    expect(useLibrarySearchStore.getState().ensureReady).not.toHaveBeenCalled();
+    expect(fetchCloudLibrarySync).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a Library item removed while cloud collections are loading", async () => {
+    const fetched = Promise.withResolvers<void>();
+    const response = Promise.withResolvers<{ playlists: []; favorites: [] }>();
+    vi.mocked(fetchCloudLibrarySync).mockImplementation(() => {
+      fetched.resolve();
+      return response.promise;
+    });
+    const playTrack = vi.fn(async () => true);
+    usePlayerStore.setState({ playTrack });
+    const result = run("drivebeats_play", { trackIds: [track.id] });
+    await fetched.promise;
+    useImportedDriveStore.setState({ rootFiles: [] });
+    response.resolve({ playlists: [], favorites: [] });
+    expect(await result).toMatchObject({
+      ok: false,
+      error: { code: "library_unavailable" },
+    });
+    expect(playTrack).not.toHaveBeenCalled();
+  });
+
+  it("cancels a resume request without erasing the track, queue, position or shuffle", async () => {
+    const started = Promise.withResolvers<void>();
+    const finish = Promise.withResolvers<boolean>();
+    const controller = new AbortController();
+    const playerAudio = audio();
+    playerAudio.currentTime = 120;
+    const queue = [track];
+    usePlayerStore.setState({
+      audio: playerAudio,
+      currentTrack: track,
+      playlist: queue,
+      currentIndex: 0,
+      currentTime: 120,
+      duration: 240,
+      shuffle: true,
+      play: vi.fn(() => {
+        started.resolve();
+        return finish.promise;
+      }),
+    });
+    const result = run(
+      "drivebeats_control_playback",
+      { action: "resume" },
+      controller.signal,
+    );
+    await started.promise;
+    controller.abort();
+    finish.resolve(false);
+    expect(await result).toMatchObject({ ok: false });
+    expect(usePlayerStore.getState()).toMatchObject({
+      currentTrack: track,
+      playlist: queue,
+      currentTime: 120,
+      shuffle: true,
+      isPlaying: false,
+    });
+    expect(playerAudio.removeAttribute).not.toHaveBeenCalled();
+  });
+
   it("does not expose persisted tracks or credentials while signed out, unknown, or logging out", async () => {
     usePlayerStore.setState({ currentTrack: track });
     for (const authStatus of ["unknown", "unauthenticated"] as const) {
@@ -294,7 +437,12 @@ describe("DriveBeats WebMCP actions", () => {
       await ready;
       if (changeAccount) signIn("account-b");
       else controller.abort();
-      expect(resetPlayback).toHaveBeenCalledOnce();
+      if (changeAccount) expect(resetPlayback).toHaveBeenCalledOnce();
+      else {
+        expect(resetPlayback).not.toHaveBeenCalled();
+        expect(usePlayerStore.getState().currentTrack).toBe(track);
+        expect(usePlayerStore.getState().isPlaying).toBe(false);
+      }
       finish?.();
       expect(await result).toMatchObject({ ok: false });
     }

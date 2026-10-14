@@ -410,7 +410,7 @@ describe("shuffle playback cycles", () => {
       const cycle = structuredClone(usePlayerStore.getState().shuffleCycle);
       const history = [...usePlayerStore.getState().shuffleHistory];
       finishEarlierPlay?.();
-      expect(await earlierPlay).toBe(true);
+      expect(await earlierPlay).toBe(false);
 
       expect(currentId()).toBe("b");
       expect(usePlayerStore.getState().shuffleCycle).toEqual(cycle);

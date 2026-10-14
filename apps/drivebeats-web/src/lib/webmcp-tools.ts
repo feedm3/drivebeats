@@ -1,9 +1,8 @@
 import { z } from "zod";
 import { createPlaylistTrack, playlistTrackToDriveFile } from "@/lib/audio";
-import { fetchCloudLibrarySync } from "@/lib/cloud-library-api";
 import {
-  applyCloudLibraryPayload,
   hasPendingLocalMutations,
+  runCloudLibrarySync,
 } from "@/lib/cloud-library-sync-runner";
 import { searchLibraryCatalog } from "@/lib/library-search-catalog";
 import type { WebMcpTool } from "@/lib/webmcp-registration";
@@ -126,16 +125,26 @@ async function collections(userId: string, signal?: AbortSignal) {
       "sync_pending",
       "Wait for the current playlist or favorite change to finish.",
     );
-  // Read this account's cloud state rather than trusting unscoped persisted
-  // playlists from a previous browser session. Apply through the normal sync seam.
-  const payload = await fetchCloudLibrarySync();
+  // Use the normal bootstrap, single-flight and throttle rules. A fresh session
+  // must establish ownership before any persisted collections are returned.
+  const synced = await runCloudLibrarySync({
+    force:
+      verifiedCollectionAccount !== userId ||
+      !usePlaylistStore.getState().isCloudHydrated ||
+      !useLibraryStore.getState().isCloudHydrated,
+    isCancelled: () => signal?.aborted ?? false,
+  });
   assertAccount(userId, signal);
+  if (!synced)
+    throw new ToolError(
+      "sync_unavailable",
+      "The cloud library could not be loaded. Check your connection and try again.",
+    );
   if (hasPendingLocalMutations())
     throw new ToolError(
       "sync_pending",
       "A collection changed during the read. Try again.",
     );
-  applyCloudLibraryPayload(payload);
   verifiedCollectionAccount = userId;
   return [
     {
@@ -146,9 +155,34 @@ async function collections(userId: string, signal?: AbortSignal) {
     ...usePlaylistStore.getState().playlists,
   ];
 }
-async function playableTracks(userId: string, signal?: AbortSignal) {
-  const tracks = await library(userId, signal);
+async function playableTracks(
+  userId: string,
+  signal?: AbortSignal,
+  useCachedCatalog = false,
+) {
+  const search = useLibrarySearchStore.getState();
+  const cached =
+    useCachedCatalog &&
+    search.catalog?.userId === userId &&
+    !search.invalidated &&
+    search.catalog.importsSignature === getLibrarySearchImportsSignature();
+  const tracks = cached
+    ? (search.catalog?.tracks ?? [])
+    : await library(userId, signal);
   const saved = await collections(userId, signal);
+  // Imports can change while the cloud request runs; revalidate before using
+  // the catalog captured above to select playable files.
+  const current = useLibrarySearchStore.getState();
+  if (
+    current.catalog?.tracks !== tracks ||
+    current.invalidated ||
+    current.catalog.userId !== userId ||
+    current.catalog.importsSignature !== getLibrarySearchImportsSignature()
+  )
+    throw new ToolError(
+      "library_unavailable",
+      "The Library changed during the read. Search again.",
+    );
   return new Map([
     ...saved.flatMap((collection) =>
       collection.tracks.map(
@@ -213,14 +247,17 @@ async function guardedPlayback<T>(
   let ownedCurrentTrack = usePlayerStore.getState().currentTrack;
   let ownedPendingTrackId = usePlayerStore.getState().pendingTrackId;
   let invalidated = false;
-  const cancelPlayback = () => {
+  const cancelPlayback = (clearAccountData = false) => {
     invalidated = true;
     const current = usePlayerStore.getState();
     const stillOwned = ownedPendingTrackId
       ? current.pendingTrackId === ownedPendingTrackId
       : current.currentTrack === ownedCurrentTrack &&
         current.pendingTrackId === null;
-    if (playbackOperation === operation && stillOwned) current.resetPlayback();
+    if (playbackOperation === operation && stillOwned) {
+      if (clearAccountData) current.resetPlayback();
+      else current.cancelPlaybackRequest();
+    }
   };
   const unsubscribe = useAuthStore.subscribe(() => {
     const auth = useAuthStore.getState();
@@ -229,9 +266,10 @@ async function guardedPlayback<T>(
       auth.authStatus !== "authenticated" ||
       auth.isLoggingOut
     )
-      cancelPlayback();
+      cancelPlayback(true);
   });
-  signal?.addEventListener("abort", cancelPlayback, { once: true });
+  const onAbort = () => cancelPlayback();
+  signal?.addEventListener("abort", onAbort, { once: true });
   try {
     const pending = action();
     ownedCurrentTrack = usePlayerStore.getState().currentTrack;
@@ -246,7 +284,7 @@ async function guardedPlayback<T>(
     return result;
   } finally {
     unsubscribe();
-    signal?.removeEventListener("abort", cancelPlayback);
+    signal?.removeEventListener("abort", onAbort);
     if (playbackOperation === operation) playbackOperation = null;
   }
 }
@@ -266,10 +304,10 @@ function tool<T extends z.ZodType>(
   return {
     name,
     description,
-    inputSchema: { ...z.toJSONSchema(schema), type: "object" } as Record<
-      string,
-      unknown
-    >,
+    inputSchema: {
+      ...z.toJSONSchema(schema, { io: "input" }),
+      type: "object",
+    } as Record<string, unknown>,
     annotations: { readOnlyHint: readOnly, untrustedContentHint: true },
     execute: async (input, options) => {
       try {
@@ -453,7 +491,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
               "no_current_track",
               "Choose a track or collection with drivebeats_play first.",
             );
-          const available = await playableTracks(userId, signal);
+          const available = await playableTracks(userId, signal, true);
           const current = usePlayerStore.getState();
           if (
             current.currentTrack !== before.currentTrack ||

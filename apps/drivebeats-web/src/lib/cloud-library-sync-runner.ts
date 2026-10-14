@@ -65,6 +65,7 @@ interface CloudLibrarySyncFlight {
  */
 let syncInFlight: CloudLibrarySyncFlight | null = null;
 let lastSyncStartedAt: number | null = null;
+let lastAppliedSessionKey: string | null = null;
 
 export interface CloudLibrarySyncOptions {
   /**
@@ -191,18 +192,22 @@ export function applyCloudLibraryPayload(payload: CloudLibrarySyncPayload) {
  * either because the sync failed or because local mutations are still in flight
  * and would be clobbered by cloud state that does not contain them yet.
  */
-async function fetchApplicableCloudLibrary(): Promise<CloudLibrarySyncPayload | null> {
+async function fetchApplicableCloudLibrary(
+  sessionKey: string,
+): Promise<CloudLibrarySyncPayload | null> {
   try {
     let payload: CloudLibrarySyncPayload | null = null;
 
     for (let attempt = 0; attempt < 3; attempt++) {
       await waitForPendingLocalMutations();
+      if (getSessionKey() !== sessionKey) return null;
 
       const localPlaylists = usePlaylistStore.getState().playlists;
       const localFavorites = getFavoriteTracks(
         useLibraryStore.getState().tracks,
       );
       let nextPayload = await fetchCloudLibrarySync();
+      if (getSessionKey() !== sessionKey) return null;
 
       if (
         typeof window !== "undefined" &&
@@ -220,7 +225,9 @@ async function fetchApplicableCloudLibrary(): Promise<CloudLibrarySyncPayload | 
             localMetadata,
           ),
         );
+        if (getSessionKey() !== sessionKey) return null;
         nextPayload = await fetchCloudLibrarySync();
+        if (getSessionKey() !== sessionKey) return null;
       }
 
       payload = nextPayload;
@@ -256,22 +263,24 @@ function applyForCaller(
   isCancelled?: () => boolean,
 ) {
   if (!payload) {
-    return;
+    return false;
   }
 
   // This caller went away: another caller of the same session, if there is one,
   // still gets the payload through its own copy of this step.
   if (isCancelled?.()) {
-    return;
+    return false;
   }
 
   // The session changed underneath the flight, so the payload belongs to a
   // session that is no longer the current one and must never be written back.
   if (getSessionKey() !== sessionKey) {
-    return;
+    return false;
   }
 
   applyCloudLibraryPayload(payload);
+  lastAppliedSessionKey = sessionKey;
+  return true;
 }
 
 /**
@@ -282,13 +291,20 @@ function applyForCaller(
  * Callers that arrive while a sync of the same session runs share its fetch but
  * not its outcome: the returned promise resolves after this caller's own apply
  * step, so adopting an in-flight run can never leave a live caller believing it
- * synced while the stores stayed untouched.
+ * synced while the stores stayed untouched. Returns whether this session has
+ * valid hydrated data, including a previously applied read during throttling
+ * or offline use. A failed, cancelled or changed-session read returns false.
  */
 export function runCloudLibrarySync({
   force = false,
   isCancelled,
-}: CloudLibrarySyncOptions = {}): Promise<void> {
+}: CloudLibrarySyncOptions = {}): Promise<boolean> {
   const sessionKey = getSessionKey();
+  const hasAppliedData = () =>
+    !isCancelled?.() &&
+    lastAppliedSessionKey === sessionKey &&
+    usePlaylistStore.getState().isCloudHydrated &&
+    useLibraryStore.getState().isCloudHydrated;
 
   // Only a flight of the same session can be applied on this caller's behalf.
   // One started for another session is left to run out; its payload is dropped.
@@ -299,7 +315,7 @@ export function runCloudLibrarySync({
   }
 
   if (!canUseNetworkSync()) {
-    return Promise.resolve();
+    return Promise.resolve(hasAppliedData());
   }
 
   const now = Date.now();
@@ -308,7 +324,7 @@ export function runCloudLibrarySync({
     lastSyncStartedAt !== null &&
     now - lastSyncStartedAt < CLOUD_SYNC_MIN_INTERVAL_MS
   ) {
-    return Promise.resolve();
+    return Promise.resolve(hasAppliedData());
   }
 
   // Stamped at the start so a slow or failing sync cannot be retried on every
@@ -318,7 +334,7 @@ export function runCloudLibrarySync({
 
   const flight: CloudLibrarySyncFlight = {
     sessionKey,
-    payload: fetchApplicableCloudLibrary().then((payload) => {
+    payload: fetchApplicableCloudLibrary(sessionKey).then((payload) => {
       // A run that produced nothing anyone could apply must not hold the
       // throttle window open, or a failed sync would suppress its own retry.
       if (!payload && lastSyncStartedAt === now) {
@@ -344,4 +360,5 @@ export function runCloudLibrarySync({
 export function resetCloudLibrarySyncState() {
   syncInFlight = null;
   lastSyncStartedAt = null;
+  lastAppliedSessionKey = null;
 }

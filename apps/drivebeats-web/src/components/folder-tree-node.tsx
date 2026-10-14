@@ -1,8 +1,8 @@
 "use client";
 
-import { FolderTreeRow } from "@drivebeats/client/views";
 import { ChevronRight, Folder, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { FolderTreeRow } from "@/components/folder-tree-row";
 import { NowPlayingBars } from "@/components/now-playing-bars";
 import { useFolderContents } from "@/hooks/use-folder-contents";
 import { sortFoldersNatural } from "@/lib/sort";

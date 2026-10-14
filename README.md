@@ -72,7 +72,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 Run these commands from the repository root. The root `dev` and `start`
 commands target `@drivebeats/web`; `test`, `lint`, and `build` validate the
-active workspace packages, including the core TypeScript check:
+web app. Lint also generates Next.js route types and checks TypeScript:
 
 ```bash
 pnpm test
@@ -80,18 +80,17 @@ pnpm lint
 pnpm build
 ```
 
-### Workspace Layout
+### Repository Layout
 
 - `apps/drivebeats-web`: Next.js app, routes, public assets, and app configuration
-- `packages/drivebeats-core`: source-only portable types and constants, exported
-  through `@drivebeats/core/types`
-- `packages/drivebeats-client`: shared browser views and music behavior
+- `apps/drivebeats-web/src`: components, application logic, and domain types
 - `db/migrations`: existing SQL migration history, kept at the repository root
 - `docs`: operational guides
 
-Install dependencies once from the repository root; all packages share
-`pnpm-lock.yaml`. Local Vercel credentials (`mise.local.toml`) and project
-linkage (`.vercel/`) also remain at the repository root. Read
+Install dependencies once from the repository root. The pnpm workspace contains
+only the web app and uses one `pnpm-lock.yaml`. Local Vercel credentials
+(`mise.local.toml`) and project linkage (`.vercel/`) also remain at the repository
+root. Read
 [Vercel access](docs/vercel-access.md) before inspecting hosting configuration.
 
 ### Production Build
@@ -110,9 +109,9 @@ for the Production environment. If `NEXT_PUBLIC_APP_URL` is unset, the app
 falls back to `https://www.drivebeats.app` for SEO metadata, sitemap, and
 robots, but OAuth still requires it to be set correctly.
 
-The monorepo's web application root is `apps/drivebeats-web`; its Next.js
-output is `.next` within that directory. Confirm the project's build settings
-and access to workspace files outside the app root before publishing.
+The web application root is `apps/drivebeats-web`; its Next.js output is `.next`
+within that directory. Keep the build settings pointed at this app and install
+dependencies from the repository root.
 
 The canonical host is `https://www.drivebeats.app`; configure the apex
 `drivebeats.app` to redirect to `www` in the Vercel domain settings, and add

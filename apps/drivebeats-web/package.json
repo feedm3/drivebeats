@@ -9,12 +9,12 @@
     "start": "next start",
     "lint": "biome check",
     "format": "biome format --write",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "packageManager": "pnpm@12.7.0",
   "dependencies": {
     "@base-ui/react": "^1.9.0",
-    "@drivebeats/core": "workspace:*",
     "@neondatabase/serverless": "^1.2.0",
     "@vercel/analytics": "^2.0.1",
     "class-variance-authority": "^0.7.1",
@@ -28,8 +28,7 @@
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
     "zod": "4.6.5",
-    "zustand": "^5.0.15",
-    "@drivebeats/client": "workspace:*"
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -5,8 +5,8 @@
 Use `pnpm` for local work because the repository tracks `pnpm-lock.yaml`.
 
 Run install, dev/start, and validation commands from the repository root.
-The Next app is `apps/drivebeats-web`; portable core code is
-`packages/drivebeats-core`. App environment files belong in
+The only application is `apps/drivebeats-web`, including components, application
+logic, and domain types in its `src` directory. App environment files belong in
 `apps/drivebeats-web/.env*`; `mise.local.toml` and Vercel linkage stay at root.
 
 Read `package.json` for available scripts. `pnpm format` applies formatting only;

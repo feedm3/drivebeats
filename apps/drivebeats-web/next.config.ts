@@ -31,7 +31,6 @@ const contentSecurityPolicy = [
 const workspaceRoot = resolve(__dirname, "../..");
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@drivebeats/core", "@drivebeats/client"],
   outputFileTracingRoot: workspaceRoot,
   turbopack: {
     root: workspaceRoot,

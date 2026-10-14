@@ -1,6 +1,5 @@
 "use client";
 
-import { HighlightedName } from "@drivebeats/client/views";
 import { Folder, Music4, Search } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AddToPlaylistPopover } from "@/components/add-to-playlist-popover";
@@ -9,6 +8,7 @@ import {
   FILE_TABLE_SHELL_CLASS,
   FileListSkeleton,
 } from "@/components/file-list-skeleton";
+import { HighlightedName } from "@/components/highlighted-name";
 import { NowPlayingBars } from "@/components/now-playing-bars";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";

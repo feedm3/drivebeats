@@ -5,11 +5,11 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter @drivebeats/web dev",
-    "build": "pnpm --filter @drivebeats/core typecheck && pnpm --filter @drivebeats/web build",
+    "build": "pnpm --filter @drivebeats/web build",
     "start": "pnpm --filter @drivebeats/web start",
-    "lint": "biome check && pnpm -r --if-present typecheck",
+    "lint": "biome check && pnpm --filter @drivebeats/web typecheck",
     "format": "biome format --write",
-    "test": "pnpm --filter @drivebeats/core typecheck && pnpm -r --if-present test"
+    "test": "pnpm --filter @drivebeats/web test"
   },
   "packageManager": "pnpm@12.7.0",
   "devDependencies": {

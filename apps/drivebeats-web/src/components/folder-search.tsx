@@ -1,8 +1,9 @@
 "use client";
 
-import { SearchInput, SearchScopeSelect } from "@drivebeats/client/views";
 import { ChevronDown, Info, Search, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef } from "react";
+import { SearchInput } from "@/components/search-input";
+import { SearchScopeSelect } from "@/components/search-scope-select";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import {

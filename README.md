@@ -17,6 +17,16 @@ audio files.
 - Mobile-friendly, responsive design
 - Limited Drive access via `drive.file` — the app only sees items you select
 
+## Control with ChatGPT
+
+Open DriveBeats in ChatGPT's built-in browser and sign in normally. Import
+your music through the website, then use Site tools to control the same
+Library and player in that browser session. WebMCP registers tools directly
+on the website; availability depends on the host's Site tools support.
+
+See [WebMCP browser control](docs/research/webmcp-browser-control.md) for the
+verified host requirements and remaining real-browser acceptance checks.
+
 ## Tech Stack
 
 - [Next.js](https://nextjs.org) (App Router)
@@ -73,12 +83,11 @@ pnpm build
 ### Workspace Layout
 
 - `apps/drivebeats-web`: Next.js app, routes, public assets, and app configuration
-- `apps/drivebeats-mcp-app`: React MCP App, built as browser HTML for the web
-  app's `/mcp` resource, with account linking, imported Library browsing and playback
 - `packages/drivebeats-core`: source-only portable types and constants, exported
   through `@drivebeats/core/types`
+- `packages/drivebeats-client`: shared browser views and music behavior
 - `db/migrations`: existing SQL migration history, kept at the repository root
-- `docs`: operational guides, research, and MCP task briefs
+- `docs`: operational guides
 
 Install dependencies once from the repository root; all packages share
 `pnpm-lock.yaml`. Local Vercel credentials (`mise.local.toml`) and project
@@ -92,18 +101,6 @@ pnpm build
 pnpm start
 ```
 
-The web build first compiles the MCP App and copies it to the ignored
-`apps/drivebeats-web/.mcp-ui/index.html`, which Next includes in the `/mcp`
-server artifact. The only media loaded is music deliberately selected from Google Drive.
-`pnpm dev` prepares the same bundle; rerun it after editing the MCP App.
-The anonymous shell offers account connection. Connected users import folders or
-tracks through Google Picker, browse and search an account-scoped local Library,
-play music, and save synced Playlists and favorites. ChatGPT actions target one
-active player. Optional DJ Mode requires host sampling support.
-See [music functionality](docs/mcp/music-functionality.md) for the storage,
-command and playback contracts, and [production activation](docs/mcp/production-release.md)
-for the required migration, configuration and live acceptance checks.
-
 ## Deployment
 
 Deploy to [Vercel](https://vercel.com) with the same environment variables
@@ -115,9 +112,7 @@ robots, but OAuth still requires it to be set correctly.
 
 The monorepo's web application root is `apps/drivebeats-web`; its Next.js
 output is `.next` within that directory. Confirm the project's build settings
-and access to workspace files outside the app root before publishing the
-migration. Task 1's [execution notes](docs/mcp/tasks/01-monorepo.md#execution-notes)
-record the inspected settings and any pending hosting changes.
+and access to workspace files outside the app root before publishing.
 
 The canonical host is `https://www.drivebeats.app`; configure the apex
 `drivebeats.app` to redirect to `www` in the Vercel domain settings, and add

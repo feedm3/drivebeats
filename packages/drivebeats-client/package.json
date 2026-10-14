@@ -5,16 +5,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./catalog": "./src/catalog.ts",
-    "./player": "./src/player.ts",
     "./views": "./src/views.tsx",
-    "./styles.css": "./src/styles.css",
     "./shuffle": "./src/shuffle.ts",
     "./file-search": "./src/file-search.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@drivebeats/core": "workspace:*",
@@ -22,7 +18,6 @@
   },
   "devDependencies": {
     "@types/react": "^19",
-    "typescript": "^7.0.2",
-    "vitest": "^5.0.3"
+    "typescript": "^7.0.2"
   }
 }

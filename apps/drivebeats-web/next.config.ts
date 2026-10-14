@@ -1,6 +1,5 @@
 import { resolve } from "node:path";
 import type { NextConfig } from "next";
-import { isMcpClientCallback } from "./src/lib/mcp/client-callbacks";
 
 const isProduction = process.env.NODE_ENV === "production";
 const scriptSources = [
@@ -31,27 +30,8 @@ const contentSecurityPolicy = [
 
 const workspaceRoot = resolve(__dirname, "../..");
 
-function consentCallbackOrigins() {
-  try {
-    const callbacks = (process.env.MCP_CLIENT_REDIRECT_URIS ?? "")
-      .split(",")
-      .map((value) => new URL(value.trim()));
-    if (callbacks.some((url) => !isMcpClientCallback(url))) return [];
-    return [...new Set(callbacks.map((url) => url.origin))];
-  } catch {
-    return [];
-  }
-}
-
 const nextConfig: NextConfig = {
-  transpilePackages: [
-    "@drivebeats/core",
-    "@drivebeats/client",
-    "@drivebeats/mcp-app",
-  ],
-  outputFileTracingIncludes: {
-    "/mcp": ["./.mcp-ui/index.html"],
-  },
+  transpilePackages: ["@drivebeats/core", "@drivebeats/client"],
   outputFileTracingRoot: workspaceRoot,
   turbopack: {
     root: workspaceRoot,
@@ -81,27 +61,6 @@ const nextConfig: NextConfig = {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=(), payment=()",
           },
-        ],
-      },
-      {
-        source: "/mcp/connect",
-        headers: [
-          {
-            key: "Content-Security-Policy",
-            // Chromium checks the external 303 callback after this page's form
-            // POST. Only the consent page may submit to configured callbacks.
-            value: contentSecurityPolicy.replace(
-              "form-action 'self'",
-              ["form-action 'self'", ...consentCallbackOrigins()].join(" "),
-            ),
-          },
-        ],
-      },
-      {
-        source: "/mcp/import/:capability",
-        headers: [
-          { key: "Cache-Control", value: "private, no-store" },
-          { key: "Referrer-Policy", value: "no-referrer" },
         ],
       },
     ];

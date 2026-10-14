@@ -10,7 +10,6 @@ coverage/
 # next.js and package build output
 .next/
 dist/
-.mcp-ui/
 out/
 
 # misc

@@ -35,17 +35,15 @@ function queuePlaylistMutation<T>(playlistId: string, task: () => Promise<T>) {
   const previous = playlistMutationQueues.get(playlistId) ?? Promise.resolve();
   const next = previous.catch(() => undefined).then(task);
   const settled = next.finally(() => {
-    if (playlistMutationQueues.get(playlistId) === settled) {
+    if (playlistMutationQueues.get(playlistId) === queued) {
       playlistMutationQueues.delete(playlistId);
     }
   });
-  playlistMutationQueues.set(
-    playlistId,
-    settled.then(
-      () => undefined,
-      () => undefined,
-    ),
+  const queued = settled.then(
+    () => undefined,
+    () => undefined,
   );
+  playlistMutationQueues.set(playlistId, queued);
   return settled;
 }
 

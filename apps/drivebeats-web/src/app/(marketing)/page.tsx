@@ -1,9 +1,11 @@
 import {
   ArrowRight,
   Check,
+  ChevronDown,
   Download,
   FolderOpen,
   Heart,
+  Info,
   ListMusic,
   Lock,
   Play,
@@ -86,7 +88,7 @@ const features = [
     icon: Lock,
     title: "Private by design",
     description:
-      "No full-Drive access. Your listening history, imported library, and offline downloads never leave your browser.",
+      "Read-only Drive access. Your imported library, listening history, and offline downloads are stored on this device.",
   },
 ];
 
@@ -125,6 +127,123 @@ const trustPoints = [
   "Under a minute setup",
   "Only the Drive files you choose",
 ];
+
+const aiSteps = [
+  {
+    title: "Open in ChatGPT",
+    description:
+      "Open drivebeats.app in the ChatGPT desktop app’s built-in browser and keep the page open.",
+  },
+  {
+    title: "Bring your music",
+    description:
+      "Sign in with Google and import the tracks or folders you want in your library.",
+  },
+  {
+    title: "Ask ChatGPT",
+    description:
+      "Try “Play my Favorites on shuffle,” or ask ChatGPT to build a playlist.",
+  },
+];
+
+function AiMusicSection() {
+  return (
+    <section
+      id="chatgpt"
+      className="scroll-mt-14 border-t border-border/50 py-20 md:py-28"
+    >
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-4">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-base font-medium text-primary dark:text-foreground">
+              Music with ChatGPT
+            </p>
+            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-base font-medium text-primary sm:text-sm dark:bg-muted dark:text-foreground">
+              New
+            </span>
+          </div>
+          <h2 className="max-w-[35ch] text-balance text-3xl font-semibold tracking-tight md:text-4xl">
+            From a request to your next track
+          </h2>
+          <p className="max-w-[48ch] text-pretty text-lg text-muted-foreground">
+            Use the ChatGPT desktop app’s built-in browser to find tracks, play
+            your Favorites, and build playlists in DriveBeats.
+          </p>
+        </div>
+        {/* biome-ignore lint/a11y/noRedundantRoles: restores list semantics stripped by Preflight */}
+        <ol role="list" className="grid gap-8 md:grid-cols-3 md:gap-12">
+          {aiSteps.map((step, index) => (
+            <li
+              key={step.title}
+              className="flex flex-col gap-4 border-t border-border/50 pt-6"
+            >
+              <p className="font-mono text-3xl tabular-nums text-primary dark:text-foreground">
+                0{index + 1}
+              </p>
+              <h3 className="text-balance text-xl font-semibold">
+                {step.title}
+              </h3>
+              <p className="max-w-[56ch] text-pretty text-base text-muted-foreground">
+                {step.description}
+              </p>
+            </li>
+          ))}
+        </ol>
+        <details className="group border-t border-border/50 pt-6">
+          <summary className="flex min-h-12 w-fit cursor-pointer list-none items-center gap-2 text-base font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+            <Info
+              className="size-6 shrink-0 stroke-current"
+              aria-hidden="true"
+            />
+            Browser support &amp; other options
+            <ChevronDown
+              className="size-6 shrink-0 stroke-current group-open:rotate-180"
+              aria-hidden="true"
+            />
+          </summary>
+          <div className="flex flex-col gap-4 pt-4">
+            <p className="max-w-[56ch] text-pretty text-base text-muted-foreground">
+              ChatGPT uses WebMCP site tools to work with your open DriveBeats
+              page. Check Site tools in the browser’s address bar to see the
+              available tools. Support depends on your app, model, and workspace
+              settings. If site tools are unavailable, use the player controls
+              as usual. Your browser may ask you to tap Play before audio
+              starts.
+            </p>
+            <p className="max-w-[56ch] text-pretty text-base text-muted-foreground">
+              Tool results are shared with the AI provider you use. They can
+              include track filenames and IDs, playlist information, and
+              playback status.
+            </p>
+            <p className="max-w-[56ch] text-pretty text-base text-muted-foreground">
+              Other AI assistants can use DriveBeats when both the assistant and
+              its browser support WebMCP. Chrome’s experimental setup is for
+              testing; enabling its flag alone does not connect an AI assistant.
+            </p>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              <a
+                href="https://learn.chatgpt.com/docs/webmcp"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-12 items-center text-base font-medium underline underline-offset-4 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >
+                About ChatGPT site tools
+              </a>
+              <a
+                href="https://developer.chrome.com/docs/ai/webmcp#local-webmcp"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-12 items-center text-base font-medium underline underline-offset-4 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >
+                Chrome testing guide
+              </a>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+  );
+}
 
 export default function LandingPage() {
   return (
@@ -249,6 +368,8 @@ export default function LandingPage() {
           </ol>
         </div>
       </section>
+
+      <AiMusicSection />
 
       {/* See it in action */}
       <section className="border-t border-border/50 py-20 md:py-28">

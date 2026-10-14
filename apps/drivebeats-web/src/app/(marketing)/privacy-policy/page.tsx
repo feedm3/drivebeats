@@ -14,7 +14,7 @@ export default function PrivacyPolicyPage() {
       <div className="mx-auto max-w-2xl space-y-6 text-sm text-muted-foreground">
         <h1 className="text-2xl font-bold text-foreground">Privacy Policy</h1>
         <p>
-          <strong className="text-foreground">Last updated:</strong> March 18,
+          <strong className="text-foreground">Last updated:</strong> October 14,
           2026
         </p>
 
@@ -115,6 +115,25 @@ export default function PrivacyPolicyPage() {
           such as Google for authentication, Google Picker, and Drive access,
           Neon for synced playlist and favorite storage, and Vercel for hosting
           and privacy-friendly analytics.
+        </p>
+
+        <h2 className="text-lg font-semibold text-foreground">
+          AI assistants and site tools
+        </h2>
+        <p>
+          If you choose to use an AI assistant with DriveBeats, WebMCP site
+          tools let it search your library, read your saved collections, control
+          playback, and update playlists or favorites in the open page. Tool
+          results are sent to the AI provider you use, such as OpenAI when using
+          ChatGPT. These results can include track filenames and file IDs,
+          playlist names and contents, favorite status, sign-in status, and
+          playback information such as the current track and position.
+        </p>
+        <p>
+          The site tools do not return audio files, Google authentication
+          tokens, or your account name and email address. Your Google Drive
+          files remain read-only. You can use DriveBeats without an AI
+          assistant.
         </p>
 
         <h2 className="text-lg font-semibold text-foreground">Contact</h2>

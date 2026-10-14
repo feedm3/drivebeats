@@ -159,7 +159,20 @@ async function playableTracks(
   userId: string,
   signal?: AbortSignal,
   useCachedCatalog = false,
+  requestedTrackIds?: string[],
 ) {
+  if (requestedTrackIds) {
+    const saved = await collections(userId, signal);
+    const savedTracks = new Map(
+      saved.flatMap((collection) =>
+        collection.tracks.map(
+          (track) => [track.fileId, playlistTrackToDriveFile(track)] as const,
+        ),
+      ),
+    );
+    if (requestedTrackIds.every((trackId) => savedTracks.has(trackId)))
+      return savedTracks;
+  }
   const search = useLibrarySearchStore.getState();
   const cached =
     useCachedCatalog &&
@@ -446,7 +459,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
             ),
           };
         }
-        const available = await playableTracks(userId, signal);
+        const available = await playableTracks(userId, signal, false, trackIds);
         const queue = (trackIds ?? []).map((trackId) => {
           const track = available.get(trackId);
           if (!track)
@@ -491,7 +504,10 @@ export function createDriveBeatsTools(): WebMcpTool[] {
               "no_current_track",
               "Choose a track or collection with drivebeats_play first.",
             );
-          const available = await playableTracks(userId, signal, true);
+          const available = await playableTracks(userId, signal, true, [
+            before.currentTrack.id,
+            ...before.playlist.map((track) => track.id),
+          ]);
           const current = usePlayerStore.getState();
           if (
             current.currentTrack !== before.currentTrack ||

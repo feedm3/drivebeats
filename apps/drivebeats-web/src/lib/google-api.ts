@@ -62,6 +62,47 @@ function getGoogleAuthHeaders(accessToken: string) {
   };
 }
 
+let driveReadRelayUntil = 0;
+const DRIVE_READ_RELAY_MS = 5 * 60 * 1000;
+
+async function fetchGoogleDriveRead(
+  url: string,
+  accessToken: string,
+  signal?: AbortSignal,
+) {
+  if (Date.now() >= driveReadRelayUntil) {
+    try {
+      return await fetch(url, {
+        headers: getGoogleAuthHeaders(accessToken),
+        signal,
+      });
+    } catch (error) {
+      // Some embedded browsers cancel authenticated cross-origin reads after
+      // preflight. Keep normal browsers direct, and never retry cancellations
+      // or HTTP permission errors through another transport.
+      if (
+        typeof window === "undefined" ||
+        navigator.onLine === false ||
+        signal?.aborted ||
+        !(error instanceof TypeError)
+      )
+        throw error;
+    }
+  }
+  const target = new URL(url);
+  const params = new URLSearchParams(target.search);
+  const fileId = target.pathname.slice("/drive/v3/files".length + 1);
+  if (fileId) params.set("fileId", decodeURIComponent(fileId));
+  const response = await fetch(`/api/drive/read?${params}`, {
+    headers: getGoogleAuthHeaders(accessToken),
+    signal,
+    cache: "no-store",
+  });
+  if (response.ok && Date.now() >= driveReadRelayUntil)
+    driveReadRelayUntil = Date.now() + DRIVE_READ_RELAY_MS;
+  return response;
+}
+
 function getGoogleDriveFileUrl(
   fileId: string,
   params: URLSearchParams | Record<string, string>,
@@ -122,10 +163,11 @@ export async function listGoogleDriveFiles(
   const searchParams =
     params instanceof URLSearchParams ? params : new URLSearchParams(params);
 
-  return fetch(`${GOOGLE_DRIVE_FILES_URL}?${searchParams.toString()}`, {
-    headers: getGoogleAuthHeaders(accessToken),
+  return fetchGoogleDriveRead(
+    `${GOOGLE_DRIVE_FILES_URL}?${searchParams.toString()}`,
+    accessToken,
     signal,
-  });
+  );
 }
 
 export async function getGoogleDriveFileMetadata(
@@ -133,9 +175,10 @@ export async function getGoogleDriveFileMetadata(
   accessToken: string,
   params: URLSearchParams | Record<string, string>,
 ) {
-  return fetch(getGoogleDriveFileUrl(fileId, params), {
-    headers: getGoogleAuthHeaders(accessToken),
-  });
+  return fetchGoogleDriveRead(
+    getGoogleDriveFileUrl(fileId, params),
+    accessToken,
+  );
 }
 
 export async function downloadGoogleDriveFileMedia(
@@ -143,14 +186,12 @@ export async function downloadGoogleDriveFileMedia(
   accessToken: string,
   signal?: AbortSignal,
 ) {
-  return fetch(
+  return fetchGoogleDriveRead(
     getGoogleDriveFileUrl(fileId, {
       alt: "media",
       supportsAllDrives: "true",
     }),
-    {
-      headers: getGoogleAuthHeaders(accessToken),
-      signal,
-    },
+    accessToken,
+    signal,
   );
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createPlaylistTrack } from "@/lib/audio";
 import {
   bootstrapCloudLibrarySync,
   fetchCloudLibrarySync,
@@ -97,6 +98,43 @@ beforeEach(() => {
 });
 
 describe("DriveBeats WebMCP actions", () => {
+  it("plays verified saved track IDs even when the imported Library catalog cannot refresh", async () => {
+    const savedTrack = { ...track, id: "saved-favorite" };
+    vi.mocked(fetchCloudLibrarySync).mockResolvedValue({
+      playlists: [],
+      favorites: [createPlaylistTrack(savedTrack)],
+    });
+    useLibrarySearchStore.setState({
+      catalog: null,
+      ensureReady: vi.fn(async () => false),
+    });
+    const playerAudio = audio();
+    const playTrack = vi.fn(async (currentTrack, playlist) => {
+      Object.defineProperty(playerAudio, "paused", { value: false });
+      usePlayerStore.setState({ currentTrack, playlist, isPlaying: true });
+      return true;
+    });
+    usePlayerStore.setState({ audio: playerAudio, playTrack });
+
+    expect(
+      await run("drivebeats_list_collections", {
+        collectionId: "system:favorites",
+      }),
+    ).toMatchObject({ ok: true, tracks: [{ id: savedTrack.id }] });
+    expect(
+      await run("drivebeats_play", { trackIds: [savedTrack.id] }),
+    ).toMatchObject({
+      ok: true,
+      playback: { isPlaying: true, track: { id: savedTrack.id } },
+    });
+    expect(playTrack).toHaveBeenCalledOnce();
+    usePlayerStore.setState({ duration: 120 });
+    expect(
+      await run("drivebeats_control_playback", { action: "seek", seconds: 30 }),
+    ).toMatchObject({ ok: true, playback: { positionSeconds: 30 } });
+    expect(playerAudio.currentTime).toBe(30);
+  });
+
   it("advertises defaulted search and collection arguments as optional inputs", () => {
     for (const name of [
       "drivebeats_search_library",

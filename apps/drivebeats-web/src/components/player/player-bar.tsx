@@ -9,6 +9,7 @@ import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { hasNextTrack, usePlayerStore } from "@/stores/player-store";
 import { PlayControls } from "./play-controls";
+import { PlaybackQueuePopover } from "./playback-queue-popover";
 import { ProgressBar } from "./progress-bar";
 import { TrackInfo } from "./track-info";
 import { VolumeControl } from "./volume-control";
@@ -111,6 +112,7 @@ interface PlayerBarProps {
 
 export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const queuedCount = usePlayerStore((s) => s.queuedTracks.length);
   const playerBarRef = useRef<HTMLDivElement>(null);
   const recentTrackRef = useRef<string | null>(null);
   const restoreAttemptedRef = useRef(false);
@@ -132,7 +134,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
     trackMetadata?.subtitle ?? (currentTrack ? "Google Drive" : "");
 
   useEffect(() => {
-    if (!currentTrack) return;
+    if (!currentTrack && queuedCount === 0) return;
 
     const playerBar = playerBarRef.current;
     if (!playerBar) return;
@@ -153,7 +155,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       resizeObserver.disconnect();
       root.style.removeProperty("--player-bar-height");
     };
-  }, [currentTrack]);
+  }, [currentTrack, queuedCount]);
 
   // Audio element event listeners
   useEffect(() => {
@@ -170,7 +172,8 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
         state.playlist !== prev.playlist ||
         state.shuffle !== prev.shuffle ||
         state.shuffleCycle !== prev.shuffleCycle ||
-        state.repeat !== prev.repeat
+        state.repeat !== prev.repeat ||
+        state.queuedTracks !== prev.queuedTracks
       ) {
         syncMediaSessionNextAction();
       }
@@ -390,7 +393,11 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       // Don't capture when typing in inputs
       if (
         e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target instanceof Element &&
+          e.target.closest(
+            "button, a, [role='button'], [contenteditable='true'], [data-playback-queue]",
+          ))
       )
         return;
 
@@ -435,7 +442,20 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  if (!currentTrack) return null;
+  if (!currentTrack && queuedCount === 0) return null;
+
+  const trackLabel = currentTrack ? (
+    <TrackInfo onNavigateToTrack={onNavigateToTrack} />
+  ) : (
+    <div className="min-w-0 flex-1 px-1">
+      <p className="text-sm font-medium">
+        {queuedCount} {queuedCount === 1 ? "track" : "tracks"} queued
+      </p>
+      <p className="text-xs text-muted-foreground">
+        Press Play to start listening
+      </p>
+    </div>
+  );
 
   return (
     <div
@@ -451,44 +471,51 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
             the same place instead of pushing the whole bar 12px taller, and
             keeps the strip inside the bar so it cannot swallow taps on the
             list scrolling behind it. */}
-        <div className="pt-3 pointer-coarse:pt-0">
-          <ProgressBar />
+        <div className="flex items-center gap-3 pt-3 pointer-coarse:pt-0">
+          <div className="min-w-0 flex-1">
+            <ProgressBar />
+          </div>
+          <PlaybackQueuePopover />
         </div>
         <div className="flex items-center gap-1 py-3 sm:hidden">
-          <TrackInfo onNavigateToTrack={onNavigateToTrack} />
+          {trackLabel}
           {/* gap-3 on touch: the two 32px icon buttons need 44px between
               centres so their expanded hit areas meet but never overlap. */}
-          <div className="flex shrink-0 items-center gap-1 pointer-coarse:gap-3">
-            <FavoriteToggleButton
-              fileId={currentTrack.id}
-              fileName={currentTrack.name}
-              mimeType={currentTrack.mimeType}
-              parents={currentTrack.parents}
-              size="icon-sm"
-              className="text-muted-foreground/80"
-            />
-            <AddToPlaylistPopover file={currentTrack} />
-          </div>
-        </div>
-        <div className="relative flex items-center justify-center pb-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:py-3">
-          <div className="hidden sm:block">
-            <TrackInfo onNavigateToTrack={onNavigateToTrack} />
-          </div>
-          <PlayControls />
-          <div className="absolute right-0 sm:static standalone:hidden">
-            <div className="flex items-center justify-end gap-1 pointer-coarse:gap-3">
+          {currentTrack ? (
+            <div className="flex shrink-0 items-center gap-1 pointer-coarse:gap-3">
               <FavoriteToggleButton
                 fileId={currentTrack.id}
                 fileName={currentTrack.name}
                 mimeType={currentTrack.mimeType}
                 parents={currentTrack.parents}
                 size="icon-sm"
-                className="hidden text-muted-foreground/80 sm:inline-flex"
+                className="text-muted-foreground/80"
               />
-              <AddToPlaylistPopover
-                file={currentTrack}
-                className="hidden sm:inline-flex"
-              />
+              <AddToPlaylistPopover file={currentTrack} />
+            </div>
+          ) : null}
+        </div>
+        <div className="relative flex items-center justify-center pb-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:py-3">
+          <div className="hidden sm:block">{trackLabel}</div>
+          <PlayControls />
+          <div className="absolute right-0 sm:static standalone:hidden">
+            <div className="flex items-center justify-end gap-1 pointer-coarse:gap-3">
+              {currentTrack ? (
+                <FavoriteToggleButton
+                  fileId={currentTrack.id}
+                  fileName={currentTrack.name}
+                  mimeType={currentTrack.mimeType}
+                  parents={currentTrack.parents}
+                  size="icon-sm"
+                  className="hidden text-muted-foreground/80 sm:inline-flex"
+                />
+              ) : null}
+              {currentTrack ? (
+                <AddToPlaylistPopover
+                  file={currentTrack}
+                  className="hidden sm:inline-flex"
+                />
+              ) : null}
               <VolumeControl />
             </div>
           </div>

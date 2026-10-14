@@ -11,8 +11,10 @@ import {
   X,
 } from "lucide-react";
 import { NowPlayingBars } from "@/components/now-playing-bars";
+import { QueueTrackActions } from "@/components/queue-track-actions";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { playlistTrackToDriveFile } from "@/lib/audio";
 import { resolveTrackMetadata } from "@/lib/track-metadata";
 import { cn } from "@/lib/utils";
 import { useId3MetadataStore } from "@/stores/id3-metadata-store";
@@ -215,6 +217,7 @@ export function PlaylistTrackItem({
           {subtitle}
         </span>
       )}
+      <QueueTrackActions track={playlistTrackToDriveFile(track)} />
       {/* On coarse pointers the 24px remove button carries a 44px `touch-target`
           overlay. Without a slot wide enough to contain it, that overlay hangs
           10px over the neighbouring play target and — painting later — would

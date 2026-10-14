@@ -23,4 +23,22 @@ describe("usePlayerBarPadding", () => {
 
     expect(result.current).toContain("var(--player-bar-height");
   });
+
+  it("keeps the last rows reachable while an idle queue opens the player", () => {
+    const { result } = renderHook(() => usePlayerBarPadding());
+
+    act(() => {
+      usePlayerStore
+        .getState()
+        .queueTrack(
+          { id: "queued", name: "Queued.mp3", mimeType: "audio/mpeg" },
+          "end",
+        );
+    });
+
+    expect(result.current).toContain("var(--player-bar-height");
+
+    act(() => usePlayerStore.getState().clearQueuedTracks());
+    expect(result.current).toBe("pb-6");
+  });
 });

@@ -111,6 +111,133 @@ beforeEach(() => {
 });
 
 describe("DriveBeats WebMCP actions", () => {
+  it("queues a batch in requested order without interrupting playback or saving a Playlist", async () => {
+    const second = { ...track, id: "second", name: "Second.mp3" };
+    const catalog = useLibrarySearchStore.getState().catalog;
+    if (!catalog) throw new Error("Missing test catalog");
+    useLibrarySearchStore.setState({
+      catalog: { ...catalog, tracks: [track, second] },
+    });
+    const playTrack = vi.fn();
+    usePlayerStore.setState({
+      currentTrack: track,
+      playlist: [track],
+      currentIndex: 0,
+      currentTime: 42,
+      shuffle: true,
+      playTrack,
+    });
+    usePlayerStore.getState().queueTrack(second, "end");
+
+    expect(
+      await run("drivebeats_queue_tracks", {
+        trackIds: [track.id, second.id],
+        position: "next",
+      }),
+    ).toMatchObject({
+      ok: true,
+      queuedTracks: [{ id: track.id }, { id: second.id }, { id: second.id }],
+    });
+    expect(usePlayerStore.getState()).toMatchObject({
+      currentTrack: track,
+      playlist: [track],
+      currentIndex: 0,
+      currentTime: 42,
+      shuffle: true,
+    });
+    expect(playTrack).not.toHaveBeenCalled();
+    expect(usePlaylistStore.getState().playlists).toEqual([]);
+  });
+
+  it("validates every requested queue track before changing the queue", async () => {
+    expect(
+      await run("drivebeats_queue_tracks", {
+        trackIds: [track.id, "outside-library"],
+        position: "end",
+      }),
+    ).toMatchObject({ ok: false, error: { code: "track_not_found" } });
+    expect(usePlayerStore.getState().queuedTracks).toEqual([]);
+  });
+
+  it("reports a successful skip when the only queued track failed after becoming current", async () => {
+    usePlayerStore.getState().queueTrack(track, "end");
+    const entry = usePlayerStore.getState().queuedTracks[0];
+    usePlayerStore.setState({
+      currentTrack: track,
+      queuedPlaybackContext: {
+        entryId: entry.entryId,
+        baseFolderStack: [],
+      },
+      isPlaying: false,
+      lastPlaybackFailure: {
+        code: "unsupported_audio",
+        message: "This track cannot be played.",
+      },
+    });
+
+    expect(
+      await run("drivebeats_control_playback", { action: "next" }),
+    ).toMatchObject({
+      ok: true,
+      playback: { isPlaying: false, queuedTrackCount: 0 },
+    });
+    expect(usePlayerStore.getState().queuedTracks).toEqual([]);
+  });
+
+  it("can start a prepared queue through next without a current track", async () => {
+    await run("drivebeats_queue_tracks", {
+      trackIds: [track.id],
+      position: "end",
+    });
+    const playerAudio = audio();
+    Object.defineProperty(playerAudio, "paused", { value: false });
+    const next = vi.fn(async () => {
+      usePlayerStore.setState({
+        currentTrack: track,
+        audio: playerAudio,
+        isPlaying: true,
+      });
+    });
+    usePlayerStore.setState({ audio: null, next });
+
+    expect(
+      await run("drivebeats_control_playback", { action: "next" }),
+    ).toMatchObject({ ok: true, playback: { isPlaying: true } });
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("validates restored explicit queue entries before advancing playback", async () => {
+    const next = vi.fn();
+    usePlayerStore.setState({
+      currentTrack: track,
+      playlist: [track],
+      next,
+    });
+    usePlayerStore
+      .getState()
+      .queueTrack({ ...track, id: "outside-library" }, "end");
+    expect(
+      await run("drivebeats_control_playback", { action: "next" }),
+    ).toMatchObject({ ok: false, error: { code: "track_not_found" } });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("does not queue old-account tracks when the account changes during validation", async () => {
+    useLibrarySearchStore.setState({
+      ensureReady: vi.fn(async () => {
+        signIn("account-b");
+        return true;
+      }),
+    });
+    expect(
+      await run("drivebeats_queue_tracks", {
+        trackIds: [track.id],
+        position: "end",
+      }),
+    ).toMatchObject({ ok: false, error: { code: "account_changed" } });
+    expect(usePlayerStore.getState().queuedTracks).toEqual([]);
+  });
+
   it("plays verified saved track IDs even when the imported Library catalog cannot refresh", async () => {
     const savedTrack = { ...track, id: "saved-favorite" };
     vi.mocked(fetchCloudLibrarySync).mockResolvedValue({

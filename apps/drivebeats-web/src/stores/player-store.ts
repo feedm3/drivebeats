@@ -15,6 +15,7 @@ import {
   PlaybackError,
   type PlaybackFailure,
 } from "@/lib/playback-failure";
+import type { PlaybackQueueEntry } from "@/lib/playback-queue";
 import {
   consumeShuffleTrack,
   createShuffleCycle,
@@ -38,7 +39,9 @@ export function hasNextTrack(state: {
   shuffle: boolean;
   repeat: RepeatMode;
   shuffleCycle?: ShuffleCycle | null;
+  queuedTracks?: { length: number };
 }) {
+  if (state.queuedTracks?.length) return true;
   if (state.playlist.length === 0) return false;
   if (state.shuffle) {
     return (
@@ -59,6 +62,7 @@ const FRESH_SOURCE_PLAY_TIMEOUT_MS = 10_000;
 let fetchAbortController: AbortController | null = null;
 let prefetchAbortController: AbortController | null = null;
 let playTrackRequestId = 0;
+let pendingQueuedEntryId: string | null = null;
 let playOperationId = 0;
 let lastKnownPlaybackAccountId = useAuthStore.getState().user?.id ?? null;
 let navigationOperation: object | null = null;
@@ -327,6 +331,12 @@ interface PlayerState {
   playingPlaylistId: string | null;
   playlist: DriveFile[];
   currentIndex: number;
+  queuedTracks: PlaybackQueueEntry[];
+  queuedAccountId: string | null;
+  queuedPlaybackContext: {
+    entryId: string;
+    baseFolderStack: FolderEntry[];
+  } | null;
   isPlaying: boolean;
   lastPlaybackFailure: PlaybackFailure | null;
   audioPermission: "unknown" | "blocked" | "allowed";
@@ -367,7 +377,15 @@ interface PlayerState {
     playlistId?: string,
     playlistFolderStacks?: FolderEntry[][],
     navigation?: "next" | "previous",
+    queuedEntry?: PlaybackQueueEntry,
   ) => Promise<boolean>;
+  queueTrack: (
+    track: DriveFile,
+    position: "next" | "end",
+    folderStack?: FolderEntry[],
+  ) => void;
+  removeQueuedTrack: (entryId: string) => void;
+  clearQueuedTracks: () => void;
   fetchAndPlay: (fileId: string) => Promise<boolean>;
   togglePlay: () => void;
   next: () => Promise<void>;
@@ -382,7 +400,7 @@ interface PlayerState {
   setIsPlaying: (p: boolean) => void;
   restoreTrack: () => Promise<void>;
   resetPlayback: () => void;
-  cancelPlaybackRequest: () => void;
+  cancelPlaybackRequest: (preserveCurrentPlayback?: boolean) => void;
   clearCache: () => void;
   prefetchNextTrack: () => void;
 }
@@ -397,6 +415,9 @@ export const usePlayerStore = create<PlayerState>()(
       playingPlaylistId: null,
       playlist: [],
       currentIndex: -1,
+      queuedTracks: [],
+      queuedAccountId: null,
+      queuedPlaybackContext: null,
       isPlaying: false,
       lastPlaybackFailure: null,
       audioPermission: "unknown",
@@ -428,6 +449,10 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       play: async () => {
+        if (!get().currentTrack && get().queuedTracks.length) {
+          await get().next();
+          return get().isPlaying;
+        }
         const { audio, currentTrack, pendingTrackId } = get();
         if (
           audio?.src &&
@@ -528,6 +553,15 @@ export const usePlayerStore = create<PlayerState>()(
             audioPermission: "allowed",
             lastPlaybackFailure: null,
           });
+        if (observed.queuedPlaybackContext) {
+          const entryId = observed.queuedPlaybackContext.entryId;
+          set((state) => ({
+            queuedTracks: state.queuedTracks.filter(
+              (entry) => entry.entryId !== entryId,
+            ),
+          }));
+          return;
+        }
         const {
           shuffle,
           currentTrack,
@@ -790,11 +824,13 @@ export const usePlayerStore = create<PlayerState>()(
         playlistId,
         playlistFolderStacks,
         navigation,
+        queuedEntry,
       ) => {
         get().initAudio();
         const index = playlist.findIndex((f) => f.id === track.id);
-        if (index < 0) return false;
+        if (index < 0 && !queuedEntry) return false;
         const requestId = ++playTrackRequestId;
+        pendingQueuedEntryId = queuedEntry?.entryId ?? null;
         const operationId = ++playOperationId;
         const state = get();
         const sourceKey = collectionKey(
@@ -827,6 +863,24 @@ export const usePlayerStore = create<PlayerState>()(
             if (requestId !== playTrackRequestId) return;
             // Shuffle may have been toggled while the media was downloading.
             const latest = get();
+            if (queuedEntry) {
+              applied = true;
+              set({
+                currentTrack: track,
+                playingFolderStack: queuedEntry.folderStack,
+                queuedPlaybackContext: {
+                  entryId: queuedEntry.entryId,
+                  baseFolderStack:
+                    latest.queuedPlaybackContext?.baseFolderStack ??
+                    latest.playingFolderStack,
+                },
+                isPlaying: true,
+                currentTime: 0,
+                duration: 0,
+                suppressGlide: true,
+              });
+              return;
+            }
             const cycle = latest.shuffle
               ? playlistChanged
                 ? createShuffleCycle(playlist.map((file) => file.id))
@@ -839,6 +893,8 @@ export const usePlayerStore = create<PlayerState>()(
             applied = true;
             set({
               currentTrack: track,
+              queuedPlaybackContext: null,
+              ...(navigation ? {} : { queuedTracks: [] }),
               playlist,
               currentIndex: index,
               playingFolderStack: playlistId
@@ -856,7 +912,9 @@ export const usePlayerStore = create<PlayerState>()(
               shufflePendingPreviousId:
                 latest.shuffle && navigation === "next" && !playlistChanged
                   ? (latest.shufflePendingPreviousId ??
-                    latest.currentTrack?.id ??
+                    (latest.queuedPlaybackContext
+                      ? latest.playlist[latest.currentIndex]?.id
+                      : latest.currentTrack?.id) ??
                     null)
                   : null,
               nextShuffleFileId: null,
@@ -898,11 +956,17 @@ export const usePlayerStore = create<PlayerState>()(
             });
           }
           return false;
+        } finally {
+          if (requestId === playTrackRequestId) pendingQueuedEntryId = null;
         }
       },
 
       togglePlay: () => {
         const { audio } = get();
+        if (!get().currentTrack && get().queuedTracks.length) {
+          void get().next();
+          return;
+        }
         if (!audio) return;
         if (audio.paused || audio.ended) {
           void get().play();
@@ -914,6 +978,26 @@ export const usePlayerStore = create<PlayerState>()(
       next: () =>
         navigate(async () => {
           if (get().pendingTrackId !== null) return;
+          const activeEntryId = get().queuedPlaybackContext?.entryId;
+          if (activeEntryId)
+            set((state) => ({
+              queuedTracks: state.queuedTracks.filter(
+                (entry) => entry.entryId !== activeEntryId,
+              ),
+            }));
+          const queuedEntry = get().queuedTracks[0];
+          if (queuedEntry) {
+            await get().playTrack(
+              queuedEntry.track,
+              get().playlist,
+              queuedEntry.folderStack,
+              undefined,
+              undefined,
+              "next",
+              queuedEntry,
+            );
+            return;
+          }
           const {
             playlist,
             currentIndex,
@@ -967,12 +1051,60 @@ export const usePlayerStore = create<PlayerState>()(
           await get().playTrack(
             playlist[nextIndex],
             playlist,
-            get().playingFolderStack,
+            get().queuedPlaybackContext?.baseFolderStack ??
+              get().playingFolderStack,
             get().playingPlaylistId ?? undefined,
             get().playlistFolderStacks ?? undefined,
             "next",
           );
         }),
+
+      queueTrack: (track, position, folderStack) => {
+        const entry: PlaybackQueueEntry = {
+          entryId: crypto.randomUUID(),
+          track,
+          folderStack: folderStack ?? deriveFolderStack(track),
+        };
+        set((state) => ({
+          queuedAccountId: useAuthStore.getState().user?.id ?? null,
+          ...(!state.currentTrack
+            ? { playbackAccountId: useAuthStore.getState().user?.id ?? null }
+            : {}),
+          queuedTracks:
+            position === "next"
+              ? [entry, ...state.queuedTracks]
+              : [...state.queuedTracks, entry],
+        }));
+        queueMicrotask(() => get().prefetchNextTrack());
+      },
+
+      removeQueuedTrack: (entryId) => {
+        if (get().pendingTrackId !== null && pendingQueuedEntryId === entryId)
+          get().cancelPlaybackRequest(
+            get().queuedPlaybackContext?.entryId !== pendingQueuedEntryId,
+          );
+        set((state) => ({
+          queuedTracks: state.queuedTracks.filter(
+            (item) => item.entryId !== entryId,
+          ),
+        }));
+        queueMicrotask(() => get().prefetchNextTrack());
+      },
+
+      clearQueuedTracks: () => {
+        if (
+          get().pendingTrackId !== null &&
+          pendingQueuedEntryId &&
+          get().queuedTracks.some(
+            (entry) => entry.entryId === pendingQueuedEntryId,
+          )
+        )
+          get().cancelPlaybackRequest(
+            get().queuedPlaybackContext?.entryId !== pendingQueuedEntryId,
+          );
+        set({ queuedTracks: [] });
+        queueMicrotask(() => get().prefetchNextTrack());
+      },
 
       previous: () =>
         navigate(async () => {
@@ -987,6 +1119,18 @@ export const usePlayerStore = create<PlayerState>()(
 
           if (audio && audio.currentTime > 3) {
             get().seek(0);
+            return;
+          }
+
+          if (get().queuedPlaybackContext && playlist[currentIndex]) {
+            await get().playTrack(
+              playlist[currentIndex],
+              playlist,
+              get().queuedPlaybackContext?.baseFolderStack ?? [],
+              get().playingPlaylistId ?? undefined,
+              get().playlistFolderStacks ?? undefined,
+              "previous",
+            );
             return;
           }
 
@@ -1020,6 +1164,7 @@ export const usePlayerStore = create<PlayerState>()(
             get().playingFolderStack,
             get().playingPlaylistId ?? undefined,
             get().playlistFolderStacks ?? undefined,
+            "previous",
           );
         }),
 
@@ -1059,7 +1204,9 @@ export const usePlayerStore = create<PlayerState>()(
           shuffleCycle: !s.shuffle
             ? createShuffleCycle(
                 s.playlist.map((file) => file.id),
-                s.currentTrack?.id,
+                s.queuedPlaybackContext
+                  ? s.playlist[s.currentIndex]?.id
+                  : s.currentTrack?.id,
               )
             : null,
           nextShuffleFileId: null,
@@ -1087,13 +1234,14 @@ export const usePlayerStore = create<PlayerState>()(
         await get().loadTrack(currentTrack.id, false);
       },
 
-      cancelPlaybackRequest: () => {
+      cancelPlaybackRequest: (preserveCurrentPlayback = false) => {
         playTrackRequestId++;
+        pendingQueuedEntryId = null;
         playOperationId++;
         navigationOperation = null;
         fetchAbortController?.abort();
         fetchAbortController = null;
-        get().pause();
+        if (!preserveCurrentPlayback) get().pause();
         set({
           pendingTrackId: null,
           isLoading: false,
@@ -1103,6 +1251,7 @@ export const usePlayerStore = create<PlayerState>()(
 
       resetPlayback: () => {
         playTrackRequestId++;
+        pendingQueuedEntryId = null;
         playOperationId++;
         navigationOperation = null;
         fetchAbortController?.abort();
@@ -1128,6 +1277,9 @@ export const usePlayerStore = create<PlayerState>()(
           playingPlaylistId: null,
           playlist: [],
           currentIndex: -1,
+          queuedTracks: [],
+          queuedAccountId: null,
+          queuedPlaybackContext: null,
           isPlaying: false,
           duration: 0,
           currentTime: 0,
@@ -1151,11 +1303,14 @@ export const usePlayerStore = create<PlayerState>()(
           blobCache,
           prefetchingFileId,
         } = get();
-        if (playlist.length <= 1) return;
+        const queuedEntry = get().queuedTracks[0];
+        if (!queuedEntry && playlist.length <= 1) return;
 
         // Determine which track to prefetch
         let nextFileId: string;
-        if (shuffle) {
+        if (queuedEntry) {
+          nextFileId = queuedEntry.track.id;
+        } else if (shuffle) {
           const cycle = reconcileShuffleCycle(
             get().shuffleCycle,
             playlist.map((file) => file.id),
@@ -1295,6 +1450,9 @@ export const usePlayerStore = create<PlayerState>()(
         playingPlaylistId: state.playingPlaylistId,
         playlist: state.playlist,
         currentIndex: state.currentIndex,
+        queuedTracks: state.queuedTracks,
+        queuedAccountId: state.queuedAccountId,
+        queuedPlaybackContext: state.queuedPlaybackContext,
         volume: state.volume,
         isMuted: state.isMuted,
         shuffle: state.shuffle,
@@ -1320,12 +1478,22 @@ useAuthStore.subscribe((state, previous) => {
     usePlayerStore.getState().clearCache();
     return;
   }
+  const queuedAccountId = usePlayerStore.getState().queuedAccountId;
+  if (
+    (previousUserId && !userId) ||
+    (userId && queuedAccountId && userId !== queuedAccountId)
+  ) {
+    usePlayerStore.getState().resetPlayback();
+    usePlayerStore.getState().clearCache();
+    return;
+  }
   if (userId && previousUserId) {
     usePlayerStore.getState().resetPlayback();
     usePlayerStore.getState().clearCache();
     return;
   }
   playTrackRequestId++;
+  pendingQueuedEntryId = null;
   playOperationId++;
   navigationOperation = null;
   fetchAbortController?.abort();

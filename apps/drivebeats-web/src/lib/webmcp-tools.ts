@@ -180,6 +180,7 @@ function playback() {
     shuffle: state.shuffle,
     repeat: state.repeat,
     queueLength: state.playlist.length,
+    queuedTrackCount: state.queuedTracks.length,
   };
 }
 async function library(userId: string, signal?: AbortSignal) {
@@ -636,6 +637,47 @@ export function createDriveBeatsTools(): WebMcpTool[] {
       },
     ),
     tool(
+      "drivebeats_queue_tracks",
+      "Queue track IDs from Library Search or saved collections without starting or interrupting playback. Position next plays them before the remaining collection; end appends them after existing manually queued tracks. Tracks retain the supplied order, even during shuffle. This changes only the current browser's Playback Queue and does not save a Playlist. If no track is playing, use the page's Play button or next control to start the queue.",
+      z.object({
+        trackIds: z.array(id).min(1).max(1000),
+        position: z.enum(["next", "end"]),
+      }),
+      false,
+      async ({ trackIds, position }, userId, signal) => {
+        const available = await playableTracks(userId, signal, false, trackIds);
+        const tracks = trackIds.map((trackId) => {
+          const track = available.get(trackId);
+          if (!track)
+            throw new ToolError(
+              "track_not_found",
+              "A track ID is outside this Library and its saved collections. Search again.",
+            );
+          return track;
+        });
+        assertAccount(userId, signal);
+        const additions = position === "next" ? [...tracks].reverse() : tracks;
+        for (const track of additions) {
+          usePlayerStore
+            .getState()
+            .queueTrack(
+              track,
+              position,
+              "folderStack" in track
+                ? (track as { folderStack: typeof INITIAL_STACK }).folderStack
+                : undefined,
+            );
+        }
+        return {
+          playback: playback(),
+          queuedTracks: usePlayerStore.getState().queuedTracks.map((entry) => ({
+            entryId: entry.entryId,
+            ...publicTrack(entry.track),
+          })),
+        };
+      },
+    ),
+    tool(
       "drivebeats_control_playback",
       "Control the current page's player: pause, resume, next, previous, seek in seconds, volume from 0 to 1, shuffle enabled, or repeat off/one/all. Resume preserves the existing queue. If audio permission blocks playback, ask the user to tap Play in DriveBeats and check status. Busy results require waiting for the current action.",
       z.discriminatedUnion("action", [
@@ -662,27 +704,36 @@ export function createDriveBeatsTools(): WebMcpTool[] {
         );
         if (requiresTrack) {
           const before = usePlayerStore.getState();
-          if (!before.currentTrack || !before.audio)
+          const hasPreparedQueue =
+            before.queuedTracks.length > 0 &&
+            ["resume", "next"].includes(input.action);
+          if (
+            (!before.currentTrack && !hasPreparedQueue) ||
+            (before.currentTrack && !before.audio)
+          )
             throw new ToolError(
               "no_current_track",
-              "Choose a track or collection with drivebeats_play first.",
+              "Choose a track or collection with drivebeats_play, or queue tracks first.",
             );
           const available = await playableTracks(userId, signal, true, [
-            before.currentTrack.id,
+            ...(before.currentTrack ? [before.currentTrack.id] : []),
             ...before.playlist.map((track) => track.id),
+            ...before.queuedTracks.map((entry) => entry.track.id),
           ]);
           const current = usePlayerStore.getState();
           if (
             current.currentTrack !== before.currentTrack ||
-            current.playlist !== before.playlist
+            current.playlist !== before.playlist ||
+            current.queuedTracks !== before.queuedTracks
           )
             throw new ToolError(
               "player_changed",
               "The player changed during the read. Try again.",
             );
           if (
-            !available.has(before.currentTrack.id) ||
-            before.playlist.some((track) => !available.has(track.id))
+            (before.currentTrack && !available.has(before.currentTrack.id)) ||
+            before.playlist.some((track) => !available.has(track.id)) ||
+            before.queuedTracks.some((entry) => !available.has(entry.track.id))
           )
             throw new ToolError(
               "track_not_found",
@@ -694,7 +745,14 @@ export function createDriveBeatsTools(): WebMcpTool[] {
           input.action === "resume" ||
           (input.action === "previous" &&
             (player.audio?.currentTime ?? 0) <= 3) ||
-          (input.action === "next" && hasNextTrack(player));
+          (input.action === "next" &&
+            hasNextTrack({
+              ...player,
+              queuedTracks: player.queuedTracks.filter(
+                (entry) =>
+                  entry.entryId !== player.queuedPlaybackContext?.entryId,
+              ),
+            }));
         if (["resume", "next", "previous"].includes(input.action)) {
           return guardedPlayback(userId, signal, async () => {
             if (input.action === "resume") {

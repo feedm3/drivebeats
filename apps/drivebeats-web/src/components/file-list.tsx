@@ -10,6 +10,7 @@ import {
 } from "@/components/file-list-skeleton";
 import { HighlightedName } from "@/components/highlighted-name";
 import { NowPlayingBars } from "@/components/now-playing-bars";
+import { QueueTrackActions } from "@/components/queue-track-actions";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -289,6 +290,19 @@ const FileListRow = memo(function FileListRow({
       <TableCell className={rowActionCellClassName}>
         <AddToPlaylistPopover file={file} className={rowActionClassName} />
       </TableCell>
+      <TableCell className="w-11 px-0">
+        {!folder ? (
+          <QueueTrackActions
+            track={file}
+            folderStack={
+              playlistFolderStacks?.[
+                playableTracks.findIndex((track) => track.id === file.id)
+              ] ?? folderStack
+            }
+            className={rowActionClassName}
+          />
+        ) : null}
+      </TableCell>
       <TableCell className="hidden text-right text-muted-foreground tabular-nums sm:table-cell">
         {folder ? "—" : formatSize(file.size)}
       </TableCell>
@@ -500,6 +514,7 @@ export function FileList({
                 </TableHead>
                 <TableHead className={cn("h-11", rowActionCellClassName)} />
                 <TableHead className={cn("h-11", rowActionCellClassName)} />
+                <TableHead className="h-11 w-11 px-0" />
                 <TableHead className="hidden h-11 w-[96px] px-4 text-right sm:table-cell">
                   <span className="text-xs font-semibold tracking-[0.16em] uppercase">
                     Size

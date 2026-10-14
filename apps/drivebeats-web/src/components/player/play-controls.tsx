@@ -21,6 +21,7 @@ export function PlayControls() {
   const hasCurrentTrack = usePlayerStore((s) => s.currentTrack !== null);
   const playlist = usePlayerStore((s) => s.playlist);
   const currentIndex = usePlayerStore((s) => s.currentIndex);
+  const queuedTracks = usePlayerStore((s) => s.queuedTracks);
 
   const hasNext = hasNextTrack({
     currentIndex,
@@ -28,6 +29,7 @@ export function PlayControls() {
     shuffle,
     shuffleCycle,
     repeat,
+    queuedTracks,
   });
 
   return (
@@ -73,7 +75,9 @@ export function PlayControls() {
           className="size-10 rounded-full"
           aria-label={isLoading ? "Loading" : isPlaying ? "Pause" : "Play"}
           onClick={togglePlay}
-          disabled={!hasCurrentTrack || isLoading}
+          disabled={
+            (!hasCurrentTrack && queuedTracks.length === 0) || isLoading
+          }
         >
           {isLoading ? (
             <LoadingIcon />

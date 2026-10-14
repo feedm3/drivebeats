@@ -85,7 +85,7 @@ function QueueList({ upcoming }: { upcoming: UpcomingTrack[] }) {
   );
 }
 
-export function PlaybackQueuePopover() {
+function QueueContents() {
   const playlist = usePlayerStore((state) => state.playlist);
   const currentIndex = usePlayerStore((state) => state.currentIndex);
   const shuffle = usePlayerStore((state) => state.shuffle);
@@ -103,7 +103,6 @@ export function PlaybackQueuePopover() {
     (state) => state.queuedPlaybackContext,
   );
   const clearQueuedTracks = usePlayerStore((state) => state.clearQueuedTracks);
-  const [open, setOpen] = useState(false);
   const upcoming = useMemo(
     () =>
       getUpcomingTracks({
@@ -134,82 +133,77 @@ export function PlaybackQueuePopover() {
   const hasAdditions = upcoming.some((entry) => entry.entryId !== null);
 
   return (
+    <PopoverContent
+      side="top"
+      align="end"
+      sideOffset={8}
+      data-playback-queue
+      className="flex max-h-[min(65dvh,var(--available-height))] w-96 max-w-[calc(100vw-24px)] flex-col overflow-hidden p-0"
+    >
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2">
+        <PopoverPrimitive.Title className="text-sm font-semibold">
+          Up next
+        </PopoverPrimitive.Title>
+        <div className="flex items-center gap-1">
+          {hasAdditions ? (
+            <Button
+              variant="ghost"
+              className="min-h-11"
+              onClick={clearQueuedTracks}
+            >
+              Clear additions
+            </Button>
+          ) : null}
+          <PopoverPrimitive.Close
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-11"
+                aria-label="Close queue"
+              />
+            }
+          >
+            <X aria-hidden="true" className="size-4" />
+          </PopoverPrimitive.Close>
+        </div>
+      </div>
+      <div className="min-h-0 overflow-y-auto overscroll-contain px-4 pb-3">
+        {hasAdditions ? (
+          <p className="pt-3 text-xs text-muted-foreground">
+            Your additions play first. Clearing them keeps your current
+            collection.
+          </p>
+        ) : null}
+        {repeat === "one" ? (
+          <p className="pt-3 text-xs text-muted-foreground">
+            Repeat one is on. Use Next to advance.
+          </p>
+        ) : null}
+        <QueueList upcoming={upcoming} />
+      </div>
+    </PopoverContent>
+  );
+}
+
+export function PlaybackQueuePopover() {
+  const [open, setOpen] = useState(false);
+
+  return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         render={
           <Button
             variant={open ? "secondary" : "ghost"}
             size="icon"
-            className="relative size-11"
-            aria-label={`Queue, ${upcoming.length} upcoming ${upcoming.length === 1 ? "track" : "tracks"}`}
+            className="size-11"
+            aria-label="Queue"
           />
         }
       >
         <ListMusic aria-hidden="true" className="size-5" />
-        {upcoming.length > 0 ? (
-          <span
-            aria-hidden="true"
-            className="absolute right-0 top-0 rounded-full bg-primary px-1 text-[10px] tabular-nums text-primary-foreground"
-          >
-            {upcoming.length}
-          </span>
-        ) : null}
       </PopoverTrigger>
-      {open ? (
-        <PopoverContent
-          side="top"
-          align="end"
-          sideOffset={8}
-          data-playback-queue
-          className="flex max-h-[min(65dvh,var(--available-height))] w-96 max-w-[calc(100vw-24px)] flex-col overflow-hidden p-0"
-        >
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2">
-            <PopoverPrimitive.Title className="text-sm font-semibold">
-              Up next{" "}
-              <span className="ml-1 tabular-nums text-muted-foreground">
-                {upcoming.length}
-              </span>
-            </PopoverPrimitive.Title>
-            <div className="flex items-center gap-1">
-              {hasAdditions ? (
-                <Button
-                  variant="ghost"
-                  className="min-h-11"
-                  onClick={clearQueuedTracks}
-                >
-                  Clear additions
-                </Button>
-              ) : null}
-              <PopoverPrimitive.Close
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-11"
-                    aria-label="Close queue"
-                  />
-                }
-              >
-                <X aria-hidden="true" className="size-4" />
-              </PopoverPrimitive.Close>
-            </div>
-          </div>
-          <div className="min-h-0 overflow-y-auto overscroll-contain px-4 pb-3">
-            {hasAdditions ? (
-              <p className="pt-3 text-xs text-muted-foreground">
-                Your additions play first. Clearing them keeps your current
-                collection.
-              </p>
-            ) : null}
-            {repeat === "one" ? (
-              <p className="pt-3 text-xs text-muted-foreground">
-                Repeat one is on. Use Next to advance.
-              </p>
-            ) : null}
-            <QueueList upcoming={upcoming} />
-          </div>
-        </PopoverContent>
-      ) : null}
+      {open ? <QueueContents /> : null}
     </Popover>
   );
 }

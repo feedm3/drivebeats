@@ -112,7 +112,7 @@ interface PlayerBarProps {
 
 export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
-  const queuedCount = usePlayerStore((s) => s.queuedTracks.length);
+  const hasQueuedTracks = usePlayerStore((s) => s.queuedTracks.length > 0);
   const playerBarRef = useRef<HTMLDivElement>(null);
   const recentTrackRef = useRef<string | null>(null);
   const restoreAttemptedRef = useRef(false);
@@ -134,7 +134,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
     trackMetadata?.subtitle ?? (currentTrack ? "Google Drive" : "");
 
   useEffect(() => {
-    if (!currentTrack && queuedCount === 0) return;
+    if (!currentTrack && !hasQueuedTracks) return;
 
     const playerBar = playerBarRef.current;
     if (!playerBar) return;
@@ -155,7 +155,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       resizeObserver.disconnect();
       root.style.removeProperty("--player-bar-height");
     };
-  }, [currentTrack, queuedCount]);
+  }, [currentTrack, hasQueuedTracks]);
 
   // Audio element event listeners
   useEffect(() => {
@@ -442,15 +442,13 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  if (!currentTrack && queuedCount === 0) return null;
+  if (!currentTrack && !hasQueuedTracks) return null;
 
   const trackLabel = currentTrack ? (
     <TrackInfo onNavigateToTrack={onNavigateToTrack} />
   ) : (
     <div className="min-w-0 flex-1 px-1">
-      <p className="text-sm font-medium">
-        {queuedCount} {queuedCount === 1 ? "track" : "tracks"} queued
-      </p>
+      <p className="text-sm font-medium">Queue ready</p>
       <p className="text-xs text-muted-foreground">
         Press Play to start listening
       </p>

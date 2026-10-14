@@ -42,9 +42,7 @@ describe("Playback Queue popover", () => {
 
   it("removes one repeated addition, then clears remaining additions while keeping playback and collection continuation", async () => {
     render(<PlaybackQueuePopover />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Queue, 3 upcoming tracks" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Queue" }));
     const removals = await screen.findAllByRole("button", {
       name: "Remove Added.mp3 from queue",
     });
@@ -65,15 +63,13 @@ describe("Playback Queue popover", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByText("Collection")).toBeInTheDocument();
     expect(screen.queryByText("Current")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Queue, 1 upcoming track" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Queue" })).toBeInTheDocument();
   });
 
   it("dismisses with Escape and restores focus without changing the queue", async () => {
     render(<PlaybackQueuePopover />);
     const trigger = screen.getByRole("button", {
-      name: "Queue, 3 upcoming tracks",
+      name: "Queue",
     });
     trigger.focus();
     fireEvent.click(trigger);

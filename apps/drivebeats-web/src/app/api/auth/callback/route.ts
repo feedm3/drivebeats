@@ -6,27 +6,16 @@ import {
   hasGoogleDriveScope,
   parseGrantedGoogleScopes,
 } from "@/lib/google";
+import { resolveGoogleRefreshToken } from "@/lib/google-grant-service";
+import {
+  clearGoogleOAuthCookies,
+  OAUTH_CONSENT_RETRY_COOKIE,
+  OAUTH_NONCE_COOKIE,
+  OAUTH_STATE_COOKIE,
+  startGoogleOAuth,
+} from "@/lib/google-oauth-flow";
 
-const OAUTH_STATE_COOKIE = "oauth_state";
-const OAUTH_NONCE_COOKIE = "oauth_nonce";
 const AUTH_ERROR_PARAM = "authError";
-
-function clearOAuthCookies(response: NextResponse) {
-  response.cookies.set(OAUTH_STATE_COOKIE, "", {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/api/auth",
-    maxAge: 0,
-  });
-  response.cookies.set(OAUTH_NONCE_COOKIE, "", {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/api/auth",
-    maxAge: 0,
-  });
-}
 
 function clearAuthCookies(response: NextResponse) {
   response.cookies.set("refresh_token", "", {
@@ -59,7 +48,7 @@ function redirectWithAuthError(
   const url = new URL("/", request.url);
   url.searchParams.set(AUTH_ERROR_PARAM, code);
   const response = NextResponse.redirect(url);
-  clearOAuthCookies(response);
+  clearGoogleOAuthCookies(response);
   clearAuthCookies(response);
   return response;
 }
@@ -99,8 +88,8 @@ export async function GET(request: NextRequest) {
     return redirectWithAuthError(request, "missing_drive_scope");
   }
 
-  if (!data.id_token || !data.refresh_token) {
-    return redirectWithAuthError(request, "missing_refresh_token");
+  if (!data.id_token) {
+    return redirectWithAuthError(request, "authentication_failed");
   }
 
   let user: Awaited<ReturnType<typeof getUserFromIdToken>>;
@@ -111,11 +100,29 @@ export async function GET(request: NextRequest) {
     return redirectWithAuthError(request, "authentication_failed");
   }
 
-  const response = NextResponse.redirect(new URL("/app", request.url));
+  let refreshToken: string | null;
+  try {
+    refreshToken = await resolveGoogleRefreshToken(user, data.refresh_token);
+  } catch {
+    // Do not log provider credentials or database connection details.
+    console.error("OAuth grant storage or refresh failed");
+    return redirectWithAuthError(request, "authentication_failed");
+  }
+  if (!refreshToken) {
+    if (request.cookies.get(OAUTH_CONSENT_RETRY_COOKIE)?.value === state) {
+      return redirectWithAuthError(request, "missing_refresh_token");
+    }
+    const recovery = startGoogleOAuth(user.id);
+    clearAuthCookies(recovery);
+    return recovery;
+  }
 
-  clearOAuthCookies(response);
+  const response = NextResponse.redirect(new URL("/app", request.url));
+  response.headers.set("Cache-Control", "no-store");
+
+  clearGoogleOAuthCookies(response);
   clearAuthCookies(response);
-  response.cookies.set("refresh_token", data.refresh_token, {
+  response.cookies.set("refresh_token", refreshToken, {
     httpOnly: true,
     secure: true,
     sameSite: "lax",

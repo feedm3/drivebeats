@@ -52,6 +52,7 @@ interface GoogleAuthUrlOptions {
   nonce: string;
   state: string;
   prompt?: "consent";
+  loginHint?: string;
 }
 
 function decodeBase64UrlJson<T>(value: string) {
@@ -122,6 +123,7 @@ export function getGoogleAuthUrl({
   state,
   nonce,
   prompt,
+  loginHint,
 }: GoogleAuthUrlOptions) {
   const clientId = getRequiredEnv("GOOGLE_CLIENT_ID");
   const appUrl = getRequiredEnv("NEXT_PUBLIC_APP_URL");
@@ -138,6 +140,9 @@ export function getGoogleAuthUrl({
 
   if (prompt) {
     params.set("prompt", prompt);
+  }
+  if (loginHint) {
+    params.set("login_hint", loginHint);
   }
 
   return `${getGoogleAuthUrlBase()}?${params.toString()}`;

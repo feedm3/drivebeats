@@ -65,6 +65,14 @@ export default function PrivacyPolicyPage() {
           cookies are used.
         </p>
         <p>
+          We also store an encrypted Google refresh token in our database,
+          linked to your Google account ID, so future sign-ins can reuse the
+          access you already approved. Logging out removes your browser session
+          and preserves this connection. Deleting cloud data removes the saved
+          connection. You can revoke access at any time in your Google Account
+          permissions.
+        </p>
+        <p>
           We store some app data locally in your browser, including recently
           played tracks, your imported library, offline downloads, and player
           state. Playlists and favorites are also cached locally for faster
@@ -113,8 +121,8 @@ export default function PrivacyPolicyPage() {
         <p>
           Limited data is shared with service providers that operate the app,
           such as Google for authentication, Google Picker, and Drive access,
-          Neon for synced playlist and favorite storage, and Vercel for hosting
-          and privacy-friendly analytics.
+          Neon for synced playlist, favorite, and encrypted connection storage,
+          and Vercel for hosting and privacy-friendly analytics.
         </p>
 
         <h2 className="text-lg font-semibold text-foreground">

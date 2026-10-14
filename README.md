@@ -128,6 +128,27 @@ DriveBeats currently supports MP3, FLAC, WAV, AAC, and OGG files from Google Dri
 
 DriveBeats uses `https://www.googleapis.com/auth/drive.file` together with Google Picker. Users explicitly choose the folders and files they want to share with the app.
 
+### Why would Google ask for permission again?
+
+Normal sign-in lets Google reuse your existing approval. DriveBeats keeps the
+Google refresh token encrypted in `google_oauth_grants`, associated with your
+verified Google account ID. Logging out removes browser authentication and local
+app data while preserving this connection for your next sign-in, including from
+another device. Deleting cloud data removes the saved connection with the user
+record; removing DriveBeats in your Google Account permissions revokes access.
+
+Google may ask for approval again if access was revoked or expired, or if
+DriveBeats no longer has a usable saved token. Existing users may need one final
+approval when first using the saved-connection flow. Recovery retries consent
+once, then displays an error rather than looping.
+
+Before deploying this flow, apply `db/migrations/0010_google_oauth_grants.sql`.
+Tokens use AES-256-GCM with an account binding and a dedicated key derived from
+`AUTH_SESSION_SECRET` using HKDF. Keep that secret stable and use a strong random
+value. Rotating it invalidates both browser sessions and saved-token encryption;
+users then need to approve a new connection. Tokens and audio are never exposed
+through site tools; no audio is stored in the database.
+
 ## License
 
 Licensed under the [MIT License](LICENSE).

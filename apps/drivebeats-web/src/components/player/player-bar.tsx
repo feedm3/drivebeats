@@ -237,6 +237,10 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
       const { currentTrack, fetchAndPlay, blobCache } =
         usePlayerStore.getState();
       if (!currentTrack) return;
+      if (usePlayerStore.getState().reportMediaError()) {
+        updateMediaSessionPlaybackState("paused");
+        return;
+      }
 
       if (errorRetryRef.trackId !== currentTrack.id) {
         errorRetryRef.trackId = currentTrack.id;

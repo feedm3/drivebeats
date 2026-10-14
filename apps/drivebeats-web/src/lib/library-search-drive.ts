@@ -1,5 +1,9 @@
 import { SUPPORTED_AUDIO_MIME_TYPES } from "@/lib/audio";
 import {
+  GoogleDriveReadError,
+  LibraryIncompleteError,
+} from "@/lib/drive-read-error";
+import {
   type GoogleDriveFilesListResponse,
   listGoogleDriveFiles,
 } from "@/lib/google-api";
@@ -60,15 +64,13 @@ async function listEveryPage(
     const response = await listFiles(accessToken, params, signal);
     abortIfNeeded(signal);
     if (!response.ok) {
-      throw new Error(
-        `Drive Library Search request failed (${response.status})`,
-      );
+      throw new GoogleDriveReadError(response.status);
     }
 
     const data = (await response.json()) as GoogleDriveFilesListResponse;
     abortIfNeeded(signal);
     if (data.incompleteSearch) {
-      throw new Error("Google Drive returned an incomplete Library Search");
+      throw new LibraryIncompleteError();
     }
 
     files.push(...(data.files ?? []));

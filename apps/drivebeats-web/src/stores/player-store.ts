@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { GoogleDriveReadError } from "@/lib/drive-read-error";
 import { downloadGoogleDriveFileMedia } from "@/lib/google-api";
 import * as offlineDb from "@/lib/offline-db";
 import {
@@ -9,6 +10,11 @@ import {
   isBlobUrl,
   isSessionMediaUrl,
 } from "@/lib/offline-media";
+import {
+  getPlaybackFailure,
+  PlaybackError,
+  type PlaybackFailure,
+} from "@/lib/playback-failure";
 import {
   consumeShuffleTrack,
   createShuffleCycle,
@@ -48,10 +54,13 @@ export function hasNextTrack(state: {
 
 const MAX_CACHE_SIZE = 20;
 const PLAY_ATTEMPT_TIMEOUT_MS = 1500;
+const FRESH_SOURCE_PLAY_TIMEOUT_MS = 10_000;
 
 let fetchAbortController: AbortController | null = null;
 let prefetchAbortController: AbortController | null = null;
 let playTrackRequestId = 0;
+let playOperationId = 0;
+let lastKnownPlaybackAccountId = useAuthStore.getState().user?.id ?? null;
 let navigationOperation: object | null = null;
 
 async function navigate(action: () => Promise<void>) {
@@ -149,26 +158,41 @@ function waitForMediaEvent(
   });
 }
 
-async function attemptAudioPlay(audio: HTMLAudioElement) {
-  const playPromise = audio
-    .play()
-    .then(() => true)
-    .catch(() => false);
-  const startedPlayingPromise = waitForMediaEvent(
-    audio,
-    "playing",
-    PLAY_ATTEMPT_TIMEOUT_MS,
-  );
-
-  const didStart = await Promise.race([
-    playPromise,
-    startedPlayingPromise,
-    new Promise<false>((resolve) => {
-      window.setTimeout(() => resolve(false), PLAY_ATTEMPT_TIMEOUT_MS);
-    }),
-  ]);
-
-  return didStart;
+async function attemptAudioPlay(
+  audio: HTMLAudioElement,
+  timeoutMs = PLAY_ATTEMPT_TIMEOUT_MS,
+) {
+  let timer: number | undefined;
+  let onPlaying: (() => void) | undefined;
+  let onError: (() => void) | undefined;
+  const mediaError = new Promise<never>((_resolve, reject) => {
+    onError = () => {
+      if (audio.error?.code === 3 || audio.error?.code === 4)
+        reject(new PlaybackError("unsupported_audio"));
+    };
+    audio.addEventListener("error", onError);
+  });
+  const started = new Promise<boolean>((resolve) => {
+    onPlaying = () => resolve(!audio.paused);
+    audio.addEventListener("playing", onPlaying, { once: true });
+  });
+  try {
+    return await Promise.race([
+      audio.play().then(() => !audio.paused),
+      started,
+      mediaError,
+      new Promise<never>((_resolve, reject) => {
+        timer = window.setTimeout(
+          () => reject(new PlaybackError("playback_timeout")),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer);
+    if (onPlaying) audio.removeEventListener("playing", onPlaying);
+    if (onError) audio.removeEventListener("error", onError);
+  }
 }
 
 async function reloadCurrentSourceAndPlay(
@@ -304,6 +328,9 @@ interface PlayerState {
   playlist: DriveFile[];
   currentIndex: number;
   isPlaying: boolean;
+  lastPlaybackFailure: PlaybackFailure | null;
+  audioPermission: "unknown" | "blocked" | "allowed";
+  playbackAccountId: string | null;
   duration: number;
   currentTime: number;
   // When true, the progress bar jumps to currentTime without its glide
@@ -326,6 +353,7 @@ interface PlayerState {
   initAudio: () => HTMLAudioElement;
   play: () => Promise<boolean>;
   confirmPlayback: () => void;
+  reportMediaError: () => boolean;
   pause: () => void;
   loadTrack: (
     fileId: string,
@@ -370,6 +398,9 @@ export const usePlayerStore = create<PlayerState>()(
       playlist: [],
       currentIndex: -1,
       isPlaying: false,
+      lastPlaybackFailure: null,
+      audioPermission: "unknown",
+      playbackAccountId: null,
       duration: 0,
       currentTime: 0,
       suppressGlide: false,
@@ -397,49 +428,106 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       play: async () => {
-        const { audio, currentTrack } = get();
-        if (!audio) return false;
+        const { audio, currentTrack, pendingTrackId } = get();
+        if (
+          audio?.src &&
+          currentTrack &&
+          pendingTrackId &&
+          pendingTrackId !== currentTrack.id
+        ) {
+          fetchAbortController?.abort();
+          fetchAbortController = null;
+          playTrackRequestId++;
+          navigationOperation = null;
+          set({ pendingTrackId: null, isLoading: false });
+        }
+        const operationId = ++playOperationId;
         const requestId = playTrackRequestId;
-        const confirmPlayback = () => {
+        const userId = useAuthStore.getState().user?.id ?? null;
+        const isCurrent = () =>
+          operationId === playOperationId &&
+          requestId === playTrackRequestId &&
+          (useAuthStore.getState().user?.id ?? null) === userId;
+        set({ lastPlaybackFailure: null });
+        if (!audio) return false;
+        const recordFailure = (error: unknown) => {
+          if (!isCurrent()) return;
+          const failure = getPlaybackFailure(error);
+          if (failure)
+            set({
+              lastPlaybackFailure: failure,
+              isPlaying: false,
+              ...(failure.code === "audio_user_interaction_required"
+                ? { audioPermission: "blocked" as const }
+                : {}),
+            });
+        };
+        const finish = (played: boolean) => {
+          if (!isCurrent()) return false;
+          const observed = played && audio.paused === false;
+          set({
+            isPlaying: played && !audio.paused,
+            ...(observed
+              ? {
+                  audioPermission: "allowed" as const,
+                  lastPlaybackFailure: null,
+                }
+              : {}),
+          });
           if (
-            requestId === playTrackRequestId &&
+            played &&
             currentTrack &&
             get().currentTrack?.id === currentTrack.id
           )
             get().confirmPlayback();
-        };
-
-        if (!audio.src) {
-          if (!currentTrack) return false;
-          const played = await get().loadTrack(currentTrack.id, true);
-          if (requestId !== playTrackRequestId) return false;
-          if (played) confirmPlayback();
           return played;
+        };
+        try {
+          if (!audio.src) {
+            if (!currentTrack) return false;
+            return finish(await get().loadTrack(currentTrack.id, true));
+          }
+          const played = await attemptAudioPlay(audio);
+          if (!played) throw new PlaybackError("playback_failed");
+          return finish(true);
+        } catch (error) {
+          if (!isCurrent()) return false;
+          const failure = getPlaybackFailure(error);
+          if (
+            failure &&
+            failure.code !== "unsupported_audio" &&
+            isIosStandalonePwa() &&
+            document.visibilityState === "visible"
+          ) {
+            try {
+              const recovered = await reloadCurrentSourceAndPlay(
+                audio,
+                isCurrent,
+              );
+              if (!isCurrent()) return false;
+              if (recovered) return finish(true);
+            } catch (recoveryError) {
+              recordFailure(recoveryError);
+              return false;
+            }
+          }
+          recordFailure(error);
+          return false;
         }
-
-        const played = await attemptAudioPlay(audio);
-        if (requestId !== playTrackRequestId) return false;
-        if (
-          !played &&
-          isIosStandalonePwa() &&
-          document.visibilityState === "visible"
-        ) {
-          const recovered = await reloadCurrentSourceAndPlay(
-            audio,
-            () => requestId === playTrackRequestId,
-          );
-          if (requestId !== playTrackRequestId) return false;
-          set({ isPlaying: recovered && !audio.paused });
-          if (recovered) confirmPlayback();
-          return recovered;
-        }
-
-        set({ isPlaying: played && !audio.paused });
-        if (played) confirmPlayback();
-        return played;
       },
 
       confirmPlayback: () => {
+        const observed = get();
+        if (
+          observed.audio?.paused === false &&
+          observed.playbackAccountId ===
+            (useAuthStore.getState().user?.id ?? null)
+        )
+          set({
+            isPlaying: true,
+            audioPermission: "allowed",
+            lastPlaybackFailure: null,
+          });
         const {
           shuffle,
           currentTrack,
@@ -474,6 +562,21 @@ export const usePlayerStore = create<PlayerState>()(
         }));
       },
 
+      reportMediaError: () => {
+        const { audio, playbackAccountId } = get();
+        if (playbackAccountId !== (useAuthStore.getState().user?.id ?? null))
+          return false;
+        if (audio?.error?.code !== 3 && audio?.error?.code !== 4) return false;
+        set({
+          lastPlaybackFailure: getPlaybackFailure(
+            new PlaybackError("unsupported_audio"),
+          ),
+          isPlaying: false,
+          isLoading: false,
+        });
+        return true;
+      },
+
       pause: () => {
         const { audio } = get();
         if (!audio) return;
@@ -486,6 +589,16 @@ export const usePlayerStore = create<PlayerState>()(
         fetchAbortController?.abort();
         const controller = new AbortController();
         fetchAbortController = controller;
+        const requestId = playTrackRequestId;
+        const operationId = playOperationId;
+        const userId = useAuthStore.getState().user?.id ?? null;
+        const isCurrent = () =>
+          !controller.signal.aborted &&
+          fetchAbortController === controller &&
+          requestId === playTrackRequestId &&
+          operationId === playOperationId &&
+          (useAuthStore.getState().user?.id ?? null) === userId;
+        set({ lastPlaybackFailure: null });
 
         const triggerId3Extraction = (blob: Blob) => {
           const track =
@@ -505,12 +618,36 @@ export const usePlayerStore = create<PlayerState>()(
         const cached = blobCache.get(fileId);
 
         const applySource = async (source: string) => {
+          if (!isCurrent()) return false;
           beforeApply?.();
           audio.src = source;
           audio.currentTime = 0;
+          set({ playbackAccountId: userId });
 
           if (autoplay) {
-            await audio.play();
+            try {
+              const played = await attemptAudioPlay(
+                audio,
+                FRESH_SOURCE_PLAY_TIMEOUT_MS,
+              );
+              if (!isCurrent()) return false;
+              if (!played) throw new PlaybackError("playback_failed");
+              if (audio.paused === false)
+                set({ audioPermission: "allowed", lastPlaybackFailure: null });
+            } catch (error) {
+              if (!isCurrent()) return false;
+              const failure = getPlaybackFailure(error);
+              if (failure)
+                set({
+                  isLoading: false,
+                  isPlaying: false,
+                  lastPlaybackFailure: failure,
+                  ...(failure.code === "audio_user_interaction_required"
+                    ? { audioPermission: "blocked" as const }
+                    : {}),
+                });
+              throw error;
+            }
           } else {
             audio.load();
             set({
@@ -526,24 +663,27 @@ export const usePlayerStore = create<PlayerState>()(
 
         if (cached) {
           if (controller.signal.aborted) return false;
-          await applySource(cached);
-          set({ isLoading: false });
-          return true;
+          const played = await applySource(cached);
+          if (isCurrent()) set({ isLoading: false });
+          return played;
         }
 
-        // Check IndexedDB for offline-cached media first.
+        // Only storage lookup errors fall through to Drive; autoplay failures
+        // from an offline source must retain their actual browser diagnosis.
+        let offlineRecord: Awaited<ReturnType<typeof offlineDb.getTrack>>;
         try {
-          const offlineRecord = await offlineDb.getTrack(fileId);
-          if (offlineRecord && !controller.signal.aborted) {
-            const offlineUrl = getOfflineTrackUrl(fileId);
-            setCachedSource(blobCache, fileId, offlineUrl);
-            triggerId3Extraction(offlineRecord.blob);
-            await applySource(offlineUrl);
-            set({ isLoading: false });
-            return true;
-          }
+          offlineRecord = await offlineDb.getTrack(fileId);
         } catch {
-          // IndexedDB unavailable, fall through to Drive fetch
+          // IndexedDB unavailable, fall through to Drive fetch.
+        }
+        if (!isCurrent()) return false;
+        if (offlineRecord) {
+          const offlineUrl = getOfflineTrackUrl(fileId);
+          setCachedSource(blobCache, fileId, offlineUrl);
+          triggerId3Extraction(offlineRecord.blob);
+          const played = await applySource(offlineUrl);
+          if (isCurrent()) set({ isLoading: false });
+          return played;
         }
 
         if (controller.signal.aborted) return false;
@@ -551,48 +691,87 @@ export const usePlayerStore = create<PlayerState>()(
         try {
           const authStore = useAuthStore.getState();
           let accessToken = await authStore.getValidAccessToken();
+          if (!isCurrent()) return false;
           if (!accessToken) {
-            throw new Error("Missing valid access token");
+            throw new PlaybackError(
+              useAuthStore.getState().authStatus === "unauthenticated"
+                ? "drive_auth_required"
+                : "network_error",
+            );
           }
 
-          const fetchTrack = (token: string) =>
-            downloadGoogleDriveFileMedia(fileId, token, controller.signal);
+          const fetchTrack = async (token: string) => {
+            try {
+              return await downloadGoogleDriveFileMedia(
+                fileId,
+                token,
+                controller.signal,
+              );
+            } catch (error) {
+              if (error instanceof TypeError)
+                throw new PlaybackError("network_error");
+              throw error;
+            }
+          };
 
           let res = await fetchTrack(accessToken);
+          if (!isCurrent()) return false;
           if (res.status === 401) {
             const refreshed = await useAuthStore
               .getState()
               .refreshAccessToken();
+            if (!isCurrent()) return false;
             accessToken = refreshed
               ? useAuthStore.getState().accessToken
               : null;
 
             if (!accessToken) {
-              throw new Error("Unable to refresh access token");
+              throw new PlaybackError(
+                useAuthStore.getState().authStatus === "unauthenticated"
+                  ? "drive_auth_required"
+                  : "network_error",
+              );
             }
 
             res = await fetchTrack(accessToken);
+            if (!isCurrent()) return false;
           }
 
-          if (!res.ok) throw new Error(`Drive API returned ${res.status}`);
+          if (!res.ok) throw new GoogleDriveReadError(res.status);
 
-          const blob = await res.blob();
+          let blob: Blob;
+          try {
+            blob = await res.blob();
+          } catch (error) {
+            if (error instanceof TypeError)
+              throw new PlaybackError("network_error");
+            throw error;
+          }
+          if (!isCurrent()) return false;
           triggerId3Extraction(blob);
           const cachedSource =
             (await cacheSessionMedia(fileId, blob, blob.type)) ??
             URL.createObjectURL(blob);
 
+          if (!isCurrent()) {
+            revokeCachedSource(cachedSource);
+            return false;
+          }
           setCachedSource(blobCache, fileId, cachedSource);
 
           // If a newer fetch started while we were downloading, don't touch audio
           if (controller.signal.aborted) return false;
 
-          await applySource(cachedSource);
-          set({ isLoading: false });
-          return true;
+          const played = await applySource(cachedSource);
+          if (isCurrent()) set({ isLoading: false });
+          return played;
         } catch (e) {
-          if (controller.signal.aborted) return false;
-          set({ isLoading: false });
+          if (!isCurrent()) return false;
+          const failure = getPlaybackFailure(e);
+          set({
+            isLoading: false,
+            ...(failure ? { lastPlaybackFailure: failure } : {}),
+          });
           throw e;
         }
       },
@@ -616,6 +795,7 @@ export const usePlayerStore = create<PlayerState>()(
         const index = playlist.findIndex((f) => f.id === track.id);
         if (index < 0) return false;
         const requestId = ++playTrackRequestId;
+        const operationId = ++playOperationId;
         const state = get();
         const sourceKey = collectionKey(
           folderStack,
@@ -639,7 +819,7 @@ export const usePlayerStore = create<PlayerState>()(
 
         // Mark the target row active immediately, but keep currentTrack
         // pointing at the playing song until audio actually starts.
-        set({ pendingTrackId: track.id });
+        set({ pendingTrackId: track.id, lastPlaybackFailure: null });
 
         let applied = false;
         try {
@@ -688,6 +868,7 @@ export const usePlayerStore = create<PlayerState>()(
           });
           if (requestId !== playTrackRequestId) return false;
           set({ pendingTrackId: null });
+          if (operationId !== playOperationId) return false;
           if (!loaded || !applied) {
             if (applied) set({ isPlaying: false });
             return false;
@@ -695,11 +876,24 @@ export const usePlayerStore = create<PlayerState>()(
           get().confirmPlayback();
           queueMicrotask(() => get().prefetchNextTrack());
           return true;
-        } catch {
+        } catch (error) {
           // Preserve the unconsumed target so failed playback can be retried.
           if (requestId === playTrackRequestId) {
+            if (operationId !== playOperationId) {
+              set({ pendingTrackId: null });
+              return false;
+            }
+            const failure = getPlaybackFailure(error);
             set({
               pendingTrackId: null,
+              ...(failure
+                ? {
+                    lastPlaybackFailure: failure,
+                    ...(failure.code === "audio_user_interaction_required"
+                      ? { audioPermission: "blocked" as const }
+                      : {}),
+                  }
+                : {}),
               ...(applied ? { isPlaying: false } : {}),
             });
           }
@@ -728,7 +922,10 @@ export const usePlayerStore = create<PlayerState>()(
             repeat,
             nextShuffleFileId,
           } = get();
-          if (playlist.length === 0) return;
+          if (playlist.length === 0) {
+            get().pause();
+            return;
+          }
 
           let nextIndex: number;
           let nextCycle: ShuffleCycle | null = null;
@@ -892,15 +1089,21 @@ export const usePlayerStore = create<PlayerState>()(
 
       cancelPlaybackRequest: () => {
         playTrackRequestId++;
+        playOperationId++;
         navigationOperation = null;
         fetchAbortController?.abort();
         fetchAbortController = null;
         get().pause();
-        set({ pendingTrackId: null, isLoading: false });
+        set({
+          pendingTrackId: null,
+          isLoading: false,
+          lastPlaybackFailure: null,
+        });
       },
 
       resetPlayback: () => {
         playTrackRequestId++;
+        playOperationId++;
         navigationOperation = null;
         fetchAbortController?.abort();
         fetchAbortController = null;
@@ -917,6 +1120,9 @@ export const usePlayerStore = create<PlayerState>()(
         set({
           currentTrack: null,
           pendingTrackId: null,
+          lastPlaybackFailure: null,
+          audioPermission: "unknown",
+          playbackAccountId: null,
           playingFolderStack: [],
           playlistFolderStacks: null,
           playingPlaylistId: null,
@@ -1102,3 +1308,33 @@ export const usePlayerStore = create<PlayerState>()(
     },
   ),
 );
+
+useAuthStore.subscribe((state, previous) => {
+  const userId = state.user?.id ?? null;
+  const previousUserId = previous.user?.id ?? null;
+  if (userId === previousUserId) return;
+  const knownOwner = lastKnownPlaybackAccountId ?? previousUserId;
+  if (userId) lastKnownPlaybackAccountId = userId;
+  if (userId && knownOwner && userId !== knownOwner) {
+    usePlayerStore.getState().resetPlayback();
+    usePlayerStore.getState().clearCache();
+    return;
+  }
+  if (userId && previousUserId) {
+    usePlayerStore.getState().resetPlayback();
+    usePlayerStore.getState().clearCache();
+    return;
+  }
+  playTrackRequestId++;
+  playOperationId++;
+  navigationOperation = null;
+  fetchAbortController?.abort();
+  fetchAbortController = null;
+  usePlayerStore.setState({
+    pendingTrackId: null,
+    isLoading: false,
+    lastPlaybackFailure: null,
+    audioPermission: "unknown",
+    playbackAccountId: null,
+  });
+});

@@ -30,6 +30,8 @@ const track: LibrarySearchTrack = {
   relativePath: "",
 };
 const initialPlayer = usePlayerStore.getState();
+const initialPlaylists = usePlaylistStore.getState();
+const initialLibrary = useLibraryStore.getState();
 function signIn(userId = "account-a") {
   useAuthStore.setState({
     authStatus: "authenticated",
@@ -80,10 +82,21 @@ beforeEach(() => {
       tracks: [track],
     },
     invalidated: false,
+    failure: null,
+    error: null,
+    status: "ready",
     ensureReady: vi.fn(async () => true),
   });
-  usePlaylistStore.setState({ playlists: [], isCloudHydrated: false });
-  useLibraryStore.setState({ tracks: {}, isCloudHydrated: false });
+  usePlaylistStore.setState({
+    ...initialPlaylists,
+    playlists: [],
+    isCloudHydrated: false,
+  });
+  useLibraryStore.setState({
+    ...initialLibrary,
+    tracks: {},
+    isCloudHydrated: false,
+  });
   usePlayerStore.setState({
     ...initialPlayer,
     audio: audio(),
@@ -293,8 +306,9 @@ describe("DriveBeats WebMCP actions", () => {
   });
 
   it("redacts persisted playback filenames after switching accounts", async () => {
-    usePlayerStore.setState({ currentTrack: track, playlist: [track] });
     signIn("account-b");
+    // A delayed persisted snapshot must remain private even after switch cleanup.
+    usePlayerStore.setState({ currentTrack: track, playlist: [track] });
     const result = await run("drivebeats_status");
     expect(result).toMatchObject({
       ok: true,
@@ -423,14 +437,298 @@ describe("DriveBeats WebMCP actions", () => {
     expect(usePlayerStore.getState().isPlaying).toBe(false);
   });
 
-  it("reports blocked audio despite a successful store request", async () => {
+  it("does not claim playback or invent an audio permission block from a successful store request", async () => {
     usePlayerStore.setState({
       playTrack: vi.fn(async () => true),
       isPlaying: true,
     });
     expect(
       await run("drivebeats_play", { trackIds: ["imported"] }),
-    ).toMatchObject({ ok: false, error: { code: "playback_blocked" } });
+    ).toMatchObject({ ok: false, error: { code: "playback_failed" } });
+  });
+
+  it("reports live UI-initiated playback without requiring a catalog refresh", async () => {
+    const playerAudio = audio();
+    Object.assign(playerAudio, {
+      currentTime: 42.5,
+      duration: 180,
+      paused: false,
+    });
+    useLibrarySearchStore.setState({ catalog: null, status: "loading" });
+    usePlayerStore.setState({
+      audio: playerAudio,
+      currentTrack: track,
+      playlist: [track],
+      playbackAccountId: "account-a",
+      currentTime: 3,
+      duration: 100,
+      isPlaying: true,
+      audioPermission: "allowed",
+    });
+    expect(await run("drivebeats_status")).toMatchObject({
+      signedIn: true,
+      library: { status: "loading", complete: false, trackCount: null },
+      playback: {
+        playerOpen: true,
+        state: "playing",
+        track: { id: "imported", fileName: "Needle.mp3" },
+        positionSeconds: 42.5,
+        durationSeconds: 180,
+        remainingSeconds: 137.5,
+        audioPermission: "allowed",
+      },
+    });
+    expect(useLibrarySearchStore.getState().ensureReady).not.toHaveBeenCalled();
+    expect(fetchCloudLibrarySync).not.toHaveBeenCalled();
+    signIn("account-b");
+    expect(await run("drivebeats_status")).toMatchObject({
+      playback: { track: null },
+    });
+  });
+
+  it("reports unknown duration and audio permission without pretending audio is authorized", async () => {
+    const playerAudio = audio();
+    Object.assign(playerAudio, { duration: Number.NaN });
+    usePlayerStore.setState({ audio: playerAudio });
+    const result = await run("drivebeats_status");
+    expect(result).toMatchObject({
+      playback: {
+        playerOpen: false,
+        state: "idle",
+        audioPermission: "unknown",
+        durationSeconds: null,
+        remainingSeconds: null,
+      },
+    });
+  });
+
+  it("returns prepared-queue recovery for an observed audio permission failure", async () => {
+    const playTrack = vi.fn(async (currentTrack, playlist) => {
+      const playerAudio = audio();
+      Object.assign(playerAudio, { src: "blob:prepared-test-audio" });
+      usePlayerStore.setState({
+        audio: playerAudio,
+        currentTrack,
+        playlist,
+        playbackAccountId: "account-a",
+        audioPermission: "blocked",
+        lastPlaybackFailure: {
+          code: "audio_user_interaction_required",
+          message: "Tap Play in DriveBeats.",
+        },
+      });
+      return false;
+    });
+    usePlayerStore.setState({ playTrack });
+    const result = await run("drivebeats_play", { trackIds: [track.id] });
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "audio_user_interaction_required" },
+      playback: {
+        queuePrepared: true,
+        isPlaying: false,
+        track: { id: track.id },
+      },
+      recovery: {
+        action: "user_click_play",
+        automaticRetry: false,
+        verificationTool: "drivebeats_status",
+      },
+    });
+    expect(playTrack).toHaveBeenCalledOnce();
+    expect(await run("drivebeats_status")).toMatchObject({
+      playback: { audioPermission: "blocked", queueLength: 1 },
+    });
+  });
+
+  it("does not advise clicking Play when downloading audio failed", async () => {
+    usePlayerStore.setState({
+      playTrack: vi.fn(async () => {
+        usePlayerStore.setState({
+          lastPlaybackFailure: {
+            code: "network_error",
+            message: "Check your connection.",
+          },
+        });
+        return false;
+      }),
+    });
+    expect(
+      await run("drivebeats_play", { trackIds: [track.id] }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: "network_error" },
+      playback: { queuePrepared: false },
+      recovery: { action: "inspect_state", automaticRetry: false },
+    });
+  });
+
+  it("distinguishes failed Library reads from zero matches and preserves Drive permission recovery", async () => {
+    useLibrarySearchStore.setState({
+      failure: { code: "drive_access_denied", message: "Check Drive access." },
+      ensureReady: vi.fn(async () => false),
+    });
+    const result = await run("drivebeats_search_library", { query: "Needle" });
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "drive_access_denied" },
+      recovery: { action: "check_drive_access", automaticRetry: false },
+    });
+    expect(result).not.toHaveProperty("total");
+    expect(await run("drivebeats_status")).toMatchObject({
+      library: { error: { code: "drive_access_denied" } },
+    });
+  });
+
+  it("returns scoped folder context and catalog freshness alongside filename search", async () => {
+    useLibrarySearchStore.setState({
+      catalog: {
+        userId: "account-a",
+        importsSignature: "track:imported",
+        fetchedAt: 12345,
+        tracks: [
+          {
+            ...track,
+            contextLabel: "Artist/Album",
+            folderStack: [
+              { id: "root", name: "Library" },
+              { id: "music", name: "Music" },
+              { id: "album", name: "Album" },
+            ],
+          },
+        ],
+      },
+    });
+    expect(
+      await run("drivebeats_search_library", { query: "Needle" }),
+    ).toMatchObject({
+      ok: true,
+      search: {
+        query: "Needle",
+        matches: "filename_only",
+        scope: "imported_library",
+        complete: true,
+        catalogUpdatedAt: 12345,
+      },
+      tracks: [
+        {
+          fileName: "Needle.mp3",
+          folderPath: "Music/Album",
+          contextLabel: "Artist/Album",
+        },
+      ],
+    });
+  });
+
+  it("advertises exclusive Play alternatives and rejects neither or both at runtime", async () => {
+    const schema = createDriveBeatsTools().find(
+      (tool) => tool.name === "drivebeats_play",
+    )?.inputSchema;
+    expect(schema).toHaveProperty("anyOf");
+    expect(await run("drivebeats_play", {})).toMatchObject({
+      error: { code: "invalid_input" },
+    });
+    expect(
+      await run("drivebeats_play", { collectionId: "p", trackIds: [track.id] }),
+    ).toMatchObject({ error: { code: "invalid_input" } });
+  });
+
+  it("edits verified saved tracks even when the complete Library is unavailable", async () => {
+    const saved = createPlaylistTrack({ ...track, id: "saved" });
+    vi.mocked(fetchCloudLibrarySync).mockResolvedValue({
+      favorites: [saved],
+      playlists: [{ id: "p", name: "Saved", tracks: [] }],
+    });
+    useLibrarySearchStore.setState({
+      catalog: null,
+      ensureReady: vi.fn(async () => false),
+    });
+    const addTracks = vi
+      .spyOn(usePlaylistStore.getState(), "addTracks")
+      .mockResolvedValue({
+        addedCount: 1,
+        duplicateCount: 0,
+        skippedCount: 0,
+        reachedTrackLimit: false,
+      });
+    const setFavorite = vi
+      .spyOn(useLibraryStore.getState(), "setFavorite")
+      .mockImplementation(async () => {
+        useLibraryStore.setState({ tracks: {} });
+      });
+    expect(
+      await run("drivebeats_edit_playlist_tracks", {
+        action: "add",
+        playlistId: "p",
+        trackIds: ["saved"],
+      }),
+    ).toMatchObject({ ok: true, addedCount: 1 });
+    expect(
+      await run("drivebeats_set_favorite", {
+        trackId: "saved",
+        favorite: false,
+      }),
+    ).toMatchObject({ ok: true });
+    expect(addTracks).toHaveBeenCalledWith("p", [saved]);
+    expect(setFavorite).toHaveBeenCalledWith(saved, false);
+    expect(useLibrarySearchStore.getState().ensureReady).not.toHaveBeenCalled();
+  });
+
+  it("requires collection verification after a creation whose completion became uncertain", async () => {
+    vi.spyOn(usePlaylistStore.getState(), "createPlaylist").mockImplementation(
+      async () => {
+        throw new TypeError("connection interrupted after submission");
+      },
+    );
+    expect(
+      await run("drivebeats_save_playlist", { name: "Evening" }),
+    ).toMatchObject({
+      ok: false,
+      effectMayHaveOccurred: true,
+      recovery: {
+        action: "verify_collections",
+        automaticRetry: false,
+        verificationTool: "drivebeats_list_collections",
+      },
+    });
+  });
+
+  it("does not claim a Favorite change happened when its prerequisite read failed", async () => {
+    useLibrarySearchStore.setState({
+      failure: { code: "network_error", message: "Check your connection." },
+      ensureReady: vi.fn(async () => false),
+    });
+    const setFavorite = vi.spyOn(useLibraryStore.getState(), "setFavorite");
+    const result = await run("drivebeats_set_favorite", {
+      trackId: track.id,
+      favorite: true,
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "network_error" },
+      recovery: { automaticRetry: false },
+    });
+    expect(result).not.toHaveProperty("effectMayHaveOccurred");
+    expect(JSON.stringify(result)).not.toContain("Playlist creation");
+    expect(setFavorite).not.toHaveBeenCalled();
+  });
+
+  it("reports offline recovery without starting a refresh or invalidating a fresh catalog", async () => {
+    Object.defineProperty(navigator, "onLine", {
+      value: false,
+      configurable: true,
+    });
+    expect(
+      await run("drivebeats_search_library", { query: "Needle" }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: "offline" },
+      recovery: { action: "check_connection", automaticRetry: false },
+    });
+    expect(useLibrarySearchStore.getState().ensureReady).not.toHaveBeenCalled();
+    expect(await run("drivebeats_status")).toMatchObject({
+      library: { status: "ready", complete: true, searchable: false },
+    });
   });
 
   it("rejects stale account queues before resuming", async () => {
@@ -454,7 +752,10 @@ describe("DriveBeats WebMCP actions", () => {
       const ready = new Promise<void>((resolve) => {
         started = resolve;
       });
-      const resetPlayback = vi.fn();
+      const resetPlayback = vi.spyOn(
+        usePlayerStore.getState(),
+        "resetPlayback",
+      );
       usePlayerStore.setState({
         currentTrack: track,
         playlist: [track],

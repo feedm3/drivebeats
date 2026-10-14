@@ -47,6 +47,7 @@ export function registerWebMcpTools(
           ? {
               ok: false,
               error: { code: "page_closed", message: "Open DriveBeats again." },
+              recovery: webMcpRecovery("page_closed", true),
             }
           : tool.execute(input, {
               signal: options?.signal
@@ -80,3 +81,5 @@ export function registerWebMcpTools(
     }
   };
 }
+
+import { webMcpRecovery } from "@/lib/webmcp-recovery";

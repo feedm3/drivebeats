@@ -164,6 +164,22 @@ describe("Drive Library Search acquisition", () => {
     expect(listFiles).toHaveBeenCalledTimes(1);
   });
 
+  it("exposes a typed Google permission failure without starting a folder listing", async () => {
+    const listFiles = vi.fn(
+      async () => new Response("Forbidden", { status: 403 }),
+    );
+
+    await expect(
+      buildLibrarySearchCatalogFromDrive({
+        accessToken: "token",
+        importedFolders: [importedFolder],
+        standaloneTracks: [],
+        listFiles,
+      }),
+    ).rejects.toMatchObject({ name: "GoogleDriveReadError", status: 403 });
+    expect(listFiles).toHaveBeenCalledTimes(1);
+  });
+
   it("does not start folders or publish a partial catalog after an audio request fails", async () => {
     const listFiles = vi.fn(
       async () => new Response("Drive unavailable", { status: 503 }),

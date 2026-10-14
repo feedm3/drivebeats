@@ -5,8 +5,10 @@ import {
   runCloudLibrarySync,
 } from "@/lib/cloud-library-sync-runner";
 import { searchLibraryCatalog } from "@/lib/library-search-catalog";
+import { webMcpRecovery } from "@/lib/webmcp-recovery";
 import type { WebMcpTool } from "@/lib/webmcp-registration";
 import { useAuthStore } from "@/stores/auth-store";
+import { useImportedDriveStore } from "@/stores/imported-drive-store";
 import {
   getLibrarySearchImportsSignature,
   useLibrarySearchStore,
@@ -24,6 +26,7 @@ class ToolError extends Error {
   constructor(
     public code: string,
     message: string,
+    public details?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -56,22 +59,65 @@ function assertAccount(userId: string, signal?: AbortSignal) {
 function publicTrack(track: DriveFile) {
   return { id: track.id, fileName: track.name };
 }
+function ownedCatalog() {
+  const search = useLibrarySearchStore.getState();
+  const catalog = search.catalog;
+  return catalog &&
+    catalog.userId === useAuthStore.getState().user?.id &&
+    !search.invalidated &&
+    catalog.importsSignature === getLibrarySearchImportsSignature()
+    ? catalog
+    : null;
+}
+function readiness() {
+  const search = useLibrarySearchStore.getState();
+  const catalog = ownedCatalog();
+  const imports = useImportedDriveStore.getState();
+  const userId = useAuthStore.getState().user?.id;
+  const collectionsVerified =
+    verifiedCollectionAccount === userId &&
+    usePlaylistStore.getState().isCloudHydrated &&
+    useLibraryStore.getState().isCloudHydrated;
+  return {
+    library: {
+      status:
+        search.catalog && !catalog && search.catalog.userId !== userId
+          ? "idle"
+          : search.status,
+      complete: Boolean(catalog),
+      searchable: Boolean(catalog) && navigator.onLine,
+      refreshRequired: !catalog || search.isStale(),
+      catalogUpdatedAt: catalog?.fetchedAt ?? null,
+      trackCount: catalog?.tracks.length ?? null,
+      importedFolderCount: imports.rootFolders.length,
+      standaloneTrackCount: imports.rootFiles.length,
+      ...(search.failure &&
+      (!search.catalog || search.catalog.userId === userId)
+        ? {
+            error: search.failure,
+            recovery: webMcpRecovery(search.failure.code, true),
+          }
+        : {}),
+    },
+    collections: {
+      status: hasPendingLocalMutations()
+        ? "sync_pending"
+        : collectionsVerified
+          ? "ready"
+          : "unverified",
+    },
+  };
+}
 let verifiedCollectionAccount: string | null = null;
 function playback() {
   const state = usePlayerStore.getState();
   const userId = useAuthStore.getState().user?.id;
-  const search = useLibrarySearchStore.getState();
-  const catalogOwned =
-    search.catalog?.userId === userId &&
-    !search.invalidated &&
-    search.catalog?.importsSignature === getLibrarySearchImportsSignature();
+  const catalog = ownedCatalog();
   const trackDetailsAvailable =
     !state.currentTrack ||
     Boolean(
-      (catalogOwned &&
-        search.catalog?.tracks.some(
-          (track) => track.id === state.currentTrack?.id,
-        )) ||
+      state.playbackAccountId === userId ||
+        catalog?.tracks.some((track) => track.id === state.currentTrack?.id) ||
         (verifiedCollectionAccount === userId &&
           (usePlaylistStore
             .getState()
@@ -83,16 +129,52 @@ function playback() {
             useLibraryStore.getState().tracks[state.currentTrack.id]
               ?.isFavorite)),
     );
+  const position = state.audio?.currentTime;
+  const duration = state.audio?.duration;
+  const positionSeconds = Number.isFinite(position)
+    ? Math.max(0, position ?? 0)
+    : Number.isFinite(state.currentTime)
+      ? Math.max(0, state.currentTime)
+      : 0;
+  const durationSeconds =
+    Number.isFinite(duration) && (duration ?? 0) > 0
+      ? (duration ?? 0)
+      : Number.isFinite(state.duration) && state.duration > 0
+        ? state.duration
+        : null;
+  const isPlaying = Boolean(
+    state.audio && !state.audio.paused && !state.audio.ended && state.isPlaying,
+  );
   return {
+    observedAt: Date.now(),
     track:
       state.currentTrack && trackDetailsAvailable
         ? publicTrack(state.currentTrack)
         : null,
     trackDetailsAvailable,
-    isPlaying: Boolean(state.audio && !state.audio.paused && state.isPlaying),
+    playerOpen: Boolean(state.currentTrack),
+    state: state.isLoading
+      ? "loading"
+      : isPlaying
+        ? "playing"
+        : state.lastPlaybackFailure?.code ===
+              "audio_user_interaction_required" && state.currentTrack
+          ? "awaiting_user"
+          : state.audio?.ended
+            ? "ended"
+            : state.currentTrack
+              ? "paused"
+              : "idle",
+    isPlaying,
     isLoading: state.isLoading,
-    positionSeconds: state.currentTime,
-    durationSeconds: state.duration,
+    positionSeconds,
+    durationSeconds,
+    remainingSeconds:
+      durationSeconds === null
+        ? null
+        : Math.max(0, durationSeconds - positionSeconds),
+    audioPermission: state.audioPermission,
+    lastFailure: state.lastPlaybackFailure,
     volume: state.volume,
     muted: state.isMuted,
     shuffle: state.shuffle,
@@ -102,7 +184,9 @@ function playback() {
 }
 async function library(userId: string, signal?: AbortSignal) {
   assertAccount(userId, signal);
-  const ready = await useLibrarySearchStore.getState().ensureReady();
+  if (navigator.onLine === false)
+    throw new ToolError("offline", "Search requires an internet connection.");
+  const ready = await useLibrarySearchStore.getState().ensureReady(signal);
   assertAccount(userId, signal);
   const state = useLibrarySearchStore.getState();
   if (
@@ -111,11 +195,14 @@ async function library(userId: string, signal?: AbortSignal) {
     state.catalog.userId !== userId ||
     state.invalidated ||
     state.catalog.importsSignature !== getLibrarySearchImportsSignature()
-  )
+  ) {
+    if (state.failure)
+      throw new ToolError(state.failure.code, state.failure.message);
     throw new ToolError(
       "library_unavailable",
       "The complete Library is not available. Check your connection and imported items in DriveBeats, then try again.",
     );
+  }
   return state.catalog.tracks;
 }
 async function collections(userId: string, signal?: AbortSignal) {
@@ -234,13 +321,33 @@ async function startPlayback(
             ),
       );
     assertAccount(userId, signal);
-    if (!played || !playback().isPlaying)
-      throw new ToolError(
-        "playback_blocked",
-        "Playback did not start. Tap Play in DriveBeats to allow browser audio, or check your connection and Drive access.",
-      );
+    if (!played || !playback().isPlaying) {
+      const current = usePlayerStore.getState();
+      const queuePrepared =
+        current.currentTrack?.id === queue[0].id &&
+        current.playlist.length === queue.length &&
+        current.playlist.every(
+          (track, index) => track.id === queue[index].id,
+        ) &&
+        Boolean(current.audio?.src);
+      throw playbackError(queuePrepared);
+    }
     return playback();
   });
+}
+function playbackError(queuePrepared?: boolean) {
+  const failure = usePlayerStore.getState().lastPlaybackFailure;
+  return new ToolError(
+    failure?.code ?? "playback_failed",
+    failure?.message ??
+      "Playback did not start. Check the current player state.",
+    {
+      playback: {
+        ...playback(),
+        ...(queuePrepared === undefined ? {} : { queuePrepared }),
+      },
+    },
+  );
 }
 
 let playbackOperation: object | null = null;
@@ -310,7 +417,8 @@ function tool<T extends z.ZodType>(
   action: (
     input: z.output<T>,
     userId: string,
-    signal?: AbortSignal,
+    signal: AbortSignal | undefined,
+    markEffectStarted: () => void,
   ) => Promise<unknown>,
   requiresAuth = true,
 ): WebMcpTool {
@@ -323,6 +431,8 @@ function tool<T extends z.ZodType>(
     } as Record<string, unknown>,
     annotations: { readOnlyHint: readOnly, untrustedContentHint: true },
     execute: async (input, options) => {
+      let userId: string | undefined;
+      let effectStarted = false;
       try {
         const parsed = schema.safeParse(input ?? {});
         if (!parsed.success)
@@ -330,23 +440,62 @@ function tool<T extends z.ZodType>(
             "invalid_input",
             "Tool arguments do not match the input schema.",
           );
-        const userId = requiresAuth ? account() : "";
+        userId = requiresAuth ? account() : "";
         if (options?.signal?.aborted)
           throw new ToolError("cancelled", "The action was cancelled.");
-        const result = await action(parsed.data, userId, options?.signal);
+        const result = await action(
+          parsed.data,
+          userId,
+          options?.signal,
+          () => {
+            effectStarted = true;
+          },
+        );
         if (requiresAuth) assertAccount(userId, options?.signal);
         return { ok: true, ...(result as object) };
       } catch (error) {
+        const auth = useAuthStore.getState();
+        const cancelled =
+          options?.signal?.aborted ||
+          (error instanceof DOMException && error.name === "AbortError");
+        const failure = cancelled
+          ? { code: "cancelled", message: "The action was cancelled." }
+          : error instanceof ToolError
+            ? { code: error.code, message: error.message }
+            : {
+                code: "action_failed",
+                message:
+                  "DriveBeats could not complete the action. Check the current page state.",
+              };
+        const ownsResult =
+          userId === auth.user?.id &&
+          auth.authStatus === "authenticated" &&
+          !auth.isLoggingOut &&
+          !cancelled;
+        const isCollectionMutation = [
+          "drivebeats_save_playlist",
+          "drivebeats_edit_playlist_tracks",
+          "drivebeats_set_favorite",
+        ].includes(name);
+        const effectMayHaveOccurred =
+          isCollectionMutation &&
+          effectStarted &&
+          [
+            "cancelled",
+            "account_changed",
+            "sync_failed",
+            "action_failed",
+            "network_error",
+            "drive_unavailable",
+          ].includes(failure.code);
         return {
           ok: false,
-          error:
-            error instanceof ToolError
-              ? { code: error.code, message: error.message }
-              : {
-                  code: "action_failed",
-                  message:
-                    "DriveBeats could not complete the action. Check the page and your connection, then try again.",
-                },
+          error: failure,
+          recovery: effectMayHaveOccurred
+            ? webMcpRecovery("sync_failed", false, name)
+            : webMcpRecovery(failure.code, readOnly, name),
+          ...(effectMayHaveOccurred ? { effectMayHaveOccurred: true } : {}),
+          ...(ownsResult && error instanceof ToolError ? error.details : {}),
         };
       }
     },
@@ -357,7 +506,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
   return [
     tool(
       "drivebeats_status",
-      "Read sign-in and live playback status in this open DriveBeats page. Sign in and import music through the page before using music tools.",
+      "Read a snapshot of the current page's sign-in, Library and collection readiness, and live player status: open/playing/paused/loading/awaiting user, current track, position, duration, remaining seconds and observed audio permission. This checks state without starting a Library refresh. Sign in and import music through the page.",
       z.object({}),
       true,
       async () => {
@@ -369,7 +518,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
         return {
           signedIn,
           ...(signedIn
-            ? { playback: playback() }
+            ? { playback: playback(), ...readiness() }
             : {
                 message:
                   "Sign in to Google in the open DriveBeats page, then open your Library.",
@@ -380,7 +529,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
     ),
     tool(
       "drivebeats_search_library",
-      "Search filenames across the complete imported Library only. Returns track IDs for playback and saved collections; never searches all Google Drive files.",
+      "Search filenames across the complete imported Library. Returns track IDs and folder context, pagination, and catalog freshness. A cold refresh can take several seconds; concurrent searches share it. Results exclude unimported Drive content; failed refreshes return an error rather than zero matches.",
       z.object({ query: z.string().max(500).default(""), ...page }),
       true,
       async ({ query, offset, limit }, userId, signal) => {
@@ -390,7 +539,22 @@ export function createDriveBeatsTools(): WebMcpTool[] {
         );
         return {
           total: matches.length,
-          tracks: matches.slice(offset, offset + limit).map(publicTrack),
+          tracks: matches.slice(offset, offset + limit).map((track) => ({
+            ...publicTrack(track),
+            folderPath: track.folderStack
+              .slice(1)
+              .map((folder) => folder.name)
+              .join("/"),
+            contextLabel: track.contextLabel,
+          })),
+          search: {
+            query,
+            matches: "filename_only",
+            scope: "imported_library",
+            complete: true,
+            catalogUpdatedAt:
+              useLibrarySearchStore.getState().catalog?.fetchedAt ?? null,
+          },
           nextOffset: offset + limit < matches.length ? offset + limit : null,
         };
       },
@@ -430,15 +594,14 @@ export function createDriveBeatsTools(): WebMcpTool[] {
     ),
     tool(
       "drivebeats_play",
-      "Play a Playlist/Favorites collection, or an ordered Playback Queue of track IDs returned by Library Search or saved collections. Browser audio may require tapping Play.",
-      z
-        .object({
-          collectionId: id.optional(),
-          trackIds: z.array(id).min(1).max(1000).optional(),
-        })
-        .refine(
-          (input) => Boolean(input.collectionId) !== Boolean(input.trackIds),
-        ),
+      "Play exactly one saved collection or an ordered queue of track IDs from Library Search or saved collections. The browser may require an initial Play click. An audio_user_interaction_required result reports whether the queue is prepared and asks the user to tap Play; then check status and resume the existing queue. Success confirms actual playback.",
+      z.union([
+        z.object({ collectionId: id, trackIds: z.never().optional() }),
+        z.object({
+          trackIds: z.array(id).min(1).max(1000),
+          collectionId: z.never().optional(),
+        }),
+      ]),
       false,
       async ({ collectionId, trackIds }, userId, signal) => {
         if (collectionId) {
@@ -474,7 +637,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
     ),
     tool(
       "drivebeats_control_playback",
-      "Control the current page's player. Use pause, resume, next, previous, seek (seconds), volume (0 to 1), shuffle (enabled), or repeat (off/one/all).",
+      "Control the current page's player: pause, resume, next, previous, seek in seconds, volume from 0 to 1, shuffle enabled, or repeat off/one/all. Resume preserves the existing queue. If audio permission blocks playback, ask the user to tap Play in DriveBeats and check status. Busy results require waiting for the current action.",
       z.discriminatedUnion("action", [
         z.object({ action: z.enum(["pause", "resume", "next", "previous"]) }),
         z.object({
@@ -535,19 +698,11 @@ export function createDriveBeatsTools(): WebMcpTool[] {
         if (["resume", "next", "previous"].includes(input.action)) {
           return guardedPlayback(userId, signal, async () => {
             if (input.action === "resume") {
-              if (!(await player.play()))
-                throw new ToolError(
-                  "playback_blocked",
-                  "Tap Play in DriveBeats to allow audio playback.",
-                );
+              if (!(await player.play())) throw playbackError();
             } else if (input.action === "next") await player.next();
             else await player.previous();
             assertAccount(userId, signal);
-            if (expectsPlayback && !playback().isPlaying)
-              throw new ToolError(
-                "playback_blocked",
-                "Playback did not start. Check DriveBeats or tap Play.",
-              );
+            if (expectsPlayback && !playback().isPlaying) throw playbackError();
             return { playback: playback() };
           });
         }
@@ -584,10 +739,10 @@ export function createDriveBeatsTools(): WebMcpTool[] {
     ),
     tool(
       "drivebeats_save_playlist",
-      "Create a named Playlist, or rename an existing Playlist by ID. Changes sync to your DriveBeats cloud library.",
+      "Create a named Playlist, or rename an existing Playlist by ID. Changes sync to your DriveBeats cloud library. If completion is uncertain, read collections before repeating creation to avoid duplicates.",
       z.object({ name, playlistId: id.optional() }),
       false,
-      async ({ name, playlistId }, userId, signal) => {
+      async ({ name, playlistId }, userId, signal, markEffectStarted) => {
         const saved = await collections(userId, signal);
         if (playlistId) {
           if (
@@ -598,8 +753,10 @@ export function createDriveBeatsTools(): WebMcpTool[] {
               "playlist_not_found",
               "Choose an existing Playlist ID.",
             );
+          markEffectStarted();
           await usePlaylistStore.getState().renamePlaylist(playlistId, name);
         } else {
+          markEffectStarted();
           playlistId =
             (await usePlaylistStore.getState().createPlaylist(name)) ??
             undefined;
@@ -622,7 +779,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
     ),
     tool(
       "drivebeats_edit_playlist_tracks",
-      "Add track IDs from Library Search or saved collections to a Playlist, or remove a single track from a Playlist. This changes DriveBeats only; Google Drive stays read-only.",
+      "Add track IDs from Library Search or saved collections to a Playlist, or remove a track. Verified saved tracks do not need a Library refresh. Changes sync in DriveBeats; Google Drive stays read-only. Verify collections before retrying an uncertain change.",
       z.discriminatedUnion("action", [
         z.object({
           action: z.literal("add"),
@@ -632,7 +789,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
         z.object({ action: z.literal("remove"), playlistId: id, trackId: id }),
       ]),
       false,
-      async (input, userId, signal) => {
+      async (input, userId, signal, markEffectStarted) => {
         const saved = await collections(userId, signal);
         const selected = saved.find((item) => item.id === input.playlistId);
         if (!selected || selected.id === FAVORITES_COLLECTION_ID)
@@ -646,6 +803,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
               "track_not_found",
               "The track is not in this Playlist.",
             );
+          markEffectStarted();
           await usePlaylistStore
             .getState()
             .removeTrack(input.playlistId, input.trackId);
@@ -665,7 +823,12 @@ export function createDriveBeatsTools(): WebMcpTool[] {
             removedTrackId: input.trackId,
           };
         }
-        const available = await playableTracks(userId, signal);
+        const available = await playableTracks(
+          userId,
+          signal,
+          false,
+          input.trackIds,
+        );
         const tracks = [...new Set(input.trackIds)].map((trackId) => {
           const track = available.get(trackId);
           if (!track)
@@ -675,6 +838,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
             );
           return createPlaylistTrack(track);
         });
+        markEffectStarted();
         const result = await usePlaylistStore
           .getState()
           .addTracks(input.playlistId, tracks);
@@ -688,17 +852,20 @@ export function createDriveBeatsTools(): WebMcpTool[] {
     ),
     tool(
       "drivebeats_set_favorite",
-      "Set or clear Favorite for a track ID returned by Library Search or saved collections. Changes sync to DriveBeats only.",
+      "Set or clear Favorite for a track ID returned by Library Search or saved collections. Verified saved tracks do not need a Library refresh. Changes sync to DriveBeats only. Verify collections before retrying an uncertain change.",
       z.object({ trackId: id, favorite: z.boolean() }),
       false,
-      async ({ trackId, favorite }, userId, signal) => {
-        const available = await playableTracks(userId, signal);
+      async ({ trackId, favorite }, userId, signal, markEffectStarted) => {
+        const available = await playableTracks(userId, signal, false, [
+          trackId,
+        ]);
         const track = available.get(trackId);
         if (!track)
           throw new ToolError(
             "track_not_found",
             "Choose a track from the Library or saved collections.",
           );
+        markEffectStarted();
         await useLibraryStore
           .getState()
           .setFavorite(createPlaylistTrack(track), favorite);

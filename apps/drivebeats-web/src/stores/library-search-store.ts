@@ -1,5 +1,9 @@
 import { create } from "zustand";
 import {
+  GoogleDriveReadError,
+  LibraryIncompleteError,
+} from "@/lib/drive-read-error";
+import {
   clearLibrarySearchCatalogForUser,
   clearLibrarySearchCatalogs,
   clearLibrarySearchCatalogsForOtherUsers,
@@ -14,15 +18,28 @@ import { useImportedDriveStore } from "@/stores/imported-drive-store";
 
 type LibrarySearchStatus = "idle" | "loading" | "ready" | "error";
 
+export interface LibrarySearchFailure {
+  code:
+    | "network_error"
+    | "offline"
+    | "drive_auth_required"
+    | "drive_access_denied"
+    | "drive_rate_limited"
+    | "library_incomplete"
+    | "library_unavailable";
+  message: string;
+}
+
 interface LibrarySearchState {
   catalog: LibrarySearchCatalogRecord | null;
   error: string | null;
+  failure: LibrarySearchFailure | null;
   hydrated: boolean;
   invalidated: boolean;
   sessionOnly: boolean;
   status: LibrarySearchStatus;
   clear: () => Promise<void>;
-  ensureReady: () => Promise<boolean>;
+  ensureReady: (signal?: AbortSignal) => Promise<boolean>;
   hydrate: () => Promise<void>;
   invalidate: () => void;
   isPotentiallyOutdated: () => boolean;
@@ -41,6 +58,19 @@ let hydrationPromise: Promise<void> | null = null;
 let ownershipVersion = 0;
 let refreshVersion = 0;
 let refreshAbortController: AbortController | null = null;
+interface RefreshFlight {
+  userId: string;
+  importsSignature: string;
+  promise: Promise<boolean>;
+}
+let refreshFlight: RefreshFlight | null = null;
+let catalogWrites: Promise<unknown> = Promise.resolve();
+
+function queueCatalogWrite<T>(write: () => Promise<T>): Promise<T> {
+  const result = catalogWrites.then(write);
+  catalogWrites = result.catch(() => undefined);
+  return result;
+}
 
 function readRememberedUserId() {
   try {
@@ -76,23 +106,81 @@ function isOnline() {
   return typeof navigator === "undefined" || navigator.onLine;
 }
 
-function refreshErrorMessage(error: unknown) {
-  if (error instanceof DOMException && error.name === "AbortError") {
+function refreshFailure(error: unknown): LibrarySearchFailure | null {
+  if (error instanceof Error && error.name === "AbortError") {
     return null;
   }
   if (!isOnline()) {
-    return "Search requires an internet connection.";
+    return {
+      code: "offline",
+      message: "Search requires an internet connection.",
+    };
   }
-  if (error instanceof Error && error.message.includes("(401)")) {
-    return "Your Google Drive session expired. Please sign in again.";
+  if (error instanceof GoogleDriveReadError) {
+    if (error.status === 401)
+      return {
+        code: "drive_auth_required",
+        message: "Your Google Drive session expired. Please sign in again.",
+      };
+    if (error.status === 403)
+      return {
+        code: "drive_access_denied",
+        message:
+          "DriveBeats cannot read part of this Library. Check Google Drive access.",
+      };
+    if (error.status === 429)
+      return {
+        code: "drive_rate_limited",
+        message: "Google Drive is busy. Wait a moment, then try again.",
+      };
   }
-  if (error instanceof Error && error.message.includes("(403)")) {
-    return "DriveBeats cannot read part of this Library. Check Google Drive access.";
+  if (error instanceof LibraryIncompleteError) {
+    return {
+      code: "library_incomplete",
+      message: "Google Drive could not check the complete Library. Try again.",
+    };
   }
-  if (error instanceof Error && error.message.includes("incomplete")) {
-    return "Google Drive could not check the complete Library. Try again.";
-  }
-  return "Could not refresh the Library. Check your connection and try again.";
+  if (error instanceof TypeError)
+    return {
+      code: "network_error",
+      message:
+        "Could not connect to Google Drive. Check your connection and try again.",
+    };
+  return {
+    code: "library_unavailable",
+    message:
+      "Could not refresh the Library. Check your connection and try again.",
+  };
+}
+
+function waitForCaller<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted)
+    return Promise.reject(
+      new DOMException("Library Search request was cancelled", "AbortError"),
+    );
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener("abort", onAbort);
+      reject(
+        new DOMException("Library Search request was cancelled", "AbortError"),
+      );
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    void promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 function adoptUser(userId: string) {
@@ -101,17 +189,19 @@ function adoptUser(userId: string) {
   refreshVersion += 1;
   refreshAbortController?.abort();
   refreshAbortController = null;
+  refreshFlight = null;
   hydrationPromise = null;
   rememberUserId(userId);
   useLibrarySearchStore.setState({
     catalog: null,
     error: null,
+    failure: null,
     hydrated: false,
     invalidated: false,
     sessionOnly: false,
     status: "idle",
   });
-  void clearLibrarySearchCatalogsForOtherUsers(userId);
+  void queueCatalogWrite(() => clearLibrarySearchCatalogsForOtherUsers(userId));
 }
 
 function syncActiveUser() {
@@ -160,21 +250,24 @@ async function wipeCatalog(seal: boolean) {
   refreshVersion += 1;
   refreshAbortController?.abort();
   refreshAbortController = null;
+  refreshFlight = null;
   hydrationPromise = null;
   useLibrarySearchStore.setState({
     catalog: null,
     error: null,
+    failure: null,
     hydrated: true,
     invalidated: false,
     sessionOnly: false,
     status: "idle",
   });
-  await clearLibrarySearchCatalogs();
+  await queueCatalogWrite(clearLibrarySearchCatalogs);
 }
 
 export const useLibrarySearchStore = create<LibrarySearchState>((set, get) => ({
   catalog: null,
   error: null,
+  failure: null,
   hydrated: false,
   invalidated: false,
   sessionOnly: false,
@@ -198,47 +291,95 @@ export const useLibrarySearchStore = create<LibrarySearchState>((set, get) => ({
     );
   },
 
-  ensureReady: async () => {
-    await get().hydrate();
-    if (catalogSealed || !isOnline()) return false;
-    if (get().isStale()) {
-      return get().refresh();
-    }
-    return Boolean(get().catalog);
+  ensureReady: async (signal) => {
+    if (signal?.aborted)
+      throw new DOMException(
+        "Library Search request was cancelled",
+        "AbortError",
+      );
+    return waitForCaller(
+      (async () => {
+        await get().hydrate();
+        if (signal?.aborted) return false;
+        if (catalogSealed) return false;
+        if (!isOnline()) {
+          if (get().isStale() && get().status !== "loading") {
+            const failure = refreshFailure(new Error("Offline"));
+            set({ failure, error: failure?.message ?? null, status: "error" });
+          }
+          return false;
+        }
+        if (get().isStale()) return startRefresh(false);
+        return Boolean(get().catalog);
+      })(),
+      signal,
+    );
   },
 
-  refresh: async () => {
-    syncActiveUser();
-    const userId = activeUserId;
-    if (catalogSealed || !userId) return false;
-    if (!isOnline()) {
-      set({
-        error: "Search requires an internet connection.",
-        status: "error",
-      });
-      return false;
-    }
+  refresh: () => startRefresh(true),
 
-    const requestVersion = refreshVersion + 1;
-    refreshVersion = requestVersion;
-    const requestOwnershipVersion = ownershipVersion;
-    refreshAbortController?.abort();
-    const controller = new AbortController();
-    refreshAbortController = controller;
-    set({ error: null, status: "loading" });
+  invalidate: () => set({ invalidated: true }),
+  clear: () => wipeCatalog(false),
+  sealAndClear: () => wipeCatalog(true),
+}));
 
+function startRefresh(supersede: boolean): Promise<boolean> {
+  syncActiveUser();
+  const userId = activeUserId;
+  if (catalogSealed || !userId) return Promise.resolve(false);
+  const importsSignature = getLibrarySearchImportsSignature();
+  if (
+    !supersede &&
+    refreshFlight?.userId === userId &&
+    refreshFlight.importsSignature === importsSignature
+  )
+    return refreshFlight.promise;
+  if (!isOnline()) {
+    const failure = refreshFailure(new Error("Offline"));
+    useLibrarySearchStore.setState({
+      failure,
+      error: failure?.message ?? null,
+      status: "error",
+    });
+    return Promise.resolve(false);
+  }
+
+  const requestVersion = refreshVersion + 1;
+  refreshVersion = requestVersion;
+  const requestOwnershipVersion = ownershipVersion;
+  refreshAbortController?.abort();
+  const controller = new AbortController();
+  refreshAbortController = controller;
+  useLibrarySearchStore.setState({
+    error: null,
+    failure: null,
+    status: "loading",
+  });
+  const flight: RefreshFlight = {
+    userId,
+    importsSignature,
+    promise: Promise.resolve(false),
+  };
+  refreshFlight = flight;
+  flight.promise = (async () => {
     try {
       const accessToken = await useAuthStore.getState().getValidAccessToken();
+      if (
+        controller.signal.aborted ||
+        catalogSealed ||
+        requestVersion !== refreshVersion ||
+        userId !== useAuthStore.getState().user?.id
+      )
+        return false;
       if (!accessToken) {
-        throw new Error(
-          useAuthStore.getState().authStatus === "unauthenticated"
-            ? "Drive Library Search request failed (401)"
-            : "Drive unavailable",
-        );
+        if (useAuthStore.getState().authStatus === "unauthenticated")
+          throw new GoogleDriveReadError(401);
+        throw new TypeError("Google Drive authentication could not be reached");
       }
 
       const { rootFolders, rootFiles } = useImportedDriveStore.getState();
-      const importsSignature = getLibrarySearchImportsSignature();
+      if (importsSignature !== getLibrarySearchImportsSignature())
+        return startRefresh(false);
       const tracks =
         rootFolders.length === 0 && rootFiles.length === 0
           ? []
@@ -254,13 +395,14 @@ export const useLibrarySearchStore = create<LibrarySearchState>((set, get) => ({
         controller.signal.aborted ||
         requestVersion !== refreshVersion ||
         requestOwnershipVersion !== ownershipVersion ||
-        userId !== activeUserId
+        userId !== activeUserId ||
+        userId !== useAuthStore.getState().user?.id
       ) {
         return false;
       }
 
       if (importsSignature !== getLibrarySearchImportsSignature()) {
-        return get().refresh();
+        return startRefresh(false);
       }
 
       const record: LibrarySearchCatalogRecord = {
@@ -273,25 +415,29 @@ export const useLibrarySearchStore = create<LibrarySearchState>((set, get) => ({
         estimateLibrarySearchCatalogBytes(record) <=
         MAX_DURABLE_LIBRARY_SEARCH_BYTES;
       const persisted = withinDurableLimit
-        ? await replaceLibrarySearchCatalog(record)
+        ? await queueCatalogWrite(() => replaceLibrarySearchCatalog(record))
         : false;
 
       if (!persisted) {
-        await clearLibrarySearchCatalogForUser(userId);
+        await queueCatalogWrite(() => clearLibrarySearchCatalogForUser(userId));
       }
 
       if (
         catalogSealed ||
         controller.signal.aborted ||
         requestVersion !== refreshVersion ||
-        requestOwnershipVersion !== ownershipVersion
+        requestOwnershipVersion !== ownershipVersion ||
+        userId !== useAuthStore.getState().user?.id
       ) {
         return false;
       }
 
-      set({
+      if (importsSignature !== getLibrarySearchImportsSignature())
+        return startRefresh(false);
+      useLibrarySearchStore.setState({
         catalog: record,
         error: null,
+        failure: null,
         hydrated: true,
         invalidated: false,
         sessionOnly: !persisted,
@@ -299,33 +445,40 @@ export const useLibrarySearchStore = create<LibrarySearchState>((set, get) => ({
       });
       return true;
     } catch (error) {
-      const message = refreshErrorMessage(error);
+      const failure = refreshFailure(error);
       if (
-        message &&
+        failure &&
         !catalogSealed &&
+        !controller.signal.aborted &&
         requestVersion === refreshVersion &&
-        requestOwnershipVersion === ownershipVersion
+        requestOwnershipVersion === ownershipVersion &&
+        userId === useAuthStore.getState().user?.id
       ) {
-        set({ error: message, status: "error" });
+        useLibrarySearchStore.setState({
+          failure,
+          error: failure.message,
+          status: "error",
+        });
       }
       return false;
     } finally {
       if (refreshAbortController === controller) {
         refreshAbortController = null;
       }
+      if (refreshFlight === flight) refreshFlight = null;
     }
-  },
-
-  invalidate: () => set({ invalidated: true }),
-  clear: () => wipeCatalog(false),
-  sealAndClear: () => wipeCatalog(true),
-}));
+  })();
+  return flight.promise;
+}
 
 if (typeof window !== "undefined") {
   activeUserId = useAuthStore.getState().user?.id ?? readRememberedUserId();
   if (activeUserId) {
     rememberUserId(activeUserId);
-    void clearLibrarySearchCatalogsForOtherUsers(activeUserId);
+    const userId = activeUserId;
+    void queueCatalogWrite(() =>
+      clearLibrarySearchCatalogsForOtherUsers(userId),
+    );
   }
   useAuthStore.subscribe(syncActiveUser);
   let importsSignature = getLibrarySearchImportsSignature();

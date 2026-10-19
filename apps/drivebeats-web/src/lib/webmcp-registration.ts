@@ -1,27 +1,31 @@
-export interface WebMcpTool {
-  name: string;
-  description: string;
+import type { WebMCP } from "webmcp-types";
+
+// Zod validates untrusted inputs at execution time. Older hosts may omit the
+// execution options, return synchronously, or expose unregisterTool.
+export type WebMcpTool = Omit<
+  WebMCP.ModelContextTool,
+  "inputSchema" | "execute"
+> & {
   inputSchema: Record<string, unknown>;
-  annotations?: { readOnlyHint?: boolean; untrustedContentHint?: boolean };
   execute: (
     input: unknown,
-    options?: { signal?: AbortSignal },
-  ) => Promise<unknown>;
-}
+    options?: Partial<WebMCP.ToolExecuteCallbackOptions>,
+  ) => Promise<Awaited<ReturnType<WebMCP.ToolExecuteCallback>>>;
+};
 
 export interface WebMcpContext {
   registerTool: (
     tool: WebMcpTool,
-    options?: { signal: AbortSignal },
-  ) => void | Promise<void>;
+    options?: WebMCP.ModelContextRegisterToolOptions,
+  ) => WebMCP.MaybePromise<void>;
   // Earlier hosts remove registrations explicitly; the current draft uses
   // registration AbortSignals. Never clear tools belonging to another feature.
-  unregisterTool?: (name: string) => void | Promise<void>;
+  unregisterTool?: (name: string) => WebMCP.MaybePromise<void>;
 }
 
 export function getWebMcpContext(): WebMcpContext | null {
   const candidates = [
-    (document as Document & { modelContext?: WebMcpContext }).modelContext,
+    document.modelContext,
     (navigator as Navigator & { modelContext?: WebMcpContext }).modelContext,
   ];
   return (
@@ -42,7 +46,10 @@ export function registerWebMcpTools(
     // closures after unmount or during StrictMode's mount/cleanup cycle.
     const registeredTool = {
       ...tool,
-      execute: async (input: unknown, options?: { signal?: AbortSignal }) =>
+      execute: async (
+        input: unknown,
+        options?: Partial<WebMCP.ToolExecuteCallbackOptions>,
+      ) =>
         disposed || controller.signal.aborted
           ? {
               ok: false,

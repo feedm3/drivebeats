@@ -23,7 +23,7 @@ describe("native WebMCP registration", () => {
       registerTool: vi.fn((descriptor, options) => {
         if (registered.has(descriptor.name)) throw new Error("Duplicate");
         registered.set(descriptor.name, descriptor);
-        options?.signal.addEventListener(
+        options?.signal?.addEventListener(
           "abort",
           () => registered.delete(descriptor.name),
           { once: true },

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Analytics } from "@vercel/analytics/react";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -19,6 +21,12 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+// Bypass the separate icon request that can fail in iOS 27's Home Screen sheet.
+// Read once; the public asset also preserves the previous Apple icon URL.
+const appleTouchIcon = `data:image/png;base64,${readFileSync(
+  join(process.cwd(), "public/apple-icon.png"),
+).toString("base64")}`;
 
 export const viewport: Viewport = {
   viewportFit: "cover",
@@ -136,6 +144,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link
+          rel="apple-touch-icon"
+          href={appleTouchIcon}
+          sizes="180x180"
+          type="image/png"
+        />
         {/* Resolved-theme status bar color. Server-rendered with `media="not
             all"` so it never applies without JavaScript (the media-qualified
             tags from `viewport.themeColor` handle that case). `theme-init.js`

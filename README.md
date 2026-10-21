@@ -41,7 +41,8 @@ verified host requirements and remaining real-browser acceptance checks.
 
 ### Prerequisites
 
-- Node.js 24 and pnpm 12.7.0 (pinned in `mise.toml`)
+- Node.js 24 (configured in `mise.toml`) and pnpm (pinned by the root
+  `package.json` `packageManager` field; mise reads the same version)
 - A Google Cloud project with the Drive API enabled
 - OAuth 2.0 credentials (Client ID and Client Secret)
 - A browser API key for Google Picker

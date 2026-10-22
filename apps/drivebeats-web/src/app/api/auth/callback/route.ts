@@ -6,7 +6,10 @@ import {
   hasGoogleDriveScope,
   parseGrantedGoogleScopes,
 } from "@/lib/google";
-import { resolveGoogleRefreshToken } from "@/lib/google-grant-service";
+import {
+  GoogleGrantError,
+  resolveGoogleRefreshToken,
+} from "@/lib/google-grant-service";
 import {
   clearGoogleOAuthCookies,
   OAUTH_CONSENT_RETRY_COOKIE,
@@ -103,9 +106,13 @@ export async function GET(request: NextRequest) {
   let refreshToken: string | null;
   try {
     refreshToken = await resolveGoogleRefreshToken(user, data.refresh_token);
-  } catch {
+  } catch (error) {
     // Do not log provider credentials or database connection details.
-    console.error("OAuth grant storage or refresh failed");
+    console.error("OAuth grant storage or refresh failed", {
+      stage: error instanceof GoogleGrantError ? error.stage : "unknown",
+      reason:
+        error instanceof GoogleGrantError ? error.reason : "operation_failed",
+    });
     return redirectWithAuthError(request, "authentication_failed");
   }
   if (!refreshToken) {

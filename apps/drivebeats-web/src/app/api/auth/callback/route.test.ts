@@ -216,6 +216,43 @@ it("recovers a revoked Google connection", async () => {
   expect(database.grants.has("account-a")).toBe(false);
 });
 
+it("recovers a saved connection belonging to another OAuth client and reuses the replacement", async () => {
+  await complete(await start());
+  returnedRefreshToken = undefined;
+  refreshedError = "unauthorized_client";
+  const recovery = await complete(await start());
+  const url = new URL(recovery.headers.get("location") ?? "");
+  expect(url.origin).toBe("https://accounts.google.com");
+  expect(url.searchParams.get("prompt")).toBe("consent");
+  expect(url.searchParams.get("login_hint")).toBe("account-a");
+  // The old grant may still work with its original client. Recovery does not
+  // delete it or revoke Google's approval before a replacement is available.
+  expect(database.remove).not.toHaveBeenCalled();
+  expect(database.grants.has("account-a")).toBe(true);
+
+  returnedRefreshToken = "current-client-refresh-token";
+  refreshedError = undefined;
+  expect((await complete(recovery)).headers.get("location")).toBe(
+    "https://drivebeats.test/app",
+  );
+  returnedRefreshToken = undefined;
+  expect((await complete(await start())).headers.get("location")).toBe(
+    "https://drivebeats.test/app",
+  );
+});
+
+it("does not loop when Google withholds a replacement for another OAuth client's token", async () => {
+  await complete(await start());
+  returnedRefreshToken = undefined;
+  refreshedError = "unauthorized_client";
+  const recovery = await complete(await start());
+  const failed = await complete(recovery);
+  expect(failed.headers.get("location")).toBe(
+    "https://drivebeats.test/?authError=missing_refresh_token",
+  );
+  expect(failed.cookies.get("oauth_consent_retry")?.maxAge).toBe(0);
+});
+
 it("preserves approval and avoids re-consent during a transient Google failure", async () => {
   await complete(await start());
   returnedRefreshToken = undefined;
@@ -265,4 +302,49 @@ it("rejects mismatched state without exchanging credentials", async () => {
     "https://drivebeats.test/?authError=invalid_oauth_state",
   );
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("identifies a failed grant lookup without logging database credentials", async () => {
+  returnedRefreshToken = undefined;
+  database.read.mockRejectedValueOnce(
+    Object.assign(new Error("postgres://user:private-password@db/private"), {
+      code: "42P01",
+    }),
+  );
+  const log = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const response = await complete(await start());
+    expect(response.headers.get("location")).toBe(
+      "https://drivebeats.test/?authError=authentication_failed",
+    );
+    expect(log).toHaveBeenCalledWith("OAuth grant storage or refresh failed", {
+      stage: "grant_lookup",
+      reason: "database_schema",
+    });
+    expect(JSON.stringify(log.mock.calls)).not.toContain("private-password");
+    expect(database.save).not.toHaveBeenCalled();
+  } finally {
+    log.mockRestore();
+  }
+});
+
+it("identifies provider refresh failures without logging provider text or tokens", async () => {
+  await complete(await start());
+  returnedRefreshToken = undefined;
+  refreshedError = "provider-private-error-detail";
+  const log = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const response = await complete(await start());
+    expect(response.headers.get("location")).toBe(
+      "https://drivebeats.test/?authError=authentication_failed",
+    );
+    expect(log).toHaveBeenCalledWith("OAuth grant storage or refresh failed", {
+      stage: "grant_refresh",
+      reason: "provider_error",
+    });
+    expect(JSON.stringify(log.mock.calls)).not.toContain(refreshedError);
+    expect(JSON.stringify(log.mock.calls)).not.toContain("test-refresh-token");
+  } finally {
+    log.mockRestore();
+  }
 });

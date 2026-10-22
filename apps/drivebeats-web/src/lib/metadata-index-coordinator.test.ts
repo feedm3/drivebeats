@@ -477,6 +477,43 @@ describe("automatic metadata coordinator", () => {
     expect(fixtures.ensure).toHaveBeenCalledOnce();
   });
 
+  it("waits on a saved reading limit, continues healthy tracks, and retries when due", async () => {
+    const coordinator = await module();
+    coordinator.setCurrentMetadataFolder([], []);
+    fixtures.search.isStale = () => false;
+    fixtures.search.catalog = {
+      userId: "account",
+      importsSignature: "imports",
+      fetchedAt: 13,
+      tracks: [track("limited"), track("good")],
+    };
+    const checkedAt = Date.now();
+    fixtures.loadedCache.mockImplementation(async (file) =>
+      file.id === "limited"
+        ? {
+            freshness: "current",
+            record: {
+              status: "unresolved",
+              reason: "budget_exceeded",
+              checkedAt,
+            },
+          }
+        : { freshness: "unknown" },
+    );
+    stop = coordinator.startMetadataIndex();
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(fixtures.ensure.mock.calls.map(([known]) => known.track.id)).toEqual(
+      ["good"],
+    );
+    expect(coordinator.useMetadataIndexStore.getState().pauseReason).toBe(
+      "waiting",
+    );
+    await vi.advanceTimersByTimeAsync(30 * 60_000);
+    expect(fixtures.ensure.mock.calls.map(([known]) => known.track.id)).toEqual(
+      ["good", "limited"],
+    );
+  });
+
   it("skips one failed visible track's backoff and continues to healthy Library tracks", async () => {
     const coordinator = await module();
     coordinator.setCurrentMetadataFolder([], [track("bad")]);

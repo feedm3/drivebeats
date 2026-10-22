@@ -57,6 +57,48 @@ beforeEach(() => {
   fixtures.records = {};
 });
 describe("persisted metadata coverage beyond the memory cache", () => {
+  it("keeps memory and durable budget deferrals pending while counting real parse failures", async () => {
+    const tracks = [
+      track("parse"),
+      track("memory-budget"),
+      track("durable-budget"),
+    ];
+    fixtures.records.parse = {
+      ...record(tracks[0], "unresolved"),
+      reason: "parse_error",
+    };
+    fixtures.records["memory-budget"] = {
+      ...record(tracks[1], "unresolved"),
+      reason: "budget_exceeded",
+    };
+    fixtures.scan.mockImplementation(async (_account, visit) => {
+      visit({ ...record(tracks[2], "unresolved"), reason: "budget_exceeded" });
+      return true;
+    });
+    const { buildPersistedMetadataCoverage } = await import(
+      "./persisted-metadata-coverage"
+    );
+    const result = await buildPersistedMetadataCoverage(
+      "account",
+      tracks,
+      (file) => {
+        const value = fixtures.records[file.id];
+        return value
+          ? { status: value.status, freshness: "current", reason: value.reason }
+          : { status: "missing", freshness: "unknown" };
+      },
+    );
+    expect(result).toMatchObject({
+      total: 3,
+      checked: 0,
+      unresolved: 1,
+      unknown: 2,
+      remaining: 2,
+      unresolvedReasons: { parse_error: 1 },
+      metadataSearchComplete: false,
+    });
+    expect(fixtures.records["durable-budget"]).toBeUndefined();
+  });
   it("counts evicted positive, confirmed empty and unresolved outcomes without hydrating tags", async () => {
     const tracks = [track("ready"), track("empty"), track("unresolved")];
     fixtures.scan.mockImplementation(async (_account, visit) => {

@@ -23,9 +23,6 @@ export interface MetadataDiagnosticTrack {
   retryable: boolean;
   retryAfterMs?: number;
   checkedAt?: number;
-  /** Persisted budget_exceeded is a per-track reader limit, not a batch pause.
-   * Legacy records do not identify which of these limits was reached. */
-  budget?: { scope: "track"; maxBytes: number; maxRangeAttempts: number };
 }
 export class MetadataDiagnosticsChangedError extends Error {
   readonly code = "metadata_changed";
@@ -96,6 +93,7 @@ export async function getMetadataUnresolvedDiagnostics(
     if (
       record?.accountId === accountId &&
       record.status === "unresolved" &&
+      record.reason !== "budget_exceeded" &&
       getMetadataFreshness(record, known.track, environment) === "current"
     ) {
       const reason = record.reason ?? "unknown";
@@ -104,15 +102,6 @@ export async function getMetadataUnresolvedDiagnostics(
         status: "unresolved",
         retryable: false,
         checkedAt: record.checkedAt,
-        ...(reason === "budget_exceeded"
-          ? {
-              budget: {
-                scope: "track",
-                maxBytes: 1024 * 1024,
-                maxRangeAttempts: 4,
-              } as const,
-            }
-          : {}),
       });
       return;
     }

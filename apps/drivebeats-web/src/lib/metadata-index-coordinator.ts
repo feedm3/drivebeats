@@ -18,6 +18,8 @@ import {
   verifyKnownCollections,
 } from "@/lib/known-track-resolver";
 import {
+  getMetadataBudgetRetryAt,
+  isMetadataBudgetDeferred,
   METADATA_PARSER_VERSION,
   METADATA_POLICY_VERSION,
 } from "@/lib/metadata-cache-types";
@@ -662,8 +664,15 @@ export function startMetadataIndex() {
                     .peekRecord(known.track, metadataEnvironmentKey());
                   if (!valid()) break;
                   if (cached.freshness === "current" && cached.record) {
-                    retries.delete(track.id);
-                    continue;
+                    if (!isMetadataBudgetDeferred(cached.record)) {
+                      retries.delete(track.id);
+                      continue;
+                    }
+                    const at = getMetadataBudgetRetryAt(cached.record);
+                    if (at > Date.now()) {
+                      retries.set(track.id, { track, at });
+                      continue;
+                    }
                   }
                   const retryAt = getTrackMetadataRetryAt(known);
                   if (retryAt > Date.now()) {

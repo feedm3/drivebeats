@@ -3,6 +3,44 @@ import { buildMetadataCoverage } from "@/lib/metadata-coverage";
 import type { MetadataView } from "@/lib/track-metadata-loader";
 
 describe("truthful complete-library coverage", () => {
+  it("counts stored budget limits as pending alongside genuine parse failures", () => {
+    const states: MetadataView[] = [
+      { status: "unresolved", freshness: "current", reason: "parse_error" },
+      { status: "unresolved", freshness: "current", reason: "budget_exceeded" },
+      { status: "unresolved", freshness: "stale", reason: "budget_exceeded" },
+      {
+        status: "deferred",
+        freshness: "unknown",
+        error: {
+          code: "budget_exceeded",
+          retryable: true,
+          budgetScope: "consumer",
+        },
+      },
+      {
+        status: "error",
+        freshness: "unknown",
+        error: { code: "budget_exceeded", retryable: true },
+      },
+    ];
+    const tracks = states.map((_state, index) => ({
+      id: String(index),
+      name: "track.mp3",
+      mimeType: "audio/mpeg",
+    }));
+    expect(
+      buildMetadataCoverage(tracks, (track) => states[Number(track.id)]),
+    ).toMatchObject({
+      total: 5,
+      checked: 0,
+      unresolved: 1,
+      unknown: 4,
+      stale: 0,
+      remaining: 4,
+      unresolvedReasons: { parse_error: 1 },
+      metadataSearchComplete: false,
+    });
+  });
   it("keeps disjoint terminal, stale, pending and transient buckets", () => {
     const states: MetadataView[] = [
       { status: "ready", freshness: "current", tags: { artist: "Artist" } },

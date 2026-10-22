@@ -116,10 +116,27 @@ beforeEach(() => {
 });
 
 describe("cache-only metadata issue details", () => {
-  it("lists only current proven saved unresolved records without media reads or guessing a budget subreason", async () => {
-    catalog(["parse", "large", "temporary", "batch"]);
+  it("lists genuine failures but excludes memory, durable and legacy budget deferrals without media reads", async () => {
+    catalog([
+      "parse",
+      "large",
+      "memory-budget",
+      "legacy-budget",
+      "temporary",
+      "batch",
+    ]);
     mocks.store.records.parse = record("parse", "parse_error");
-    mocks.durable = [record("large", "budget_exceeded")];
+    mocks.store.records["memory-budget"] = record(
+      "memory-budget",
+      "budget_exceeded",
+    );
+    mocks.durable = [
+      record("large", "budget_exceeded"),
+      {
+        ...record("legacy-budget", "budget_exceeded"),
+        rangeStrategyVersion: undefined,
+      },
+    ];
     mocks.states.set("temporary", {
       status: "error",
       freshness: "unknown",
@@ -134,8 +151,9 @@ describe("cache-only metadata issue details", () => {
     const result = await getMetadataUnresolvedDiagnostics();
     expect(result).toMatchObject({
       available: true,
-      total: 2,
+      total: 1,
       truncated: false,
+      reasons: [{ code: "parse_error", count: 1 }],
       tracks: [
         {
           id: "parse",
@@ -143,15 +161,10 @@ describe("cache-only metadata issue details", () => {
           reason: "parse_error",
           retryable: false,
         },
-        {
-          id: "large",
-          reason: "budget_exceeded",
-          budget: { scope: "track", maxBytes: 1048576, maxRangeAttempts: 4 },
-        },
       ],
     });
     expect(result.tracks.map((row) => row.id)).not.toContain("temporary");
-    expect(result.tracks[1].budget).not.toHaveProperty("detail");
+    expect(result.tracks.map((row) => row.id)).toEqual(["parse"]);
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });

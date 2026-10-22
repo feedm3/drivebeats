@@ -20,6 +20,8 @@ export interface MetadataOutcome {
   reason?: string;
   environmentKey?: string;
   rangeStrategyVersion?: number;
+  /** Consecutive bounded reader limits for this content and reading strategy. */
+  retryCount?: number;
 }
 
 export interface MetadataRecord extends MetadataOutcome {
@@ -35,6 +37,28 @@ export interface MetadataRecord extends MetadataOutcome {
 }
 
 export type MetadataFreshness = "current" | "stale" | "unknown";
+
+export function isMetadataBudgetDeferred(
+  record: { status: string; reason?: string } | undefined,
+) {
+  return record?.status === "unresolved" && record.reason === "budget_exceeded";
+}
+
+export function getMetadataBudgetRetryCount(record: MetadataOutcome) {
+  return Number.isSafeInteger(record.retryCount) && (record.retryCount ?? 0) > 0
+    ? Math.min(7, record.retryCount as number)
+    : 1;
+}
+
+/** Legacy saved limits also wait before retrying; reloads never reset backoff. */
+export function getMetadataBudgetRetryAt(record: MetadataRecord) {
+  if (!isMetadataBudgetDeferred(record)) return 0;
+  const delay = Math.min(
+    24 * 60 * 60_000,
+    30 * 60_000 * 2 ** (getMetadataBudgetRetryCount(record) - 1),
+  );
+  return record.checkedAt + delay;
+}
 
 /** An absent validator is never an enduring cache hit. */
 export function getMetadataFingerprint(

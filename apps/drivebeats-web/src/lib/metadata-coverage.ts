@@ -17,7 +17,11 @@ export function buildMetadataCoverage(
   const fields = { title: 0, artist: 0, album: 0 };
   for (const track of tracks ?? []) {
     const value = getState(track);
-    if (value.freshness === "stale") counts.stale += 1;
+    // Budget limits defer another bounded attempt; they are never read failures.
+    // Include old persisted outcomes and transient consumer/background deferrals.
+    if ((value.reason ?? value.error?.code) === "budget_exceeded")
+      counts.unknown += 1;
+    else if (value.freshness === "stale") counts.stale += 1;
     else if (value.freshness === "current" && value.status === "ready") {
       counts.ready += 1;
       for (const field of ["title", "artist", "album"] as const)

@@ -99,7 +99,7 @@ beforeEach(() => {
   fixtures.diagnostics.mockResolvedValue({
     reasons: [
       { code: "parse_error", count: 2 },
-      { code: "budget_exceeded", count: 2 },
+      { code: "unsupported_format", count: 2 },
     ],
     tracks: [
       {
@@ -111,7 +111,7 @@ beforeEach(() => {
       {
         id: "b",
         fileName: "Track B.mp3",
-        reason: "budget_exceeded",
+        reason: "unsupported_format",
         status: "unresolved",
       },
     ],
@@ -225,11 +225,9 @@ describe("metadata activity subscriptions", () => {
     fireEvent.click(expand);
     await waitFor(() => expect(screen.getByText("Track A.mp3")).toBeVisible());
     expect(screen.getByText("2 tracks: Decoding failed")).toBeVisible();
-    expect(screen.getByText("2 tracks: Reading limit reached")).toBeVisible();
+    expect(screen.getByText("2 tracks: Unsupported format")).toBeVisible();
     expect(
-      screen.getByText(
-        "Reading limit reached for this track. Other tracks continue.",
-      ),
+      screen.getByText("This audio format is not supported yet."),
     ).toBeVisible();
     const heading = screen.getByText("Music metadata");
     const count = screen.getByText("82 of 2913 checked");

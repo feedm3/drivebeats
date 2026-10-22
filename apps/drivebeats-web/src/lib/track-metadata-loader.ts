@@ -20,7 +20,10 @@ import {
   updateKnownTrackDescriptor,
 } from "@/lib/known-track-resolver";
 import {
+  getMetadataBudgetRetryAt,
+  getMetadataBudgetRetryCount,
   getMetadataFingerprint,
+  isMetadataBudgetDeferred,
   METADATA_RANGE_STRATEGY_VERSION,
   type MetadataFreshness,
   type MetadataOutcome,
@@ -126,7 +129,17 @@ function setStatus(known: KnownTrack, view: MetadataView) {
   changed();
 }
 export function getTrackMetadataRetryAt(known: KnownTrack): number {
-  return retryAt.get(`${keyFor(known)}:${known.scopeKey}`) ?? 0;
+  const store = useId3MetadataStore.getState();
+  const saved =
+    store.accountId === known.accountId
+      ? store.getRecord(known.track, metadataEnvironmentKey())
+      : null;
+  return Math.max(
+    retryAt.get(`${keyFor(known)}:${known.scopeKey}`) ?? 0,
+    saved?.record && saved.freshness === "current"
+      ? getMetadataBudgetRetryAt(saved.record)
+      : 0,
+  );
 }
 export function getTrackMetadataState(known: KnownTrack): MetadataView {
   if (!assertKnownTrack(known))
@@ -138,18 +151,34 @@ export function getTrackMetadataState(known: KnownTrack): MetadataView {
     known.track,
     metadataEnvironmentKey(),
   );
-  if (record && (freshness === "current" || freshness === "stale"))
+  if (record && (freshness === "current" || freshness === "stale")) {
+    const deferred =
+      freshness === "current" && isMetadataBudgetDeferred(record);
     return {
-      status: record.status,
+      status: deferred ? "deferred" : record.status,
       freshness,
       tags: record.tags,
       checkedAt: record.checkedAt,
       loadedVia: record.loadedVia,
       reason: record.reason,
       ...(record.reason
-        ? { error: { code: record.reason, retryable: false } }
+        ? {
+            error: {
+              code: record.reason,
+              retryable: deferred,
+              ...(deferred
+                ? {
+                    retryAfterMs: Math.max(
+                      0,
+                      getMetadataBudgetRetryAt(record) - Date.now(),
+                    ),
+                  }
+                : {}),
+            },
+          }
         : {}),
     };
+  }
   return (
     (statusScopes.get(keyFor(known)) === known.scopeKey
       ? statuses.get(keyFor(known))
@@ -411,6 +440,13 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
         ["ready", "no_target_tags", "unresolved"].includes(existing.status)
       )
         return { metadata: existing, loadedNow: false };
+      // Strengthening a descriptor can reveal a saved cooldown that was not
+      // current at entry. Do not bypass it with another media read.
+      if (
+        existing.status === "deferred" &&
+        getTrackMetadataRetryAt(known) > Date.now()
+      )
+        return { metadata: existing, loadedNow: false };
       const token = await useAuthStore.getState().getValidAccessToken();
       assertCurrent(flight);
       if (!token) throw new MetadataReadError("drive_auth_required", true);
@@ -458,12 +494,26 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
         "parse_error",
       ].includes(error.code)
     ) {
+      const previous = useId3MetadataStore
+        .getState()
+        .getRecord(descriptor, metadataEnvironmentKey());
       outcome = {
         status: "unresolved",
         reason: error.code,
         loadedVia: "drive_range",
         ...(error.code === "budget_exceeded"
-          ? { rangeStrategyVersion: METADATA_RANGE_STRATEGY_VERSION }
+          ? {
+              rangeStrategyVersion: METADATA_RANGE_STRATEGY_VERSION,
+              retryCount:
+                previous.freshness === "current" &&
+                previous.record &&
+                isMetadataBudgetDeferred(previous.record)
+                  ? Math.min(
+                      7,
+                      getMetadataBudgetRetryCount(previous.record) + 1,
+                    )
+                  : 1,
+            }
           : {}),
         ...(error.code === "range_unsupported"
           ? { environmentKey: metadataEnvironmentKey() }

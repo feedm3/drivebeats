@@ -195,7 +195,7 @@ describe("shared metadata consumer boundary", () => {
     expect(result.metadata.tags).toEqual({ title: "Remote" });
     expect(mocks.extract).not.toHaveBeenCalled();
   });
-  it("retains a deterministic media limit outcome for the current range strategy", async () => {
+  it("defers a media limit across reloads, retries with longer backoff, and can later succeed", async () => {
     const { MetadataReadError } = await import("./drive-metadata-reader");
     const { METADATA_RANGE_STRATEGY_VERSION } = await import(
       "./metadata-cache-types"
@@ -203,18 +203,51 @@ describe("shared metadata consumer boundary", () => {
     mocks.range.mockRejectedValueOnce(
       new MetadataReadError("budget_exceeded", false),
     );
-    const { ensureTrackMetadata } = await import("./track-metadata-loader");
+    mocks.range.mockRejectedValueOnce(
+      new MetadataReadError("budget_exceeded", false),
+    );
+    let { ensureTrackMetadata } = await import("./track-metadata-loader");
     await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
-      metadata: { status: "unresolved", reason: "budget_exceeded" },
+      metadata: {
+        status: "deferred",
+        error: { code: "budget_exceeded", retryable: true },
+      },
     });
     expect(mocks.records.get(track.id)).toMatchObject({
       status: "unresolved",
       reason: "budget_exceeded",
       rangeStrategyVersion: METADATA_RANGE_STRATEGY_VERSION,
+      retryCount: 1,
     });
+    vi.resetModules();
+    ({ ensureTrackMetadata } = await import("./track-metadata-loader"));
     await ensureTrackMetadata(known());
     expect(mocks.range).toHaveBeenCalledOnce();
     expect(mocks.put).toHaveBeenCalledOnce();
+    const clock = vi.spyOn(Date, "now");
+    try {
+      clock.mockReturnValue(
+        Number(mocks.records.get(track.id)?.checkedAt) + 30 * 60_000,
+      );
+      await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
+        metadata: {
+          status: "deferred",
+          error: { retryAfterMs: 60 * 60_000 },
+        },
+      });
+      expect(mocks.range).toHaveBeenCalledTimes(2);
+      await ensureTrackMetadata(known());
+      expect(mocks.range).toHaveBeenCalledTimes(2);
+      clock.mockReturnValue(
+        Number(mocks.records.get(track.id)?.checkedAt) + 60 * 60_000,
+      );
+      await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
+        metadata: { status: "ready", tags: { title: "Remote" } },
+      });
+      expect(mocks.range).toHaveBeenCalledTimes(3);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("reserves the post-read version check after consuming the full permitted media byte allowance", async () => {
@@ -258,6 +291,51 @@ describe("shared metadata consumer boundary", () => {
     });
     expect(mocks.descriptor).toHaveBeenCalledTimes(2);
     expect(mocks.put).toHaveBeenCalledOnce();
+  });
+
+  it("resets a saved reading-limit cooldown when the file version changes", async () => {
+    mocks.records.set(track.id, {
+      status: "unresolved",
+      reason: "budget_exceeded",
+      loadedVia: "drive_range",
+      fingerprint: JSON.stringify(["old-version", track.size]),
+      checkedAt: Date.now(),
+      retryCount: 7,
+    });
+    const { MetadataReadError } = await import("./drive-metadata-reader");
+    mocks.range.mockRejectedValueOnce(new MetadataReadError("budget_exceeded"));
+    const { ensureTrackMetadata } = await import("./track-metadata-loader");
+    await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
+      metadata: {
+        status: "deferred",
+        error: { retryAfterMs: expect.any(Number) },
+      },
+    });
+    expect(mocks.range).toHaveBeenCalledOnce();
+    expect(mocks.records.get(track.id)?.retryCount).toBe(1);
+  });
+
+  it("honors saved cooldowns discovered after strengthening an incomplete descriptor", async () => {
+    mocks.records.set(track.id, {
+      status: "unresolved",
+      reason: "budget_exceeded",
+      loadedVia: "drive_range",
+      fingerprint: JSON.stringify([track.modifiedTime, track.size]),
+      checkedAt: Date.now(),
+      retryCount: 3,
+    });
+    const incomplete = known();
+    incomplete.track = {
+      ...incomplete.track,
+      modifiedTime: undefined,
+      size: undefined,
+    };
+    const { ensureTrackMetadata } = await import("./track-metadata-loader");
+    await expect(ensureTrackMetadata(incomplete)).resolves.toMatchObject({
+      metadata: { status: "deferred", error: { retryable: true } },
+    });
+    expect(mocks.descriptor).toHaveBeenCalledOnce();
+    expect(mocks.range).not.toHaveBeenCalled();
   });
 
   it("keeps a caller's exhausted batch allowance retryable instead of persisting a per-track failure", async () => {

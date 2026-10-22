@@ -20,10 +20,6 @@ const REASON_COPY: Record<string, { title: string; explanation: string }> = {
     title: "Decoding failed",
     explanation: "Embedded metadata could not be decoded.",
   },
-  budget_exceeded: {
-    title: "Reading limit reached",
-    explanation: "Reading limit reached for this track. Other tracks continue.",
-  },
   unsupported_format: {
     title: "Unsupported format",
     explanation: "This audio format is not supported yet.",

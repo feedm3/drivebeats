@@ -40,7 +40,7 @@ import {
 } from "@/stores/offline-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
 
-type View = "main" | "confirm-downloads" | "confirm-cloud" | "confirm-account";
+type View = "main" | "confirm-downloads" | "confirm-account";
 
 interface StorageDialogProps {
   open: boolean;
@@ -85,7 +85,6 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
   const metadataAccount = useId3MetadataStore((state) => state.accountId);
   const metadataGeneration = useId3MetadataStore((state) => state.generation);
   const metadataHydrated = useId3MetadataStore((state) => state.hydrated);
-  const [deletingCloudData, setDeletingCloudData] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const trackJobs = useOfflineStore((state) => state.trackJobs);
   const offlineCollections = useOfflineStore((state) => state.collections);
@@ -206,23 +205,6 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
       toast.error("Could not retry downloads.");
     } finally {
       setRetrying(false);
-    }
-  }, []);
-
-  const handleDeleteCloudData = useCallback(async () => {
-    setDeletingCloudData(true);
-    try {
-      await deleteAllCloudLibraryData();
-      usePlaylistStore.getState().clearCloudState();
-      usePlaylistStore.persist.clearStorage();
-      useLibraryStore.getState().clearCloudFavorites();
-      toast.success("Deleted synced playlists and favorites.");
-      setView("main");
-    } catch (error) {
-      console.error("Delete cloud data failed:", error);
-      toast.error("Could not delete cloud data.");
-    } finally {
-      setDeletingCloudData(false);
     }
   }, []);
 
@@ -371,15 +353,6 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
                   {favoriteCount}
                 </span>
               </div>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setView("confirm-cloud")}
-                disabled={playlists.length === 0 && favoriteCount === 0}
-              >
-                <Trash2 className="size-3.5" />
-                Delete cloud data
-              </Button>
             </div>
 
             <div className="mt-4 flex items-center justify-between border-t pt-4">
@@ -432,44 +405,6 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
                   </>
                 ) : (
                   "Remove all downloads"
-                )}
-              </Button>
-            </div>
-          </>
-        )}
-
-        {view === "confirm-cloud" && (
-          <>
-            <DialogTitle>Delete cloud data?</DialogTitle>
-            <DialogDescription>
-              This permanently deletes {playlists.length}{" "}
-              {playlists.length === 1 ? "playlist" : "playlists"} and{" "}
-              {favoriteCount} {favoriteCount === 1 ? "favorite" : "favorites"}{" "}
-              from your account. This can't be undone.
-            </DialogDescription>
-            <div className="mt-4 flex justify-between">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setView("main")}
-                disabled={deletingCloudData}
-              >
-                <ArrowLeft className="size-3.5" />
-                Back
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleDeleteCloudData}
-                disabled={deletingCloudData}
-              >
-                {deletingCloudData ? (
-                  <>
-                    <Loader2 className="size-3.5 animate-spin" />
-                    Deleting cloud data...
-                  </>
-                ) : (
-                  "Delete cloud data"
                 )}
               </Button>
             </div>

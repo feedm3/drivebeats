@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { AddToPlaylistPopover } from "@/components/add-to-playlist-popover";
 import { FavoriteToggleButton } from "@/components/favorite-toggle-button";
+import { useCachedTrackTags } from "@/hooks/use-cached-track-tags";
 import { resolveTrackMetadata } from "@/lib/track-metadata";
 import { useAuthStore } from "@/stores/auth-store";
-import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { hasNextTrack, usePlayerStore } from "@/stores/player-store";
 import { PlayControls } from "./play-controls";
@@ -119,9 +119,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
   const [playerHydrated, setPlayerHydrated] = useState(
     () => usePlayerStore.persist?.hasHydrated?.() ?? false,
   );
-  const id3 = useId3MetadataStore((s) =>
-    currentTrack ? s.cache[currentTrack.id] : undefined,
-  );
+  const id3 = useCachedTrackTags(currentTrack);
   const trackMetadata = currentTrack
     ? resolveTrackMetadata(
         currentTrack.name,

@@ -10,7 +10,7 @@ vi.mock("@/components/ui/icon-tooltip", () => ({
 describe("Files search control", () => {
   afterEach(cleanup);
 
-  it("defaults to a filename-only Library Search with a two-character hint", () => {
+  it("defaults to a cached-metadata Library Search with a two-character hint", () => {
     render(
       <FolderSearch
         canSearchCurrentFolder
@@ -28,7 +28,9 @@ describe("Files search control", () => {
       screen.getByRole("option", { name: "Current folder" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Search checks file names only/),
+      screen.getByText(
+        /Search file names and music details saved on this device/,
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/Enter at least two characters/),
@@ -137,7 +139,7 @@ describe("Files search control", () => {
     ).toHaveClass("pointer-coarse:gap-3");
   });
 
-  it("opens the filename-only information on click", () => {
+  it("opens the search information on click", () => {
     render(
       <FolderSearch
         canSearchCurrentFolder
@@ -150,8 +152,10 @@ describe("Files search control", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Search information" }));
-    expect(screen.getAllByText(/Search checks file names only/)).toHaveLength(
-      2,
-    );
+    expect(
+      screen.getAllByText(
+        /Search file names and music details saved on this device/,
+      ),
+    ).toHaveLength(2);
   });
 });

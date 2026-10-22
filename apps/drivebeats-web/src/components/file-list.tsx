@@ -21,17 +21,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useCachedTrackSearch } from "@/hooks/use-cached-track-search";
+import { useCachedTrackTags } from "@/hooks/use-cached-track-tags";
 import { usePlayerBarPadding } from "@/hooks/use-player-bar-padding";
 import { createPlaylistTrack } from "@/lib/audio";
-import { filterFilesBySearch } from "@/lib/file-search";
+import type { Id3Metadata } from "@/lib/id3-metadata";
+import {
+  observeVisibleMetadataTrack,
+  setCurrentMetadataFolder,
+} from "@/lib/metadata-index-coordinator";
 import { resolveTrackMetadata } from "@/lib/track-metadata";
 import { cn } from "@/lib/utils";
-import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { usePlayerStore } from "@/stores/player-store";
 import type { DriveFile, FolderEntry } from "@/types";
 import { FOLDER_MIME } from "@/types";
 
 interface FileListProps {
+  metadataById?: ReadonlyMap<string, Id3Metadata | undefined>;
   contextById?: ReadonlyMap<string, string>;
   files: DriveFile[];
   folderStackById?: ReadonlyMap<string, FolderEntry[]>;
@@ -120,12 +126,15 @@ function MobileFileMetadata({
   file,
   context,
   searchQuery,
+  cachedTags,
 }: {
+  cachedTags?: Id3Metadata;
   file: DriveFile;
   context?: string;
   searchQuery: string;
 }) {
-  const id3 = useId3MetadataStore((state) => state.cache[file.id]);
+  const liveTags = useCachedTrackTags(file);
+  const id3 = cachedTags ?? liveTags;
   const folder = isFolder(file);
   const metadata = resolveTrackMetadata(file.name, file.parentFolderName, id3);
   const artistAndSize = [metadata.subtitle, formatSize(file.size)]
@@ -161,6 +170,7 @@ function MobileFileMetadata({
 }
 
 interface FileListRowProps {
+  cachedTags?: Id3Metadata;
   file: DriveFile;
   context?: string;
   folderStack: FolderEntry[];
@@ -177,6 +187,7 @@ interface FileListRowProps {
 }
 
 const FileListRow = memo(function FileListRow({
+  cachedTags,
   file,
   context,
   folderStack,
@@ -191,6 +202,11 @@ const FileListRow = memo(function FileListRow({
   playTrack,
   togglePlay,
 }: FileListRowProps) {
+  const rowRef = useRef<HTMLTableRowElement>(null);
+  useEffect(() => {
+    if (!rowRef.current || isFolder(file)) return;
+    return observeVisibleMetadataTrack(rowRef.current, file);
+  }, [file]);
   const folder = isFolder(file);
   const onActivate = () =>
     folder
@@ -218,6 +234,8 @@ const FileListRow = memo(function FileListRow({
 
   return (
     <TableRow
+      ref={rowRef}
+      title={file.name}
       data-active={isActive || undefined}
       tabIndex={0}
       role="button"
@@ -261,16 +279,17 @@ const FileListRow = memo(function FileListRow({
               <MobileFileMetadata
                 file={file}
                 context={context}
+                cachedTags={cachedTags}
                 searchQuery={searchQuery}
               />
             </span>
             <span className="hidden sm:block">
-              <HighlightedName name={file.name} searchQuery={searchQuery} />
-              {context ? (
-                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                  {context}
-                </span>
-              ) : null}
+              <MobileFileMetadata
+                file={file}
+                context={context}
+                cachedTags={cachedTags}
+                searchQuery={searchQuery}
+              />
             </span>
           </span>
         </div>
@@ -311,6 +330,7 @@ const FileListRow = memo(function FileListRow({
 });
 
 export function FileList({
+  metadataById,
   contextById,
   files,
   folderStackById,
@@ -340,14 +360,21 @@ export function FileList({
     () => new Set(playingFolderStack.map((f) => f.id)),
     [playingFolderStack],
   );
+  useEffect(
+    () => setCurrentMetadataFolder(folderStack, files),
+    [folderStack, files],
+  );
   const sortedFiles = useMemo(
     () => sortFilesByName(files, nameSortDirection, contextById, sortPathById),
     [contextById, files, nameSortDirection, sortPathById],
   );
-  const filteredFiles = useMemo(
-    () => filterFilesBySearch(sortedFiles, searchQuery),
-    [sortedFiles, searchQuery],
+  const folderSearch = useCachedTrackSearch(
+    sortedFiles,
+    searchQuery,
+    searchScope !== "library" && searchQuery.trim().length > 0,
   );
+  const filteredFiles = folderSearch.tracks;
+  const displayTags = metadataById ?? folderSearch.metadataById;
   const playableTracks = useMemo(
     () => filteredFiles.filter((file) => !isFolder(file)),
     [filteredFiles],
@@ -415,7 +442,7 @@ export function FileList({
     return () => observer.disconnect();
   }, [filteredFiles.length, visibleCount]);
 
-  if (loading) {
+  if (loading || folderSearch.pending) {
     return (
       <ScrollArea className="min-h-0 flex-1">
         <div className={cn(playerBarPadding)}>
@@ -538,6 +565,7 @@ export function FileList({
                   <FileListRow
                     key={file.id}
                     file={file}
+                    cachedTags={displayTags?.get(file.id)}
                     context={contextById?.get(file.id)}
                     folderStack={folderStack}
                     playableTracks={playableTracks}

@@ -158,21 +158,6 @@ export async function removeCloudFavorite(track: PlaylistTrack) {
   });
 }
 
-export async function saveCloudTrackMetadata(
-  tracks: Array<{
-    fileId: string;
-    modifiedTime?: string;
-    title?: string;
-    artist?: string;
-    album?: string;
-  }>,
-) {
-  await request("/api/tracks/metadata", {
-    method: "POST",
-    body: JSON.stringify({ tracks }),
-  });
-}
-
 export async function deleteAllCloudLibraryData() {
   await request("/api/me/cloud-data", {
     method: "DELETE",
@@ -186,11 +171,9 @@ export function isCloudLibraryEmpty(data: CloudLibrarySyncPayload) {
 export function createCloudLibrarySnapshot(
   playlists: Playlist[],
   favorites: PlaylistTrack[],
-  trackMetadata?: CloudLibrarySyncPayload["trackMetadata"],
 ): CloudLibrarySyncPayload {
   return {
     playlists,
     favorites,
-    trackMetadata,
   };
 }

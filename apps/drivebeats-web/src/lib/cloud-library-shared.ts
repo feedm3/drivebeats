@@ -1,16 +1,8 @@
 import type { Playlist, PlaylistTrack } from "@/types";
 
-export interface Id3SyncMetadata {
-  title?: string;
-  artist?: string;
-  album?: string;
-  modifiedTime?: string;
-}
-
 export interface CloudLibrarySyncPayload {
   playlists: Playlist[];
   favorites: PlaylistTrack[];
-  trackMetadata?: Record<string, Id3SyncMetadata>;
 }
 
 export interface CreatePlaylistInput {

@@ -4,6 +4,11 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 import { getSupportedAudioQuery } from "@/lib/audio";
 import {
+  type DriveReadFailure,
+  getDriveReadFailure,
+  googleDriveReadError,
+} from "@/lib/drive-read-error";
+import {
   type GoogleDriveFilesListResponse,
   listGoogleDriveFiles,
 } from "@/lib/google-api";
@@ -18,6 +23,7 @@ import { ROOT_FOLDER_ID } from "@/types";
 
 interface FolderReadOptions {
   canCommit?: () => boolean;
+  onFailure?: (failure: DriveReadFailure) => void;
   signal?: AbortSignal;
 }
 
@@ -25,6 +31,7 @@ interface FolderReadResult {
   files: DriveFile[] | null;
   message?: string;
   sessionExpired?: boolean;
+  failure?: DriveReadFailure;
 }
 
 interface FolderRead {
@@ -81,6 +88,15 @@ async function readFolder(
       );
       if (!active()) return { files: null };
       if (!response.ok) {
+        const failure = getDriveReadFailure(googleDriveReadError(response));
+        if (failure)
+          return {
+            files: null,
+            failure,
+            message: failure.retryAfterMs
+              ? `${failure.message} Retry in ${Math.ceil(failure.retryAfterMs / 1000)} seconds.`
+              : failure.message,
+          };
         const messages: Record<number, string> = {
           401: "Session expired. Please sign in again.",
           403: "Access denied. Check your Google Drive permissions.",
@@ -101,7 +117,16 @@ async function readFolder(
     } while (pageToken);
     useFolderCacheStore.getState().setFiles(folderId, allFiles);
     return { files: allFiles };
-  } catch {
+  } catch (error) {
+    const failure = getDriveReadFailure(error);
+    if (active() && failure)
+      return {
+        files: null,
+        failure,
+        message: failure.retryAfterMs
+          ? `${failure.message} Retry in ${Math.ceil(failure.retryAfterMs / 1000)} seconds.`
+          : failure.message,
+      };
     return active()
       ? { files: null, message: "Network error. Check your connection." }
       : { files: null };
@@ -154,6 +179,7 @@ export function useFolderContents() {
       try {
         const result = await read.promise;
         if (!canCommit()) return null;
+        if (result.failure) options.onFailure?.(result.failure);
         if (result.message && !read.noticeShown) {
           read.noticeShown = true;
           toast.error(result.message);

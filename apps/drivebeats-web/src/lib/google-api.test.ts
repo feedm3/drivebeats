@@ -1,17 +1,96 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useAuthStore } from "@/stores/auth-store";
 import {
   downloadGoogleDriveFileMedia,
   listGoogleDriveFiles,
+  readGoogleDriveFileRange,
 } from "./google-api";
 
-beforeEach(() => vi.useFakeTimers());
+let accountSequence = 0;
+beforeEach(() => {
+  vi.useFakeTimers();
+  useAuthStore.setState({
+    user: {
+      id: `google-read-test-${++accountSequence}`,
+      email: "test@example.com",
+      name: "Test",
+      picture: null,
+    },
+  });
+});
 afterEach(() => {
+  useAuthStore.setState({ isLoggingOut: true });
+  useAuthStore.setState({ isLoggingOut: false });
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
 describe("browser-only Drive reads", () => {
+  it.each([
+    { status: 429, marked: true },
+    { status: 429, marked: false },
+    { status: 503, marked: false },
+  ])(
+    "does not let Range proxy throttling ($status, marked=$marked) stop direct browser-token playback and folder reads",
+    async ({ status, marked }) => {
+      const accountId = useAuthStore.getState().user?.id;
+      const fetchMock = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(
+          new Response(null, {
+            status,
+            headers: {
+              ...(marked ? { "X-DriveBeats-Cooldown-Scope": "metadata" } : {}),
+              "Retry-After": "600",
+            },
+          }),
+        )
+        .mockResolvedValueOnce(new Response("audio"))
+        .mockResolvedValueOnce(Response.json({ files: [] }));
+      vi.stubGlobal("fetch", fetchMock);
+      expect(
+        (
+          await readGoogleDriveFileRange(
+            "known",
+            "browser-token",
+            0,
+            15,
+            undefined,
+            { accountId, fileSize: 1000 },
+          )
+        ).status,
+      ).toBe(status);
+      expect(
+        await (
+          await downloadGoogleDriveFileMedia("known", "browser-token")
+        ).text(),
+      ).toBe("audio");
+      expect(
+        await (
+          await listGoogleDriveFiles("browser-token", new URLSearchParams())
+        ).json(),
+      ).toEqual({ files: [] });
+      await expect(
+        readGoogleDriveFileRange("known", "browser-token", 0, 15, undefined, {
+          accountId,
+          fileSize: 1000,
+        }),
+      ).rejects.toMatchObject({
+        reason: "rate_limited",
+        cooldownScope: "metadata",
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/drive-range");
+      expect(String(fetchMock.mock.calls[1][0])).toContain(
+        "googleapis.com/drive/v3/files/known",
+      );
+      expect(String(fetchMock.mock.calls[2][0])).toContain(
+        "googleapis.com/drive/v3/files?",
+      );
+    },
+  );
+
   it("retries temporary network failures at the Google endpoint with bounded backoff", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -117,9 +196,18 @@ describe("browser-only Drive reads", () => {
         new Response("audio", { headers: { "Content-Type": "audio/mpeg" } }),
       );
     vi.stubGlobal("fetch", fetchMock);
-    const pending = downloadGoogleDriveFileMedia("selected-track", "token");
-    await vi.runAllTimersAsync();
-    expect(await (await pending).text()).toBe("audio");
+    // Consume the successful response as soon as it arrives. Advancing every
+    // timer before reading its body deliberately leaves the transfer idle until
+    // the navigation deadline, rather than simulating a download consumer.
+    const pending = downloadGoogleDriveFileMedia(
+      "selected-track",
+      "token",
+    ).then((response) => response.text());
+    await vi.advanceTimersByTimeAsync(199);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await pending).toBe("audio");
+    expect(vi.getTimerCount()).toBe(0);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1][0]).toBe(
       "https://www.googleapis.com/drive/v3/files/selected-track?alt=media&supportsAllDrives=true",

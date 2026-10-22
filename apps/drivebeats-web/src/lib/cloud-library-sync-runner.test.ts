@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CloudLibrarySyncPayload } from "@/lib/cloud-library-shared";
 import type { Playlist, PlaylistTrack } from "@/types";
 
+vi.mock("@/lib/known-track-resolver", () => ({
+  verifyKnownCollections: vi.fn(),
+}));
+
 const CLOUD_BOOTSTRAP_KEY = "drivebeats-cloud-bootstrap-v1";
 
 const mockFetchCloudLibrarySync = vi.fn();
@@ -13,8 +17,7 @@ vi.mock("@/lib/cloud-library-api", () => ({
   createCloudLibrarySnapshot: (
     playlists: Playlist[],
     favorites: PlaylistTrack[],
-    trackMetadata?: unknown,
-  ) => ({ playlists, favorites, trackMetadata }),
+  ) => ({ playlists, favorites }),
   isCloudLibraryEmpty: (data: CloudLibrarySyncPayload) =>
     data.playlists.length === 0 && data.favorites.length === 0,
 }));
@@ -91,7 +94,9 @@ function track(overrides: Partial<PlaylistTrack> = {}): PlaylistTrack {
 }
 
 function payload(
-  overrides: Partial<CloudLibrarySyncPayload> = {},
+  overrides: Partial<CloudLibrarySyncPayload> & {
+    trackMetadata?: unknown;
+  } = {},
 ): CloudLibrarySyncPayload {
   return { playlists: [], favorites: [], ...overrides };
 }
@@ -450,7 +455,6 @@ describe("runCloudLibrarySync", () => {
     expect(mockBootstrapCloudLibrarySync).toHaveBeenCalledWith({
       playlists: playlistState.playlists,
       favorites: [],
-      trackMetadata: { "file-1": { title: "Song" } },
     });
     // Fetched once before and once after the bootstrap upload.
     expect(mockFetchCloudLibrarySync).toHaveBeenCalledTimes(2);
@@ -505,7 +509,6 @@ describe("applyCloudLibraryPayload", () => {
         },
       ],
       favorites: [track({ fileId: "f2" }), track({ fileId: "f1" })],
-      trackMetadata: { a: { title: "Song", modifiedTime: "2026-01-01" } },
     });
 
     expect(mockReplacePlaylistsFromCloud).not.toHaveBeenCalled();
@@ -702,7 +705,7 @@ describe("applyCloudLibraryPayload", () => {
     expect(mockReplaceFavoritesFromCloud).toHaveBeenCalledWith([]);
   });
 
-  it("hydrates id3 metadata only for new or newer entries", async () => {
+  it("ignores tags from older servers while continuing collection hydration", async () => {
     const { applyCloudLibraryPayload } = await loadRunner();
 
     id3State.cache = { a: { title: "Song", modifiedTime: "2026-01-01" } };
@@ -713,6 +716,6 @@ describe("applyCloudLibraryPayload", () => {
       }),
     );
 
-    expect(mockHydrateFromSync).toHaveBeenCalledTimes(1);
+    expect(mockHydrateFromSync).not.toHaveBeenCalled();
   });
 });

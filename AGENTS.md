@@ -48,7 +48,7 @@ Keep database access easy to audit.
 ## Sync Boundaries
 
 - `playlists` and `favorites` are cloud-synced through Neon.
-- ID3 title, artist, and album metadata for tracks in playlists or favorites also syncs through Neon.
+- Extracted title, artist, and album tags stay in the account- and content-version-scoped browser cache; they never sync through Neon. New browsers rebuild tags and initially display filenames. Collection file descriptors remain separate from extracted tags.
 - `recently played`, imported Drive items, player state, and offline downloads remain device-local.
 - Do not store the full imported folder tree in the database.
 - Only store metadata needed for synced features. Never store audio blobs in Neon.

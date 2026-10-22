@@ -124,7 +124,8 @@ export function AppPageClient({ hasServerSession }: AppPageClientProps) {
 
   const handleTreeSelect = useCallback(
     (path: FolderEntry[]) => {
-      setFolderStack(path);
+      // A repeated selection is still navigation and clears the active search.
+      setFolderStack([...path]);
       setActivePlaylist(null);
       setActiveView("files");
       window.history.pushState(getHistoryStateWithFolderStack(path, null), "");

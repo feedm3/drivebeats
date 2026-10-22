@@ -3,6 +3,7 @@ import {
   GoogleDriveReadError,
   LibraryIncompleteError,
 } from "@/lib/drive-read-error";
+import type { DriveRequestOptions } from "@/lib/drive-request-scheduler";
 import {
   type GoogleDriveFilesListResponse,
   listGoogleDriveFiles,
@@ -18,7 +19,22 @@ type DriveListFiles = (
   accessToken: string,
   params: URLSearchParams,
   signal?: AbortSignal,
+  options?: DriveRequestOptions,
 ) => Promise<Response>;
+
+export interface LibrarySearchBuildPage {
+  phase: "audio" | "folders";
+  files: DriveFile[];
+}
+
+export interface LibrarySearchBuildCheckpoint {
+  startedAt: number;
+  listingComplete?: boolean;
+  audioFiles: DriveFile[];
+  folders: DriveFile[];
+  phase: "audio" | "folders";
+  pageToken?: string;
+}
 
 interface BuildLibrarySearchCatalogFromDriveInput {
   accessToken: string;
@@ -26,6 +42,13 @@ interface BuildLibrarySearchCatalogFromDriveInput {
   standaloneTracks: DriveFile[];
   listFiles?: DriveListFiles;
   signal?: AbortSignal;
+  requestOptions?: DriveRequestOptions;
+  checkpoint?: LibrarySearchBuildCheckpoint;
+  startedAt?: number;
+  onCheckpoint?: (
+    checkpoint: LibrarySearchBuildCheckpoint,
+    page?: LibrarySearchBuildPage,
+  ) => void | Promise<void>;
 }
 
 function abortIfNeeded(signal?: AbortSignal) {
@@ -42,9 +65,17 @@ async function listEveryPage(
   query: string,
   listFiles: DriveListFiles,
   signal?: AbortSignal,
+  requestOptions?: DriveRequestOptions,
+  existingFiles: DriveFile[] = [],
+  initialPageToken?: string,
+  onPage?: (
+    files: DriveFile[],
+    nextPageToken: string | undefined,
+    page: DriveFile[],
+  ) => void | Promise<void>,
 ): Promise<DriveFile[]> {
-  const files: DriveFile[] = [];
-  let pageToken: string | undefined;
+  const files: DriveFile[] = [...existingFiles];
+  let pageToken: string | undefined = initialPageToken;
 
   do {
     abortIfNeeded(signal);
@@ -61,10 +92,19 @@ async function listEveryPage(
       params.set("pageToken", pageToken);
     }
 
-    const response = await listFiles(accessToken, params, signal);
+    const response = await listFiles(
+      accessToken,
+      params,
+      signal,
+      requestOptions,
+    );
     abortIfNeeded(signal);
     if (!response.ok) {
-      throw new GoogleDriveReadError(response.status);
+      throw new GoogleDriveReadError(
+        response.headers.get("X-DriveBeats-Rate-Limited") === "true"
+          ? 429
+          : response.status,
+      );
     }
 
     const data = (await response.json()) as GoogleDriveFilesListResponse;
@@ -73,8 +113,10 @@ async function listEveryPage(
       throw new LibraryIncompleteError();
     }
 
-    files.push(...(data.files ?? []));
+    const page = data.files ?? [];
+    files.push(...page);
     pageToken = data.nextPageToken;
+    await onPage?.(files, pageToken, page);
   } while (pageToken);
 
   return files;
@@ -93,21 +135,64 @@ export async function buildLibrarySearchCatalogFromDrive({
   standaloneTracks,
   listFiles = listGoogleDriveFiles,
   signal,
+  requestOptions,
+  checkpoint,
+  startedAt = checkpoint?.startedAt ?? Date.now(),
+  onCheckpoint,
 }: BuildLibrarySearchCatalogFromDriveInput): Promise<LibrarySearchTrack[]> {
   abortIfNeeded(signal);
+  if (checkpoint?.listingComplete)
+    return buildLibrarySearchCatalog({
+      audioFiles: checkpoint.audioFiles,
+      folders: checkpoint.folders,
+      importedFolders,
+      standaloneTracks,
+    });
 
-  const audioFiles = await listEveryPage(
-    accessToken,
-    supportedAudioQuery(),
-    listFiles,
-    signal,
-  );
+  const audioFiles =
+    checkpoint?.phase === "folders"
+      ? checkpoint.audioFiles
+      : await listEveryPage(
+          accessToken,
+          supportedAudioQuery(),
+          listFiles,
+          signal,
+          requestOptions,
+          checkpoint?.audioFiles,
+          checkpoint?.pageToken,
+          (files, pageToken, page) =>
+            onCheckpoint?.(
+              {
+                startedAt,
+                audioFiles: files,
+                folders: [],
+                phase: pageToken ? "audio" : "folders",
+                pageToken,
+              },
+              { phase: "audio", files: page },
+            ),
+        );
   abortIfNeeded(signal);
   const folders = await listEveryPage(
     accessToken,
     `trashed = false and mimeType = '${FOLDER_MIME}'`,
     listFiles,
     signal,
+    requestOptions,
+    checkpoint?.phase === "folders" ? checkpoint.folders : [],
+    checkpoint?.phase === "folders" ? checkpoint.pageToken : undefined,
+    (files, pageToken, page) =>
+      onCheckpoint?.(
+        {
+          startedAt,
+          listingComplete: !pageToken,
+          audioFiles,
+          folders: files,
+          phase: "folders",
+          pageToken,
+        },
+        { phase: "folders", files: page },
+      ),
   );
 
   abortIfNeeded(signal);

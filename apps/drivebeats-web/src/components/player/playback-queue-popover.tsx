@@ -9,17 +9,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useCachedTrackTags } from "@/hooks/use-cached-track-tags";
 import { getPlaybackQueueTracks } from "@/lib/playback-queue";
 import { resolveTrackMetadata } from "@/lib/track-metadata";
 import { cn } from "@/lib/utils";
-import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { usePlayerStore } from "@/stores/player-store";
 import type { DriveFile } from "@/types";
 
 type SessionQueueTrack = ReturnType<typeof getPlaybackQueueTracks>[number];
 
 function QueueTrackLabel({ track }: { track: DriveFile }) {
-  const metadata = useId3MetadataStore((state) => state.cache[track.id]);
+  const metadata = useCachedTrackTags(track);
   const { title, subtitle } = resolveTrackMetadata(
     track.name,
     track.parentFolderName,

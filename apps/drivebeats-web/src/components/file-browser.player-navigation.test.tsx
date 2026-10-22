@@ -65,6 +65,10 @@ vi.mock("@/components/drive-import-button", () => ({
   ),
 }));
 
+vi.mock("@/components/metadata-activity", () => ({
+  MetadataActivity: () => null,
+}));
+
 vi.mock("@/components/file-list", () => ({
   FileList: ({
     files,
@@ -83,6 +87,21 @@ vi.mock("@/components/file-list", () => ({
       {files.map((file) => file.name).join(", ")}
     </div>
   ),
+}));
+
+vi.mock("@/hooks/use-cached-track-search", () => ({
+  useCachedTrackSearch: (
+    files: DriveFile[],
+    query: string,
+    enabled: boolean,
+  ) => ({
+    tracks: enabled
+      ? files.filter((file) =>
+          file.name.toLowerCase().includes(query.toLowerCase()),
+        )
+      : files,
+    pending: false,
+  }),
 }));
 
 vi.mock("@/hooks/use-drive-import", () => ({
@@ -286,7 +305,7 @@ describe("FileBrowser player navigation", () => {
     });
   });
 
-  it("preserves a Library query across ordinary folder navigation and scope changes", async () => {
+  it("clears a Library query on folder navigation but preserves it when changing scope", async () => {
     fetchFolderContents.mockImplementation(
       async (
         _folderId: string,
@@ -320,8 +339,13 @@ describe("FileBrowser player navigation", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("searchbox")).toHaveValue("friends");
-      expect(screen.getByTestId("file-list")).toHaveTextContent("Friends.mp3");
+      expect(screen.getByRole("searchbox")).toHaveValue("");
+      expect(screen.getByTestId("file-list")).toHaveTextContent(
+        "Another track.mp3",
+      );
+    });
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "friends" },
     });
 
     fireEvent.change(screen.getByRole("combobox", { name: "Search scope" }), {
@@ -343,6 +367,34 @@ describe("FileBrowser player navigation", () => {
       expect(
         screen.getByRole("combobox", { name: "Search scope" }),
       ).toHaveValue("library");
+    });
+  });
+  it("clears a Library query when the same folder is explicitly selected again", async () => {
+    const onFolderNavigate = vi.fn();
+    const rendered = render(
+      <FileBrowser
+        externalFolderStack={rootStack}
+        onFolderNavigate={onFolderNavigate}
+      />,
+    );
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "friends" },
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("file-list")).toHaveTextContent("Friends.mp3"),
+    );
+    rendered.rerender(
+      <FileBrowser
+        externalFolderStack={[...rootStack]}
+        onFolderNavigate={onFolderNavigate}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("searchbox")).toHaveValue("");
+      expect(screen.getByTestId("file-list")).toHaveTextContent("Music");
+      expect(screen.getByTestId("file-list")).not.toHaveTextContent(
+        "Friends.mp3",
+      );
     });
   });
 });

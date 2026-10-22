@@ -3,6 +3,7 @@ import type { LibrarySearchTrack } from "@/lib/library-search-catalog";
 
 export interface LibrarySearchCatalogRecord {
   fetchedAt: number;
+  completedAt?: number;
   importsSignature: string;
   tracks: LibrarySearchTrack[];
   userId: string;

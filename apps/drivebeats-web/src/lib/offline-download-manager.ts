@@ -1,4 +1,8 @@
 import {
+  DriveDeferredError,
+  DrivePreemptedError,
+} from "@/lib/drive-request-scheduler";
+import {
   downloadGoogleDriveFileMedia,
   getGoogleDriveFileMetadata,
 } from "@/lib/google-api";
@@ -11,6 +15,7 @@ import {
 } from "@/lib/storage-persistence";
 import { getTrackSignature } from "@/lib/track-signature";
 import { useAuthStore } from "@/stores/auth-store";
+import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { getFavoriteTracks, useLibraryStore } from "@/stores/library-store";
 import {
   type OfflineDownloadErrorCategory,
@@ -145,8 +150,17 @@ interface FailureDisposition {
 
 const productionDependencies: OfflineDownloadManagerDependencies = {
   drive: {
-    downloadFileMedia: downloadGoogleDriveFileMedia,
-    getFileMetadata: getGoogleDriveFileMetadata,
+    downloadFileMedia: (fileId, token, signal) =>
+      downloadGoogleDriveFileMedia(fileId, token, signal, {
+        priority: "offline",
+        maxAttempts: 1,
+        headersTimeoutMs: MEDIA_HEADERS_TIMEOUT_MS,
+      }),
+    getFileMetadata: (fileId, token, params) =>
+      getGoogleDriveFileMetadata(fileId, token, params, {
+        priority: "offline",
+        maxAttempts: 1,
+      }),
   },
   database: offlineDb,
   clock: {
@@ -316,12 +330,12 @@ function parseRetryAfter(response: Response, now: number): number | undefined {
 
   const seconds = Number(value);
   if (Number.isFinite(seconds) && seconds >= 0) {
-    return now + Math.min(seconds * 1_000, MAX_BACKOFF_MS);
+    return now + seconds * 1_000;
   }
 
   const date = Date.parse(value);
   if (!Number.isFinite(date) || date <= now) return undefined;
-  return now + Math.min(date - now, MAX_BACKOFF_MS);
+  return now + (date - now);
 }
 
 function retryDelay(runtime: Runtime, attempt: number) {
@@ -340,7 +354,10 @@ async function classifyFailure(
 ): Promise<FailureDisposition> {
   const now = runtime.dependencies.clock.now();
 
-  if (error instanceof DeadlineError) {
+  if (
+    error instanceof DeadlineError ||
+    (error instanceof DOMException && error.name === "TimeoutError")
+  ) {
     return {
       category: "timeout",
       retryAt: now + retryDelay(runtime, attempt),
@@ -359,7 +376,12 @@ async function classifyFailure(
     if (status === 403) {
       const retryable =
         error.reason === "rateLimitExceeded" ||
-        error.reason === "userRateLimitExceeded";
+        [
+          "userRateLimitExceeded",
+          "downloadQuotaExceeded",
+          "dailyLimitExceeded",
+          "quotaExceeded",
+        ].includes(error.reason ?? "");
       return retryable
         ? {
             category: "rate-limited",
@@ -773,16 +795,25 @@ async function downloadResponse(
       status: "downloading",
       phase: "fetching",
     });
-    let response = await withRequestDeadline(
-      runtime.dependencies.drive.downloadFileMedia(
+    const requestMedia = (token: string) => {
+      const request = runtime.dependencies.drive.downloadFileMedia(
         track.fileId,
-        accessToken,
+        token,
         requestController.signal,
-      ),
-      MEDIA_HEADERS_TIMEOUT_MS,
-      "media response headers",
-      requestController,
-    );
+      );
+      // Production starts its header timer only after scheduler grant. Injected
+      // transports retain the same timeout contract without a scheduler.
+      return runtime.dependencies.drive === productionDependencies.drive
+        ? request
+        : withRequestDeadline(
+            request,
+            MEDIA_HEADERS_TIMEOUT_MS,
+            "media response headers",
+            requestController,
+          );
+    };
+    let response = await requestMedia(accessToken);
+
     if (!isGenerationCurrent(runtime, generation) || generationSignal.aborted) {
       return null;
     }
@@ -815,16 +846,7 @@ async function downloadResponse(
 
       accessToken = useAuthStore.getState().accessToken;
       if (!accessToken) return null;
-      response = await withRequestDeadline(
-        runtime.dependencies.drive.downloadFileMedia(
-          track.fileId,
-          accessToken,
-          requestController.signal,
-        ),
-        MEDIA_HEADERS_TIMEOUT_MS,
-        "media response headers",
-        requestController,
-      );
+      response = await requestMedia(accessToken);
       if (
         !isGenerationCurrent(runtime, generation) ||
         generationSignal.aborted
@@ -972,6 +994,32 @@ async function processTrack(
       return;
     }
 
+    if (
+      error instanceof DrivePreemptedError ||
+      (error instanceof DriveDeferredError && error.reason !== "rate_limited")
+    ) {
+      useOfflineStore.getState().updateTrackJob(track.fileId, {
+        status: "queued",
+        phase: "idle",
+        attempt: initialJob.attempt,
+        errorCategory: undefined,
+        nextAttemptAt: undefined,
+      });
+      return;
+    }
+    if (
+      error instanceof DriveDeferredError &&
+      error.reason === "rate_limited"
+    ) {
+      useOfflineStore.getState().updateTrackJob(track.fileId, {
+        status: "failed",
+        phase: "idle",
+        attempt: initialJob.attempt,
+        errorCategory: "rate-limited",
+        nextAttemptAt: runtime.dependencies.clock.now() + error.retryAfterMs,
+      });
+      return;
+    }
     const failure = await classifyFailure(runtime, error, attempt);
     const mayRetry =
       AUTOMATIC_RETRY_CATEGORIES.has(failure.category) &&
@@ -1351,6 +1399,9 @@ export function createOfflineDownloadManager(
     },
 
     removeAllDownloads: async () => {
+      const metadataBeforeRemoval = useId3MetadataStore.getState();
+      const metadataAccount = metadataBeforeRemoval.accountId;
+      const metadataGeneration = metadataBeforeRemoval.generation;
       supersedeGeneration(runtime, "remove-all");
       runtime.drainRequested = false;
       if (runtime.retryTimer) {
@@ -1368,6 +1419,12 @@ export function createOfflineDownloadManager(
       usePlayerStore.getState().clearCache();
       useOfflineStore.getState().clearAll();
       useOfflineStore.persist.clearStorage();
+      const metadataAfterRemoval = useId3MetadataStore.getState();
+      if (
+        metadataAfterRemoval.accountId === metadataAccount &&
+        metadataAfterRemoval.generation === metadataGeneration
+      )
+        await metadataAfterRemoval.resetCachedMetadata();
     },
   };
 }

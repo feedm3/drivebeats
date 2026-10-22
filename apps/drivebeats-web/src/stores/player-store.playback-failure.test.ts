@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { downloadGoogleDriveFileMedia } from "@/lib/google-api";
 import * as offlineDb from "@/lib/offline-db";
 import { useAuthStore } from "@/stores/auth-store";
-import { usePlayerStore } from "@/stores/player-store";
+import {
+  getAvailablePlaybackBlob,
+  usePlayerStore,
+} from "@/stores/player-store";
 import type { DriveFile } from "@/types";
 
 vi.mock("@/lib/google-api", async (importOriginal) => ({
@@ -13,8 +16,9 @@ vi.mock("@/lib/offline-db", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/offline-db")>()),
   getTrack: vi.fn(),
 }));
+const requestMetadata = vi.hoisted(() => vi.fn());
 vi.mock("@/stores/id3-metadata-store", () => ({
-  useId3MetadataStore: { getState: () => ({ requestMetadata: vi.fn() }) },
+  useId3MetadataStore: { getState: () => ({ requestMetadata }) },
 }));
 
 const initialPlayer = usePlayerStore.getState();
@@ -88,6 +92,139 @@ afterEach(() => {
 const play = () => usePlayerStore.getState().playTrack(track, [track], []);
 
 describe("typed playback outcomes", () => {
+  it("keeps playback successful when its optional metadata notification loses scope", async () => {
+    const selected = { ...track, modifiedTime: "v1", size: "5" };
+    usePlayerStore.setState({ blobCache: new Map() });
+    vi.mocked(offlineDb.getTrack).mockResolvedValueOnce({
+      blob: new Blob(["audio"]),
+      sizeBytes: 5,
+      modifiedTime: "v1",
+      mimeType: "audio/mpeg",
+      name: track.name,
+      downloadedAt: Date.now(),
+    });
+    requestMetadata.mockRejectedValueOnce(
+      new DOMException("Account changed", "AbortError"),
+    );
+    expect(
+      await usePlayerStore.getState().playTrack(selected, [selected], []),
+    ).toBe(true);
+    await vi.waitFor(() => expect(requestMetadata).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(usePlayerStore.getState().lastPlaybackFailure).toBeNull();
+    expect(usePlayerStore.getState().isPlaying).toBe(true);
+  });
+  it("reports offline Blob provenance rather than the selected track's newer same-size version", async () => {
+    const selected = { ...track, modifiedTime: "v2", size: "5" };
+    const blob = new Blob(["audio"], { type: "audio/mpeg" });
+    usePlayerStore.setState({ blobCache: new Map() });
+    vi.mocked(offlineDb.getTrack).mockResolvedValueOnce({
+      blob,
+      sizeBytes: 5,
+      mimeType: "audio/mpeg",
+      name: track.name,
+      modifiedTime: "v1",
+      downloadedAt: Date.now(),
+    });
+    expect(
+      await usePlayerStore.getState().playTrack(selected, [selected], []),
+    ).toBe(true);
+    await vi.waitFor(() => expect(requestMetadata).toHaveBeenCalledOnce());
+    expect(requestMetadata).toHaveBeenCalledWith(track.id, blob, {
+      accountId: "account-one",
+      fileId: track.id,
+      modifiedTime: "v1",
+      size: "5",
+    });
+    expect(downloadGoogleDriveFileMedia).not.toHaveBeenCalled();
+  });
+
+  it("retains the download-start descriptor after a same-size selected descriptor changes", async () => {
+    const selected = { ...track, modifiedTime: "v1", size: "5" };
+    const download = Promise.withResolvers<Response>();
+    usePlayerStore.setState({ blobCache: new Map() });
+    vi.mocked(downloadGoogleDriveFileMedia).mockReturnValueOnce(
+      download.promise,
+    );
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:download");
+    const pending = usePlayerStore
+      .getState()
+      .playTrack(selected, [selected], []);
+    await vi.waitFor(() =>
+      expect(downloadGoogleDriveFileMedia).toHaveBeenCalledOnce(),
+    );
+    selected.modifiedTime = "v2";
+    download.resolve(
+      new Response("audio", { headers: { "Content-Type": "audio/mpeg" } }),
+    );
+    expect(await pending).toBe(true);
+    await vi.waitFor(() => expect(requestMetadata).toHaveBeenCalledOnce());
+    expect(requestMetadata.mock.calls[0][2]).toEqual({
+      accountId: "account-one",
+      fileId: track.id,
+      modifiedTime: "v1",
+      size: "5",
+    });
+  });
+
+  it("retains the prefetch-start descriptor instead of rereading a mutated playlist", async () => {
+    const prefetched = { ...secondTrack, modifiedTime: "v1", size: "5" };
+    const download = Promise.withResolvers<Response>();
+    usePlayerStore.setState({
+      blobCache: new Map(),
+      playlist: [track, prefetched],
+      currentTrack: track,
+      currentIndex: 0,
+      prefetchNextTrack: initialPlayer.prefetchNextTrack,
+    });
+    vi.mocked(downloadGoogleDriveFileMedia).mockReturnValueOnce(
+      download.promise,
+    );
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:prefetch");
+    usePlayerStore.getState().prefetchNextTrack();
+    await vi.waitFor(() =>
+      expect(downloadGoogleDriveFileMedia).toHaveBeenCalledOnce(),
+    );
+    prefetched.modifiedTime = "v2";
+    download.resolve(
+      new Response("audio", { headers: { "Content-Type": "audio/mpeg" } }),
+    );
+    await vi.waitFor(() => expect(requestMetadata).toHaveBeenCalledOnce());
+    expect(requestMetadata.mock.calls[0][2]).toEqual({
+      accountId: "account-one",
+      fileId: secondTrack.id,
+      modifiedTime: "v1",
+      size: "5",
+    });
+  });
+
+  it("does not return an old account's delayed local audio to a new account", async () => {
+    const local = Promise.withResolvers<
+      offlineDb.OfflineTrackRecord | undefined
+    >();
+    vi.mocked(offlineDb.getTrack).mockReturnValueOnce(local.promise);
+    const pending = getAvailablePlaybackBlob(track.id, {
+      modifiedTime: "v1",
+      size: "5",
+    });
+    useAuthStore.setState({
+      user: {
+        id: "account-two",
+        email: "other@example.test",
+        name: null,
+        picture: null,
+      },
+    });
+    local.resolve({
+      blob: new Blob(["audio"]),
+      sizeBytes: 5,
+      modifiedTime: "v1",
+      mimeType: "audio/mpeg",
+      name: track.name,
+      downloadedAt: Date.now(),
+    });
+    expect(await pending).toBeNull();
+  });
   it("reports a prepared track blocked by browser interaction without re-downloading it", async () => {
     vi.mocked(audio.play).mockRejectedValueOnce(
       new DOMException(

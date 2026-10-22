@@ -6,16 +6,13 @@ import {
   fetchCloudLibrarySync,
   isCloudLibraryEmpty,
 } from "@/lib/cloud-library-api";
-import type {
-  CloudLibrarySyncPayload,
-  Id3SyncMetadata,
-} from "@/lib/cloud-library-shared";
+import type { CloudLibrarySyncPayload } from "@/lib/cloud-library-shared";
+import { verifyKnownCollections } from "@/lib/known-track-resolver";
 import {
   getFavoritesSignature,
   getPlaylistsSignature,
 } from "@/lib/track-signature";
 import { useAuthStore } from "@/stores/auth-store";
-import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import {
   getFavoriteTracks,
   hasPendingFavoriteMutations,
@@ -37,7 +34,7 @@ const CLOUD_BOOTSTRAP_KEY = "drivebeats-cloud-bootstrap-v1";
  *
  * In an installed PWA every app switch (lock screen, notification, back to the
  * music) fires a resume event, and each unthrottled sync is a full Neon
- * round-trip for all playlists, favorites and track metadata. The user is the
+ * round-trip for all playlists and favorites. The user is the
  * main writer of their own library and their own mutations push to the cloud
  * immediately and update the stores optimistically, so polling only exists to
  * pick up edits made on another device. One minute bounds resume-triggered
@@ -134,26 +131,6 @@ function resolveIncomingFavorites(
 }
 
 /**
- * Mirrors the merge rule in `hydrateFromSync`: it only writes entries that are
- * missing locally or carry a newer `modifiedTime`.
- */
-function hasNewTrackMetadata(record: Record<string, Id3SyncMetadata>) {
-  const cache = useId3MetadataStore.getState().cache;
-
-  for (const [fileId, metadata] of Object.entries(record)) {
-    const existing = cache[fileId];
-    if (
-      !existing ||
-      (metadata.modifiedTime && existing.modifiedTime !== metadata.modifiedTime)
-    ) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/**
  * Applies a cloud payload to the stores, skipping every replacement whose
  * result would be equivalent to the current state. The `replace*` calls rebuild
  * the playlist and favorite collections wholesale, so a redundant call
@@ -179,10 +156,6 @@ export function applyCloudLibraryPayload(payload: CloudLibrarySyncPayload) {
       )
   ) {
     libraryState.replaceFavoritesFromCloud(payload.favorites);
-  }
-
-  if (payload.trackMetadata && hasNewTrackMetadata(payload.trackMetadata)) {
-    useId3MetadataStore.getState().hydrateFromSync(payload.trackMetadata);
   }
 }
 
@@ -215,15 +188,8 @@ async function fetchApplicableCloudLibrary(
         isCloudLibraryEmpty(nextPayload) &&
         (localPlaylists.length > 0 || localFavorites.length > 0)
       ) {
-        const localId3Cache = useId3MetadataStore.getState().cache;
-        const localMetadata =
-          Object.keys(localId3Cache).length > 0 ? localId3Cache : undefined;
         await bootstrapCloudLibrarySync(
-          createCloudLibrarySnapshot(
-            localPlaylists,
-            localFavorites,
-            localMetadata,
-          ),
+          createCloudLibrarySnapshot(localPlaylists, localFavorites),
         );
         if (getSessionKey() !== sessionKey) return null;
         nextPayload = await fetchCloudLibrarySync();
@@ -279,6 +245,8 @@ function applyForCaller(
   }
 
   applyCloudLibraryPayload(payload);
+  const userId = useAuthStore.getState().user?.id;
+  if (userId) verifyKnownCollections(userId);
   lastAppliedSessionKey = sessionKey;
   return true;
 }

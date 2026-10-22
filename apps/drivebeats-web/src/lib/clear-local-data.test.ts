@@ -7,6 +7,10 @@ import type { DriveFile } from "@/types";
 
 // Mock all store modules before importing the module under test
 vi.mock("sonner", () => ({ toast: { dismiss: vi.fn() } }));
+const mockStopMetadataIndex = vi.fn();
+vi.mock("@/lib/metadata-index-coordinator", () => ({
+  stopMetadataIndex: mockStopMetadataIndex,
+}));
 
 const mockResetPlayback = vi.fn();
 const mockClearCache = vi.fn();
@@ -242,6 +246,7 @@ describe("clearLocalData", () => {
 
     await clearLocalData();
 
+    expect(mockStopMetadataIndex).toHaveBeenCalled();
     expect(mockResetPlayback).toHaveBeenCalled();
     expect(mockClearCache).toHaveBeenCalled();
     expect(mockPlayerClearStorage).toHaveBeenCalled();
@@ -250,7 +255,8 @@ describe("clearLocalData", () => {
     expect(mockPlaylistClearCloud).toHaveBeenCalled();
     expect(mockPlaylistClearStorage).toHaveBeenCalled();
     expect(mockMetadataClearAll).toHaveBeenCalled();
-    expect(mockMetadataClearStorage).toHaveBeenCalled();
+    // clearAll now owns and awaits IndexedDB plus legacy storage removal.
+    expect(mockMetadataClearStorage).not.toHaveBeenCalled();
     expect(mockFolderCacheClear).toHaveBeenCalled();
     expect(mockClearFolderListings).toHaveBeenCalled();
     expect(mockImportedDriveClear).toHaveBeenCalled();
@@ -260,6 +266,42 @@ describe("clearLocalData", () => {
     expect(
       localStorage.getItem("drivebeats-offline-download-diagnostics:v1"),
     ).toBeNull();
+  });
+
+  it("removes account-bearing metadata notifications while preserving quota and cooldown protection", async () => {
+    localStorage.setItem(
+      "drivebeats-metadata-updated",
+      JSON.stringify({ accountId: USER_ID, fileId: "private-track" }),
+    );
+    localStorage.setItem(
+      "drivebeats-metadata-clear",
+      JSON.stringify({ accountId: USER_ID }),
+    );
+    localStorage.setItem(
+      "drivebeats-metadata-cache-reset",
+      JSON.stringify({ accountId: USER_ID }),
+    );
+    const quotaKey = `drivebeats-drive-scheduling-v1:${USER_ID}`;
+    const quotaState = JSON.stringify({
+      requests: 49,
+      bytes: 5_000_000,
+      cooldownUntil: Date.now() + 60_000,
+      windowStarted: Date.now(),
+    });
+    localStorage.setItem(quotaKey, quotaState);
+    // clearAll itself sends the final cross-tab invalidation while wiping tags.
+    mockMetadataClearAll.mockImplementationOnce(async () => {
+      localStorage.setItem(
+        "drivebeats-metadata-clear",
+        JSON.stringify({ accountId: USER_ID }),
+      );
+    });
+    const { clearLocalData } = await import("@/lib/clear-local-data");
+    await clearLocalData();
+    expect(localStorage.getItem("drivebeats-metadata-updated")).toBeNull();
+    expect(localStorage.getItem("drivebeats-metadata-clear")).toBeNull();
+    expect(localStorage.getItem("drivebeats-metadata-cache-reset")).toBeNull();
+    expect(localStorage.getItem(quotaKey)).toBe(quotaState);
   });
 
   it("posts CLEAR_CACHES message to service worker", async () => {

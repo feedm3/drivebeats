@@ -33,30 +33,51 @@ function toDriveFile(file: GoogleDriveFileMetadataResponse): DriveFile | null {
   };
 }
 
-async function fetchPickedFileMetadata(fileIds: string[], accessToken: string) {
-  const requests = fileIds.map(async (fileId) => {
-    const params = new URLSearchParams({
-      fields: DRIVE_METADATA_FIELDS,
-      supportsAllDrives: "true",
-    });
-    const response = await getGoogleDriveFileMetadata(
-      fileId,
-      accessToken,
-      params,
-    );
-
-    if (!response.ok) {
-      throw new Error(`Drive metadata lookup failed for ${fileId}`);
+/** Lazily feed the bounded Drive lane, keeping selection order. */
+export async function fetchPickedFileMetadata(
+  fileIds: string[],
+  accessToken: string,
+  options: { signal?: AbortSignal; accountId?: string } = {},
+) {
+  const controller = new AbortController();
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, controller.signal])
+    : controller.signal;
+  const files: (DriveFile | null)[] = new Array(fileIds.length).fill(null);
+  let next = 0;
+  async function worker() {
+    for (;;) {
+      signal.throwIfAborted();
+      const index = next++;
+      if (index >= fileIds.length) return;
+      const params = new URLSearchParams({
+        fields: DRIVE_METADATA_FIELDS,
+        supportsAllDrives: "true",
+      });
+      const response = await getGoogleDriveFileMetadata(
+        fileIds[index],
+        accessToken,
+        params,
+        { signal, accountId: options.accountId, priority: "navigation" },
+      );
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => {});
+        throw new Error("Drive metadata lookup failed");
+      }
+      files[index] = toDriveFile(
+        (await response.json()) as GoogleDriveFileMetadataResponse,
+      );
     }
-
-    return toDriveFile(
-      (await response.json()) as GoogleDriveFileMetadataResponse,
+  }
+  try {
+    await Promise.all(
+      Array.from({ length: Math.min(4, fileIds.length) }, () => worker()),
     );
-  });
-
-  return (await Promise.all(requests)).filter(
-    (file): file is DriveFile => !!file,
-  );
+    return files.filter((file): file is DriveFile => !!file);
+  } finally {
+    // A failed/cancelled selection cannot keep feeding obsolete requests.
+    controller.abort();
+  }
 }
 
 export function useDriveImport(
@@ -76,7 +97,9 @@ export function useDriveImport(
     setIsImporting(true);
 
     try {
+      const accountId = useAuthStore.getState().user?.id;
       const accessToken = await getValidAccessToken();
+      if (useAuthStore.getState().user?.id !== accountId) return;
       if (!accessToken) {
         toast.error(
           useAuthStore.getState().authStatus === "unauthenticated"
@@ -90,6 +113,7 @@ export function useDriveImport(
       await ensureGooglePickerLoaded();
 
       await new Promise<void>((resolve, reject) => {
+        const lookup = new AbortController();
         let hasSettled = false;
         let picker: GooglePickerInstance | undefined;
 
@@ -99,6 +123,7 @@ export function useDriveImport(
           }
 
           hasSettled = true;
+          lookup.abort();
           setActiveGooglePickerSession(null);
           picker?.setVisible(false);
           settle();
@@ -164,7 +189,16 @@ export function useDriveImport(
               const files = await fetchPickedFileMetadata(
                 selectedFileIds,
                 accessToken,
+                { signal: lookup.signal, accountId },
               );
+              if (
+                hasSettled ||
+                useAuthStore.getState().isLoggingOut ||
+                useAuthStore.getState().user?.id !== accountId
+              ) {
+                finish(resolve);
+                return;
+              }
               if (onSelected) {
                 await onSelected(files);
               } else {

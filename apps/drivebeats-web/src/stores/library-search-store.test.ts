@@ -5,9 +5,29 @@ import type { LibrarySearchCatalogRecord } from "@/lib/library-search-catalog-db
 const persisted = new Map<string, LibrarySearchCatalogRecord>();
 let estimatedBytes = 1_000;
 let persistGate: () => Promise<void>;
-let buildImpl: (input: {
-  signal?: AbortSignal;
-}) => Promise<LibrarySearchTrack[]>;
+type BuildInput = Parameters<
+  typeof import("@/lib/library-search-drive").buildLibrarySearchCatalogFromDrive
+>[0];
+let buildImpl: (input: BuildInput) => Promise<LibrarySearchTrack[]>;
+const progress = new Map<string, unknown>();
+const saveProgress = vi.fn(async (key: string, value: unknown) => {
+  progress.set(key, structuredClone(value));
+  return true;
+});
+const deleteProgress = vi.fn(async (key: string) => {
+  progress.delete(key);
+});
+vi.mock("@/lib/background-progress-db", () => ({
+  loadBackgroundProgress: async (key: string) => progress.get(key),
+  saveBackgroundProgress: (key: string, value: unknown) =>
+    saveProgress(key, value),
+  deleteBackgroundProgressPrefix: async (prefix: string) => {
+    for (const key of progress.keys())
+      if (key.startsWith(prefix)) progress.delete(key);
+  },
+  inheritBackgroundProgressFence: () => {},
+  deleteBackgroundProgress: (key: string) => deleteProgress(key),
+}));
 
 vi.mock("@/lib/library-search-catalog-db", () => ({
   loadLibrarySearchCatalog: async (userId: string) =>
@@ -30,8 +50,7 @@ vi.mock("@/lib/library-search-catalog-db", () => ({
 }));
 
 vi.mock("@/lib/library-search-drive", () => ({
-  buildLibrarySearchCatalogFromDrive: (input: { signal?: AbortSignal }) =>
-    buildImpl(input),
+  buildLibrarySearchCatalogFromDrive: (input: BuildInput) => buildImpl(input),
 }));
 
 const importedFolder = {
@@ -106,6 +125,9 @@ async function prepare(userId = "a") {
 describe("Library Search lifecycle", () => {
   beforeEach(() => {
     persisted.clear();
+    progress.clear();
+    deleteProgress.mockClear();
+    saveProgress.mockClear();
     estimatedBytes = 1_000;
     persistGate = async () => {};
     buildImpl = async () => [catalogTrack("fresh")];
@@ -120,6 +142,333 @@ describe("Library Search lifecycle", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+    Object.defineProperty(navigator, "locks", {
+      configurable: true,
+      value: undefined,
+    });
+  });
+
+  it("reuses an import signature without walking unchanged arrays and invalidates replaced roots", async () => {
+    await prepare();
+    const { getLibrarySearchImportsSignature } = await import(
+      "@/stores/library-search-store"
+    );
+    const { useImportedDriveStore } = await import(
+      "@/stores/imported-drive-store"
+    );
+    const roots = useImportedDriveStore.getState().rootFolders;
+    const map = vi.spyOn(roots, "map");
+    expect(getLibrarySearchImportsSignature()).toBe("folder:music");
+    for (let index = 0; index < 100; index++)
+      getLibrarySearchImportsSignature();
+    expect(map).not.toHaveBeenCalled();
+    useImportedDriveStore.setState({
+      rootFolders: [{ ...importedFolder, id: "other" }],
+    });
+    expect(getLibrarySearchImportsSignature()).toBe("folder:other");
+    map.mockRestore();
+  });
+
+  it("discards an expired persisted catalog checkpoint instead of mixing old pages", async () => {
+    const key = "catalog:a:folder:music";
+    progress.set(key, {
+      schema: 1,
+      id: "old",
+      startedAt: Date.now() - 16 * 60_000,
+      audioChunks: 1,
+      folderChunks: 0,
+      bytes: 10,
+      phase: "audio",
+      pageToken: "expired",
+    });
+    progress.set(`${key}:chunks:old:audio:0`, [
+      { id: "old", name: "Old.mp3", mimeType: "audio/mpeg" },
+    ]);
+    const { store } = await prepare();
+    buildImpl = async (input) => {
+      expect(input.checkpoint).toBeUndefined();
+      return [catalogTrack("new")];
+    };
+    await expect(store.getState().ensureReady()).resolves.toBe(true);
+    expect(store.getState().catalog?.tracks.map((track) => track.id)).toEqual([
+      "new",
+    ]);
+    expect(progress.size).toBe(0);
+  });
+
+  it("resumes a fresh persisted manifest at its folder page token without repeating audio reads", async () => {
+    const key = "catalog:a:folder:music";
+    const startedAt = Date.now() - 1000;
+    progress.set(key, {
+      schema: 1,
+      id: "resume",
+      startedAt,
+      audioChunks: 1,
+      folderChunks: 1,
+      bytes: 500,
+      phase: "folders",
+      pageToken: "last-folders",
+    });
+    progress.set(`${key}:chunks:resume:audio:0`, [
+      {
+        id: "saved",
+        name: "Saved.mp3",
+        mimeType: "audio/mpeg",
+        parents: ["music"],
+      },
+    ]);
+    progress.set(`${key}:chunks:resume:folders:0`, [importedFolder]);
+    const { store } = await prepare();
+    const actual = await vi.importActual<
+      typeof import("@/lib/library-search-drive")
+    >("@/lib/library-search-drive");
+    const list = vi.fn(async (_token: string, params: URLSearchParams) => {
+      expect(params.get("q")).toContain("application/vnd.google-apps.folder");
+      expect(params.get("pageToken")).toBe("last-folders");
+      return Response.json({ files: [] });
+    });
+    buildImpl = async (input) =>
+      actual.buildLibrarySearchCatalogFromDrive({ ...input, listFiles: list });
+    await expect(store.getState().ensureReady()).resolves.toBe(true);
+    expect(list).toHaveBeenCalledOnce();
+    expect(store.getState().catalog).toMatchObject({
+      fetchedAt: startedAt,
+      tracks: [{ id: "saved" }],
+    });
+    expect(progress.size).toBe(0);
+  });
+
+  it("drops a failed partial checkpoint before the next build", async () => {
+    const { store } = await prepare();
+    buildImpl = async (input) => {
+      await input.onCheckpoint?.({
+        startedAt: input.startedAt ?? Date.now(),
+        audioFiles: [],
+        folders: [],
+        phase: "audio",
+        pageToken: "previous",
+      });
+      throw new TypeError("network failed");
+    };
+    await expect(store.getState().ensureReady()).resolves.toBe(false);
+    expect(progress.size).toBe(0);
+    buildImpl = async (input) => {
+      expect(input.checkpoint).toBeUndefined();
+      return [catalogTrack("recovered")];
+    };
+    await expect(store.getState().ensureReady()).resolves.toBe(true);
+  });
+
+  it("restarts one rejected page token from scratch and forgets repeatedly failing progress", async () => {
+    const { store } = await prepare();
+    const { GoogleDriveReadError } = await import("@/lib/drive-read-error");
+    let calls = 0;
+    buildImpl = async (input) => {
+      expect(input.checkpoint).toBeUndefined();
+      calls++;
+      await input.onCheckpoint?.({
+        startedAt: input.startedAt ?? Date.now(),
+        phase: "audio",
+        audioFiles: [],
+        folders: [],
+        pageToken: "rejected",
+      });
+      throw new GoogleDriveReadError(400);
+    };
+    await expect(store.getState().ensureReady()).resolves.toBe(false);
+    expect(calls).toBe(2);
+    expect(progress.size).toBe(0);
+    buildImpl = async (input) => {
+      expect(input.checkpoint).toBeUndefined();
+      return [catalogTrack("recovered")];
+    };
+    await expect(store.getState().ensureReady()).resolves.toBe(true);
+  });
+
+  it("dates a completed generation from the start of its listing", async () => {
+    const { store } = await prepare();
+    const startedAt = Date.now();
+    buildImpl = async () => {
+      vi.setSystemTime(startedAt + 120_000);
+      return [catalogTrack("fresh")];
+    };
+    await expect(store.getState().ensureReady()).resolves.toBe(true);
+    expect(store.getState().catalog).toMatchObject({
+      fetchedAt: startedAt,
+      completedAt: startedAt + 120_000,
+    });
+  });
+
+  it("persists each completed catalog page once rather than rewriting accumulated files", async () => {
+    const { store } = await prepare();
+    const actual = await vi.importActual<
+      typeof import("@/lib/library-search-drive")
+    >("@/lib/library-search-drive");
+    buildImpl = async (input) =>
+      actual.buildLibrarySearchCatalogFromDrive({
+        ...input,
+        listFiles: async (_token, params) => {
+          if (params.get("q")?.includes("application/vnd.google-apps.folder"))
+            return Response.json({ files: [importedFolder] });
+          const index = Number(params.get("pageToken") ?? 0);
+          return Response.json({
+            files: Array.from({ length: 100 }, (_, row) => ({
+              id: `${index}-${row}`,
+              name: `Track${row}.mp3`,
+              mimeType: "audio/mpeg",
+              parents: ["music"],
+            })),
+            ...(index < 2 ? { nextPageToken: String(index + 1) } : {}),
+          });
+        },
+      });
+    await expect(store.getState().ensureReady()).resolves.toBe(true);
+    const arrays = saveProgress.mock.calls
+      .map(([, value]) => value)
+      .filter(Array.isArray);
+    expect(arrays.map((page) => page.length)).toEqual([100, 100, 100, 1]);
+    expect(store.getState().catalog?.tracks.length).toBe(300);
+    expect(progress.size).toBe(0);
+  });
+
+  it.each([false, true])(
+    "shares a cross-tab catalog build and foreground promotion (session-only=%s)",
+    async (sessionOnly) => {
+      const peers = new Map<string, Set<TestChannel>>();
+      class TestChannel {
+        onmessage: ((event: MessageEvent) => void) | null = null;
+        constructor(readonly name: string) {
+          const group = peers.get(name) ?? new Set<TestChannel>();
+          group.add(this);
+          peers.set(name, group);
+        }
+        postMessage(data: unknown) {
+          for (const peer of peers.get(this.name) ?? [])
+            if (peer !== this)
+              peer.onmessage?.({ data: structuredClone(data) } as MessageEvent);
+        }
+      }
+      vi.stubGlobal("BroadcastChannel", TestChannel);
+      const tails = new Map<string, Promise<unknown>>();
+      Object.defineProperty(navigator, "locks", {
+        configurable: true,
+        value: {
+          request: async (
+            name: string,
+            _options: unknown,
+            work: () => Promise<unknown>,
+          ) => {
+            const previous = tails.get(name) ?? Promise.resolve();
+            const next = previous.catch(() => {}).then(work);
+            tails.set(name, next);
+            try {
+              return await next;
+            } finally {
+              if (tails.get(name) === next) tails.delete(name);
+            }
+          },
+        },
+      });
+      if (sessionOnly) estimatedBytes = 17 * 1024 * 1024;
+      const gate = deferred<LibrarySearchTrack[]>();
+      let calls = 0;
+      let ownerInput: BuildInput | undefined;
+      buildImpl = async (input) => {
+        calls++;
+        ownerInput = input;
+        return gate.promise;
+      };
+      const first = await prepare();
+      const owner = first.store
+        .getState()
+        .ensureReady(undefined, { background: true });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(calls).toBe(1);
+      vi.setSystemTime(Date.now() + 1000);
+      const second = await prepare();
+      const consumer = second.store.getState().ensureReady();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(calls).toBe(1);
+      const priority = ownerInput?.requestOptions?.priority;
+      expect(typeof priority === "function" ? priority() : priority).toBe(
+        "navigation",
+      );
+      gate.resolve([catalogTrack("shared")]);
+      await expect(owner).resolves.toBe(true);
+      await expect(consumer).resolves.toBe(true);
+      expect(calls).toBe(1);
+      expect(second.store.getState().catalog?.tracks[0].id).toBe("shared");
+      expect(second.store.getState().sessionOnly).toBe(sessionOnly);
+    },
+  );
+
+  it("detaches a foreground caller after 15 seconds while keeping the shared build", async () => {
+    const gate = deferred<LibrarySearchTrack[]>();
+    let calls = 0;
+    buildImpl = async () => {
+      calls++;
+      return gate.promise;
+    };
+    const { store } = await prepare();
+    const pending = store.getState().ensureReady();
+    await vi.advanceTimersByTimeAsync(15_000);
+    await expect(pending).resolves.toBe(false);
+    expect(calls).toBe(1);
+    expect(store.getState().status).toBe("loading");
+    gate.resolve([catalogTrack("eventual")]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.getState().catalog?.tracks[0].id).toBe("eventual");
+  });
+
+  it("detaches an exhausted foreground request allowance instead of retrying it forever", async () => {
+    const { store } = await prepare();
+    const { DriveDeferredError } = await import(
+      "@/lib/drive-request-scheduler"
+    );
+    let calls = 0;
+    buildImpl = async (input) => {
+      calls++;
+      const budget = input.requestOptions?.budget;
+      if (budget) {
+        budget.requestsUsed = budget.maxRequests;
+        throw new DriveDeferredError("budget_exceeded");
+      }
+      throw new DriveDeferredError("coordination_unavailable");
+    };
+    await expect(store.getState().ensureReady()).resolves.toBe(false);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(calls).toBeLessThanOrEqual(2);
+    expect(store.getState().catalog).toBeNull();
+  });
+
+  it("resumes the last complete page after a budget pause and clears progress on publication", async () => {
+    const { store } = await prepare();
+    const { DriveDeferredError } = await import(
+      "@/lib/drive-request-scheduler"
+    );
+    const checkpoint = {
+      startedAt: Date.now(),
+      phase: "audio" as const,
+      audioFiles: [{ id: "first", name: "First.mp3", mimeType: "audio/mpeg" }],
+      folders: [],
+      pageToken: "next",
+    };
+    let calls = 0;
+    buildImpl = async (input) => {
+      if (++calls === 1) {
+        await input.onCheckpoint?.(checkpoint);
+        throw new DriveDeferredError("paused", 1000);
+      }
+      expect(input.checkpoint).toEqual(checkpoint);
+      return [catalogTrack("first")];
+    };
+    const pending = store.getState().ensureReady();
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(pending).resolves.toBe(true);
+    expect(calls).toBe(2);
+    expect(deleteProgress).toHaveBeenCalledWith("catalog:a:folder:music");
+    expect(progress.size).toBe(0);
   });
 
   it("shares an overlapping readiness refresh without one caller cancelling another", async () => {

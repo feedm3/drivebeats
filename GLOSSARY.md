@@ -25,9 +25,9 @@ The user's DriveBeats music collection, consisting of Standalone Tracks and the 
 _Avoid_: Google Drive, My Drive, global files
 
 **Library Search**:
-An online, filename-only search across every Playable Track in the Library.
+A search across every Playable Track in the Library using filenames and current audio title, artist, and album tags cached on this device.
 _Avoid_: Global Search, Drive search
 
 **Current Folder Search**:
-A filename-only search limited to the Current Folder.
+A search limited to the Current Folder using filenames and current audio title, artist, and album tags cached on this device.
 _Avoid_: Local search

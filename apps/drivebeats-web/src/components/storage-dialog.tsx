@@ -3,7 +3,6 @@
 import {
   ArrowLeft,
   Cloud,
-  Copy,
   HardDrive,
   Loader2,
   RotateCcw,
@@ -25,13 +24,14 @@ import {
 } from "@/components/ui/dialog";
 import { logoutAndRedirect } from "@/lib/clear-local-data";
 import { deleteAllCloudLibraryData } from "@/lib/cloud-library-api";
-import * as offlineDb from "@/lib/offline-db";
 import {
-  exportOfflineDownloadDiagnostics,
-  hasOfflineDownloadDiagnostics,
-} from "@/lib/offline-download-diagnostics";
+  getMetadataCacheUsage,
+  type MetadataCacheUsage,
+} from "@/lib/metadata-cache-usage";
+import * as offlineDb from "@/lib/offline-db";
 import { offlineDownloadManager } from "@/lib/offline-download-manager";
 import { formatBytes } from "@/lib/utils";
+import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { useLibrarySearchStore } from "@/stores/library-search-store";
 import { getFavoriteTracks, useLibraryStore } from "@/stores/library-store";
 import {
@@ -69,24 +69,6 @@ const PERSISTENCE_COPY: Record<
   },
 };
 
-async function copyText(text: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  const copied = document.execCommand("copy");
-  textarea.remove();
-  if (!copied) throw new Error("Clipboard unavailable");
-}
-
 export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
   const [view, setView] = useState<View>("main");
   const [trackCount, setTrackCount] = useState(0);
@@ -96,8 +78,13 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
   );
   const [removing, setRemoving] = useState(false);
   const [retrying, setRetrying] = useState(false);
-  const [copyingDiagnostics, setCopyingDiagnostics] = useState(false);
-  const [diagnosticsAvailable, setDiagnosticsAvailable] = useState(false);
+  const [metadataUsage, setMetadataUsage] = useState<MetadataCacheUsage | null>(
+    null,
+  );
+  const [checkingMetadata, setCheckingMetadata] = useState(false);
+  const metadataAccount = useId3MetadataStore((state) => state.accountId);
+  const metadataGeneration = useId3MetadataStore((state) => state.generation);
+  const metadataHydrated = useId3MetadataStore((state) => state.hydrated);
   const [deletingCloudData, setDeletingCloudData] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const trackJobs = useOfflineStore((state) => state.trackJobs);
@@ -118,6 +105,7 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
     (job) => job.errorCategory === "storage-unavailable",
   );
   const hasOfflineData =
+    (metadataUsage?.recordCount ?? 0) > 0 ||
     trackCount > 0 ||
     Object.keys(trackJobs).length > 0 ||
     Object.keys(offlineCollections).length > 0;
@@ -158,9 +146,40 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
   useEffect(() => {
     if (open) {
       void loadStats();
-      setDiagnosticsAvailable(hasOfflineDownloadDiagnostics());
     }
   }, [open, loadStats]);
+
+  useEffect(() => {
+    if (!open || !metadataAccount) {
+      setMetadataUsage(null);
+      setCheckingMetadata(false);
+      return;
+    }
+    if (!metadataHydrated) {
+      setMetadataUsage(null);
+      setCheckingMetadata(true);
+      return;
+    }
+    const controller = new AbortController();
+    setMetadataUsage(null);
+    setCheckingMetadata(true);
+    void getMetadataCacheUsage(metadataAccount, controller.signal)
+      .then((usage) => {
+        const current = useId3MetadataStore.getState();
+        if (
+          !controller.signal.aborted &&
+          current.accountId === metadataAccount &&
+          current.generation === metadataGeneration
+        ) {
+          setMetadataUsage(usage);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!controller.signal.aborted) setCheckingMetadata(false);
+      });
+    return () => controller.abort();
+  }, [open, metadataAccount, metadataGeneration, metadataHydrated]);
 
   const handleRemoveAll = useCallback(async () => {
     setRemoving(true);
@@ -170,6 +189,9 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
       setTrackCount(0);
       setTotalBytes(0);
       setView("main");
+      toast.success("Downloads and music metadata removed.");
+    } catch {
+      toast.error("Could not remove all local data. Please try again.");
     } finally {
       setRemoving(false);
     }
@@ -184,23 +206,6 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
       toast.error("Could not retry downloads.");
     } finally {
       setRetrying(false);
-    }
-  }, []);
-
-  const handleCopyDiagnostics = useCallback(async () => {
-    if (!hasOfflineDownloadDiagnostics()) {
-      setDiagnosticsAvailable(false);
-      return;
-    }
-
-    setCopyingDiagnostics(true);
-    try {
-      await copyText(exportOfflineDownloadDiagnostics());
-      toast.success("Download diagnostics copied.");
-    } catch {
-      toast.error("Could not copy download diagnostics.");
-    } finally {
-      setCopyingDiagnostics(false);
     }
   }, []);
 
@@ -235,12 +240,12 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
+      <DialogContent className="w-[calc(100%_-_2rem)] [&_button]:min-h-11 [&_button]:min-w-11">
         {view === "main" && (
           <>
             <DialogTitle>Storage & data</DialogTitle>
             <DialogDescription>
-              Device downloads and synced account data.
+              Device downloads, music metadata and synced account data.
             </DialogDescription>
 
             <h3 className="mt-4 flex items-center gap-2 text-sm font-semibold tracking-tight">
@@ -255,9 +260,19 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
                 <span className="font-medium tabular-nums">{trackCount}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Storage used</span>
+                <span className="text-muted-foreground">Download storage</span>
                 <span className="font-medium tabular-nums">
                   {formatBytes(totalBytes)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Music metadata</span>
+                <span className="font-medium tabular-nums">
+                  {checkingMetadata
+                    ? "Checking…"
+                    : metadataUsage
+                      ? formatBytes(metadataUsage.approximateBytes)
+                      : "Unavailable"}
                 </span>
               </div>
               {quota && (
@@ -329,33 +344,10 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
                   variant="destructive"
                   size="sm"
                   onClick={() => setView("confirm-downloads")}
-                  disabled={!hasOfflineData}
+                  disabled={!hasOfflineData || checkingMetadata}
                 >
                   <Trash2 className="size-3.5" />
                   Remove all downloads
-                </Button>
-              </div>
-
-              <div className="rounded-lg border border-border/70 p-3">
-                <p className="font-medium">Download diagnostics</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {diagnosticsAvailable
-                    ? "Copy a sanitized, device-local history for a support report."
-                    : "No download diagnostics recorded yet."}
-                </p>
-                <Button
-                  className="mt-2"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyDiagnostics}
-                  disabled={!diagnosticsAvailable || copyingDiagnostics}
-                >
-                  {copyingDiagnostics ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Copy className="size-3.5" />
-                  )}
-                  Copy download diagnostics
                 </Button>
               </div>
             </div>
@@ -413,8 +405,9 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
             <DialogDescription>
               This removes all offline download settings and {trackCount}{" "}
               downloaded {trackCount === 1 ? "track" : "tracks"} (
-              {formatBytes(totalBytes)}) from this device. You can re-download
-              them later.
+              {formatBytes(totalBytes)}) from this device, plus cached music
+              metadata. Downloads can be saved again; metadata rebuilds
+              automatically.
             </DialogDescription>
             <div className="mt-4 flex justify-between">
               <Button

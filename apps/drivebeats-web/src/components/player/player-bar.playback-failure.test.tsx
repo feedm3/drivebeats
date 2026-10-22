@@ -10,11 +10,22 @@ vi.mock("@/lib/google-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google-api")>()),
   downloadGoogleDriveFileMedia: vi.fn(),
 }));
+vi.mock("@/lib/cached-track-tags", () => ({
+  getCachedTrackTags: () => undefined,
+  hydrateCachedTrackTags: async () => {},
+}));
+
 vi.mock("@/stores/id3-metadata-store", () => ({
+  retainCachedMetadataRecord: () => () => {},
   useId3MetadataStore: Object.assign(
-    (selector: (state: { cache: Record<string, unknown> }) => unknown) =>
-      selector({ cache: {} }),
-    { getState: () => ({ requestMetadata: vi.fn() }) },
+    (
+      selector: (state: {
+        cache: Record<string, unknown>;
+        records: Record<string, unknown>;
+        generation: number;
+      }) => unknown,
+    ) => selector({ cache: {}, records: {}, generation: 1 }),
+    { getState: () => ({ requestMetadata: vi.fn(), generation: 1 }) },
   ),
 }));
 vi.mock("@/components/add-to-playlist-popover", () => ({

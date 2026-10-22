@@ -18,26 +18,57 @@ export function getSearchTokens(query: string) {
   ].filter(Boolean);
 }
 
-export function matchesFileSearch(file: DriveFile, query: string) {
+export type SearchTags = { title?: string; artist?: string; album?: string };
+export type TagLookup = (file: DriveFile) => SearchTags | undefined;
+
+export function matchedSearchFields(
+  file: DriveFile,
+  query: string,
+  tags?: SearchTags,
+) {
+  const tokens = getSearchTokens(query);
+  const fields = {
+    filename: file.name,
+    cached_title: tags?.title,
+    cached_artist: tags?.artist,
+    cached_album: tags?.album,
+  };
+  return Object.entries(fields)
+    .filter(
+      ([, value]) =>
+        value &&
+        tokens.some((token) => value.toLocaleLowerCase().includes(token)),
+    )
+    .map(([key]) => key);
+}
+
+export function matchesFileSearch(
+  file: DriveFile,
+  query: string,
+  tags?: SearchTags,
+) {
   const tokens = getSearchTokens(query);
   if (tokens.length === 0) {
     return true;
   }
 
-  const fileName = file.name.toLocaleLowerCase();
-  return tokens.every((token) => fileName.includes(token));
+  const values = [file.name, tags?.title, tags?.artist, tags?.album]
+    .filter(Boolean)
+    .map((value) => value?.toLocaleLowerCase() ?? "");
+  return tokens.every((token) => values.some((value) => value.includes(token)));
 }
 
-export function filterFilesBySearch(files: DriveFile[], query: string) {
+export function filterFilesBySearch(
+  files: DriveFile[],
+  query: string,
+  lookup?: TagLookup,
+) {
   const tokens = getSearchTokens(query);
   if (tokens.length === 0) {
     return files;
   }
 
-  return files.filter((file) => {
-    const fileName = file.name.toLocaleLowerCase();
-    return tokens.every((token) => fileName.includes(token));
-  });
+  return files.filter((file) => matchesFileSearch(file, query, lookup?.(file)));
 }
 
 export function getHighlightedTextParts(

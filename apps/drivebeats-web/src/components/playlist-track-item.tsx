@@ -14,10 +14,10 @@ import { NowPlayingBars } from "@/components/now-playing-bars";
 import { QueueTrackActions } from "@/components/queue-track-actions";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { useCachedTrackTags } from "@/hooks/use-cached-track-tags";
 import { playlistTrackToDriveFile } from "@/lib/audio";
 import { resolveTrackMetadata } from "@/lib/track-metadata";
 import { cn } from "@/lib/utils";
-import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import type {
   OfflineDownloadErrorCategory,
   OfflineTrackJob,
@@ -94,7 +94,7 @@ export function PlaylistTrackItem({
   onRemove,
   removeLabel = "Remove from playlist",
 }: PlaylistTrackItemProps) {
-  const id3 = useId3MetadataStore((s) => s.cache[track.fileId]);
+  const id3 = useCachedTrackTags(playlistTrackToDriveFile(track));
   const { title, subtitle: metadataSubtitle } = resolveTrackMetadata(
     track.fileName,
     track.parentFolderName,

@@ -1,7 +1,9 @@
 "use client";
 
 import { toast } from "sonner";
+import { clearBackgroundProgress } from "@/lib/background-progress-db";
 import { clearFolderListings } from "@/lib/folder-cache-db";
+import { stopMetadataIndex } from "@/lib/metadata-index-coordinator";
 import { clearOfflineDownloadDiagnostics } from "@/lib/offline-download-diagnostics";
 import { offlineDownloadManager } from "@/lib/offline-download-manager";
 import { useAuthStore } from "@/stores/auth-store";
@@ -17,6 +19,9 @@ const APP_STORAGE_KEYS = [
   "sidebar-width",
   "sidebar-folders-collapsed",
   "sidebar-playlists-collapsed",
+  "drivebeats-metadata-updated",
+  "drivebeats-metadata-clear",
+  "drivebeats-metadata-cache-reset",
 ];
 
 async function purgeServiceWorkerCaches() {
@@ -33,6 +38,8 @@ async function purgeServiceWorkerCaches() {
 
 export async function clearLocalData() {
   toast.dismiss();
+  stopMetadataIndex();
+  await clearBackgroundProgress();
 
   usePlayerStore.getState().resetPlayback();
   usePlayerStore.getState().clearCache();
@@ -60,8 +67,7 @@ export async function clearLocalData() {
   usePlaylistStore.getState().clearCloudState();
   usePlaylistStore.persist.clearStorage();
 
-  useId3MetadataStore.getState().clearAll();
-  useId3MetadataStore.persist.clearStorage();
+  await useId3MetadataStore.getState().clearAll();
 
   try {
     await offlineDownloadManager.removeAllDownloads();
@@ -90,6 +96,11 @@ export async function clearLocalData() {
   useImportedDriveStore.getState().clear();
   useImportedDriveStore.persist.clearStorage();
 
+  // Remove account-bearing metadata notifications after clearAll has sent its
+  // cross-tab invalidation. Keep drivebeats-drive-scheduling-v1:* state: its
+  // account key coordinates old open tabs, and retaining budget/cooldown windows
+  // prevents logout/reload from resetting provider protection. A future key
+  // pseudonymization needs a coordinated migration rather than deleting state.
   for (const key of APP_STORAGE_KEYS) {
     window.localStorage.removeItem(key);
   }

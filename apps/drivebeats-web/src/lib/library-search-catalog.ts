@@ -1,4 +1,4 @@
-import { matchesFileSearch } from "@/lib/file-search";
+import { matchesFileSearch, type TagLookup } from "@/lib/file-search";
 import type { DriveFile, FolderEntry } from "@/types";
 import { INITIAL_STACK } from "@/types";
 
@@ -150,8 +150,11 @@ export function buildLibrarySearchCatalog({
 export function searchLibraryCatalog(
   catalog: LibrarySearchTrack[],
   query: string,
+  lookup?: TagLookup,
 ) {
-  return catalog.filter((track) => matchesFileSearch(track, query));
+  return catalog.filter((track) =>
+    matchesFileSearch(track, query, lookup?.(track)),
+  );
 }
 
 export function filterLibraryCatalogToCurrentImports(

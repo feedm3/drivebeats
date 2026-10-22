@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPlaylistTrack } from "@/lib/audio";
+import * as cachedTags from "@/lib/cached-track-tags";
 import {
   bootstrapCloudLibrarySync,
   fetchCloudLibrarySync,
 } from "@/lib/cloud-library-api";
 import { resetCloudLibrarySyncState } from "@/lib/cloud-library-sync-runner";
 import type { LibrarySearchTrack } from "@/lib/library-search-catalog";
+import * as metadataCacheDb from "@/lib/metadata-cache-db";
+import * as metadataLoader from "@/lib/track-metadata-loader";
 import { createDriveBeatsTools } from "@/lib/webmcp-tools";
 import { useAuthStore } from "@/stores/auth-store";
+import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
 import { useLibrarySearchStore } from "@/stores/library-search-store";
 import { useLibraryStore } from "@/stores/library-store";
@@ -62,7 +66,7 @@ function audio() {
   } as unknown as HTMLAudioElement;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.restoreAllMocks();
   resetCloudLibrarySyncState();
   localStorage.setItem("drivebeats-cloud-bootstrap-v1", "1");
@@ -72,7 +76,12 @@ beforeEach(() => {
   });
   vi.mocked(fetchCloudLibrarySync).mockReset();
   vi.mocked(bootstrapCloudLibrarySync).mockReset();
+  await useId3MetadataStore.getState().clearAll();
+  // A cleared namespace stays sealed against old open-tab authentication.
+  // Each test starts a genuinely new sign-in session.
+  useAuthStore.getState().clearTokens();
   signIn();
+  await useId3MetadataStore.getState().setAccount("account-a");
   useImportedDriveStore.setState({ rootFolders: [], rootFiles: [track] });
   useLibrarySearchStore.setState({
     catalog: {
@@ -834,7 +843,12 @@ describe("DriveBeats WebMCP actions", () => {
       ok: true,
       search: {
         query: "Needle",
-        matches: "filename_only",
+        searchFields: [
+          "filename",
+          "cached_title",
+          "cached_artist",
+          "cached_album",
+        ],
         scope: "imported_library",
         complete: true,
         catalogUpdatedAt: 12345,
@@ -1083,5 +1097,300 @@ describe("DriveBeats WebMCP actions", () => {
         trackIds: ["imported"],
       }),
     ).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+  });
+});
+
+describe("shared local metadata tools", () => {
+  it("returns a restricted page without serializing the whole oversized Library", async () => {
+    const tracks = Array.from({ length: 50_001 }, (_, index) => ({
+      ...track,
+      id: `track-${index}`,
+    }));
+    const catalog = useLibrarySearchStore.getState().catalog;
+    if (!catalog) throw new Error("Missing catalog");
+    useLibrarySearchStore.setState({ catalog: { ...catalog, tracks } });
+    const serializeTags = vi.spyOn(cachedTags, "getCachedTrackTags");
+    expect(
+      await run("drivebeats_search_library", { limit: 2, offset: 10 }),
+    ).toMatchObject({
+      ok: true,
+      total: 50_001,
+      tracks: [{ id: "track-10" }, { id: "track-11" }],
+      nextCursor: null,
+      restriction: "snapshot_limit",
+      search: { complete: false },
+    });
+    expect(serializeTags.mock.calls.length).toBeLessThan(10);
+  });
+
+  it("reports an in-progress catalog when its bounded foreground allowance ends", async () => {
+    useLibrarySearchStore.setState({
+      catalog: null,
+      status: "loading",
+      ensureReady: vi.fn(async () => false),
+    });
+    expect(
+      await run("drivebeats_search_library", { query: "Needle" }),
+    ).toMatchObject({ ok: false, error: { code: "library_indexing" } });
+  });
+
+  it("rejects a search if a new catalog replaces its source during the local cache scan", async () => {
+    vi.spyOn(metadataCacheDb, "readMetadataRecords").mockImplementation(
+      async () => {
+        const current = useLibrarySearchStore.getState().catalog;
+        if (!current) throw new Error("Missing catalog");
+        useLibrarySearchStore.setState({
+          catalog: { ...current, fetchedAt: current.fetchedAt + 1 },
+        });
+        return true;
+      },
+    );
+    expect(
+      await run("drivebeats_search_library", { query: "Needle" }),
+    ).toMatchObject({ ok: false, error: { code: "search_changed" } });
+  });
+
+  it("removes completed metadata from a batch output when its membership disappears while another track waits", async () => {
+    const second = { ...track, id: "second", name: "Second.mp3" };
+    const initial = useLibrarySearchStore.getState().catalog;
+    if (!initial) throw new Error("Missing catalog");
+    useImportedDriveStore.setState({ rootFiles: [track, second] });
+    useLibrarySearchStore.setState({
+      catalog: {
+        ...initial,
+        importsSignature: "track:imported|track:second",
+        tracks: [track, second],
+      },
+      invalidated: false,
+    });
+    let release!: (
+      value: Awaited<ReturnType<typeof metadataLoader.ensureTrackMetadata>>,
+    ) => void;
+    const gate = new Promise<
+      Awaited<ReturnType<typeof metadataLoader.ensureTrackMetadata>>
+    >((resolve) => {
+      release = resolve;
+    });
+    const ensure = vi
+      .spyOn(metadataLoader, "ensureTrackMetadata")
+      .mockImplementation(async (known) => {
+        if (known.track.id === "second") return gate;
+        return {
+          metadata: {
+            status: "ready",
+            freshness: "current",
+            tags: { title: "Removed private tag" },
+          },
+          loadedNow: true,
+        };
+      });
+    const pending = run("drivebeats_load_track_metadata", {
+      trackIds: ["imported", "second"],
+    });
+    await vi.waitFor(() => expect(ensure).toHaveBeenCalledTimes(2));
+    useImportedDriveStore.setState({ rootFiles: [second] });
+    useLibrarySearchStore.setState({
+      catalog: {
+        ...initial,
+        importsSignature: "track:second",
+        tracks: [second],
+      },
+      invalidated: false,
+    });
+    release({
+      metadata: { status: "missing", freshness: "unknown" },
+      loadedNow: false,
+    });
+    const result = await pending;
+    expect(result).toMatchObject({
+      ok: true,
+      tracks: [
+        { id: "imported", metadata: { status: "unavailable" } },
+        { id: "second" },
+      ],
+    });
+    expect(JSON.stringify(result)).not.toContain("Removed private tag");
+    expect(JSON.stringify(result)).not.toContain("Needle.mp3");
+  });
+
+  const versioned = {
+    ...track,
+    size: "2048",
+    modifiedTime: "2026-10-22T00:00:00Z",
+  };
+  async function seed() {
+    const second = { ...versioned, id: "second", name: "Other.mp3" };
+    useImportedDriveStore.setState({ rootFiles: [versioned, second] });
+    useLibrarySearchStore.setState({
+      catalog: {
+        userId: "account-a",
+        fetchedAt: 900,
+        importsSignature: "track:imported|track:second",
+        tracks: [versioned, second],
+      },
+      invalidated: false,
+    });
+    useId3MetadataStore.getState().getRecord(versioned);
+    await useId3MetadataStore.getState().putRecord(versioned, {
+      status: "ready",
+      tags: { title: "Original", artist: "Needle artist", album: "Blue" },
+      loadedVia: "local_blob",
+    });
+    return second;
+  }
+  it("searches across filename and cached fields with token AND semantics", async () => {
+    await seed();
+    const result = await run("drivebeats_search_library", {
+      query: "needle blue",
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      total: 1,
+      tracks: [
+        {
+          id: "imported",
+          matchedFields: ["filename", "cached_artist", "cached_album"],
+          metadata: { status: "ready" },
+          display: { title: "Original", titleSource: "audio_tags" },
+        },
+      ],
+    });
+    expect(fetchCloudLibrarySync).not.toHaveBeenCalled();
+  });
+  it("keeps cursor tag values and results stable during cache warming", async () => {
+    const second = await seed();
+    const first = await run("drivebeats_search_library", {
+      query: "",
+      limit: 1,
+    });
+    await useId3MetadataStore.getState().putRecord(second, {
+      status: "ready",
+      tags: { title: "Added later" },
+      loadedVia: "local_blob",
+    });
+    const next = await run("drivebeats_search_library", {
+      cursor: first.nextCursor,
+    });
+    expect(next).toMatchObject({
+      ok: true,
+      total: 2,
+      tracks: [{ id: "second", metadata: { status: "missing" } }],
+    });
+    const fresh = await run("drivebeats_search_library", { query: "added" });
+    expect(fresh).toMatchObject({ ok: true, total: 1 });
+  });
+  it("rejects cursor scope changes before returning cached private rows", async () => {
+    await seed();
+    const first = await run("drivebeats_search_library", { limit: 1 });
+    useImportedDriveStore.setState({ rootFiles: [] });
+    const next = await run("drivebeats_search_library", {
+      cursor: first.nextCursor,
+    });
+    expect(next).toMatchObject({
+      ok: false,
+      error: { code: "search_changed" },
+    });
+    expect(next).not.toHaveProperty("tracks");
+  });
+  it("cache_only never verifies unknown IDs with the cloud or Drive", async () => {
+    await seed();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const result = await run("drivebeats_load_track_metadata", {
+      trackIds: ["imported", "foreign"],
+      mode: "cache_only",
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      budget: { requestsUsed: 0, bytesRead: 0 },
+      tracks: [
+        { id: "imported", metadata: { status: "ready" }, loadedNow: false },
+        {
+          id: "foreign",
+          metadata: { status: "unavailable" },
+          error: { code: "track_not_found" },
+        },
+      ],
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchCloudLibrarySync).not.toHaveBeenCalled();
+  });
+  it("cache_only returns evicted durable tags without Drive or cloud reads", async () => {
+    await seed();
+    const record = useId3MetadataStore.getState().records.imported;
+    useId3MetadataStore.setState({ records: {}, cache: {} });
+    vi.spyOn(metadataCacheDb, "loadMetadataRecord").mockResolvedValue({
+      record,
+      epoch: 0,
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const result = await run("drivebeats_load_track_metadata", {
+      trackIds: ["imported"],
+      mode: "cache_only",
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      remainingTrackIds: [],
+      tracks: [
+        {
+          metadata: {
+            status: "ready",
+            freshness: "current",
+            tags: { title: "Original" },
+          },
+        },
+      ],
+      budget: { requestsUsed: 0, bytesRead: 0 },
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchCloudLibrarySync).not.toHaveBeenCalled();
+  });
+  it.each(["ready", "no_target_tags", "unresolved"] as const)(
+    "keeps stale %s records in remainingTrackIds",
+    async (status) => {
+      await seed();
+      const record = useId3MetadataStore.getState().records.imported;
+      useId3MetadataStore.setState({
+        records: {
+          imported: { ...record, status, fingerprint: "old-content" },
+        },
+      });
+      const result = await run("drivebeats_load_track_metadata", {
+        trackIds: ["imported"],
+        mode: "cache_only",
+      });
+      expect(result).toMatchObject({
+        ok: true,
+        remainingTrackIds: ["imported"],
+        tracks: [{ metadata: { status, freshness: "stale" } }],
+      });
+    },
+  );
+  it("keeps stale outcomes returned during a load_missing backoff retryable", async () => {
+    await seed();
+    vi.spyOn(metadataLoader, "ensureTrackMetadata").mockResolvedValue({
+      metadata: {
+        status: "ready",
+        freshness: "stale",
+        error: { code: "network_error", retryable: true },
+      },
+      loadedNow: false,
+    });
+    const result = await run("drivebeats_load_track_metadata", {
+      trackIds: ["imported"],
+      mode: "load_missing",
+    });
+    expect(result).toMatchObject({ ok: true, remainingTrackIds: ["imported"] });
+  });
+  it("rejects duplicate IDs and unknown arguments without executing work", async () => {
+    expect(
+      await run("drivebeats_load_track_metadata", { trackIds: ["x", "x"] }),
+    ).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+    expect(
+      await run("drivebeats_load_track_metadata", {
+        trackIds: ["x"],
+        force: true,
+      }),
+    ).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+    expect(fetchCloudLibrarySync).not.toHaveBeenCalled();
   });
 });

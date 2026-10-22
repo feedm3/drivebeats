@@ -15,6 +15,7 @@ import { DriveImportButton } from "@/components/drive-import-button";
 import { FileList } from "@/components/file-list";
 import { type FileSearchScope, FolderSearch } from "@/components/folder-search";
 import { LibrarySearchError } from "@/components/library-search-error";
+import { MetadataActivity } from "@/components/metadata-activity";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import {
@@ -24,13 +25,11 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import { useCachedTrackSearch } from "@/hooks/use-cached-track-search";
 import { useDriveImport } from "@/hooks/use-drive-import";
 import { useFolderContents } from "@/hooks/use-folder-contents";
 import { useOnlineStatus } from "@/hooks/use-online-status";
-import {
-  filterLibraryCatalogToCurrentImports,
-  searchLibraryCatalog,
-} from "@/lib/library-search-catalog";
+import { filterLibraryCatalogToCurrentImports } from "@/lib/library-search-catalog";
 import {
   getImportedLibraryRootEntries,
   useImportedDriveStore,
@@ -111,7 +110,7 @@ export function FileBrowser({
     setSearch((current) => {
       const scope =
         folderStack.at(-1)?.id === ROOT_FOLDER_ID ? "library" : current.scope;
-      const query = current.scope === "folder" ? "" : current.query;
+      const query = "";
       return scope === current.scope && query === current.query
         ? current
         : { query, scope };
@@ -241,13 +240,12 @@ export function FileBrowser({
         : [],
     [importedRootFiles, importedRootFolders, libraryCatalog],
   );
-  const librarySearchResults = useMemo(
-    () =>
-      librarySearchActive
-        ? searchLibraryCatalog(visibleCatalogTracks, deferredSearchQuery)
-        : [],
-    [deferredSearchQuery, librarySearchActive, visibleCatalogTracks],
+  const librarySearchSnapshot = useCachedTrackSearch(
+    visibleCatalogTracks,
+    deferredSearchQuery,
+    librarySearchActive,
   );
+  const librarySearchResults = librarySearchSnapshot.tracks;
   const contextById = useMemo(
     () =>
       librarySearchActive
@@ -291,7 +289,7 @@ export function FileBrowser({
 
   if (isLibraryRoot && !loading && libraryIsEmpty) {
     return (
-      <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-4 sm:pt-7">
+      <div className="mx-auto flex h-full w-full min-w-0 flex-col overflow-hidden px-4 pt-4 sm:pt-7">
         <div className="flex items-center gap-2">
           <BreadcrumbNav
             folderStack={folderStack}
@@ -323,7 +321,7 @@ export function FileBrowser({
   }
 
   return (
-    <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-4 sm:pt-7">
+    <div className="mx-auto flex h-full w-full min-w-0 flex-col overflow-hidden px-4 pt-4 sm:pt-7">
       <div className="relative flex items-center gap-2">
         <BreadcrumbNav
           folderStack={folderStack}
@@ -333,6 +331,7 @@ export function FileBrowser({
         {/* gap-3 on touch so the 32px search and overflow buttons sit 44px
             apart centre-to-centre once their hit areas expand. */}
         <div className="ml-auto flex shrink-0 items-center gap-2 pointer-coarse:gap-3">
+          <MetadataActivity />
           <IconTooltip
             label={refreshing ? `Refreshing ${searchScope}` : refreshLabel}
           >
@@ -448,11 +447,15 @@ export function FileBrowser({
       <Separator className="my-2 sm:my-3" />
       <FileList
         contextById={contextById}
+        metadataById={
+          librarySearchActive ? librarySearchSnapshot.metadataById : undefined
+        }
         files={librarySearchActive ? librarySearchResults : files}
         folderStackById={folderStackById}
         loading={
           librarySearchActive
-            ? librarySearchStatus === "loading" && !libraryCatalog
+            ? (librarySearchStatus === "loading" && !libraryCatalog) ||
+              librarySearchSnapshot.pending
             : loading
         }
         folderStack={folderStack}

@@ -4,6 +4,11 @@ import {
   LibraryIncompleteError,
 } from "@/lib/drive-read-error";
 import {
+  createDriveRequestBudget,
+  DriveDeferredError,
+  DrivePreemptedError,
+} from "@/lib/drive-request-scheduler";
+import {
   clearLibrarySearchCatalogForUser,
   clearLibrarySearchCatalogs,
   clearLibrarySearchCatalogsForOtherUsers,
@@ -13,6 +18,10 @@ import {
   replaceLibrarySearchCatalog,
 } from "@/lib/library-search-catalog-db";
 import { buildLibrarySearchCatalogFromDrive } from "@/lib/library-search-drive";
+import {
+  createLibrarySearchProgress,
+  MAX_CATALOG_CHECKPOINT_AGE_MS,
+} from "@/lib/library-search-progress";
 import { useAuthStore } from "@/stores/auth-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
 
@@ -39,7 +48,11 @@ interface LibrarySearchState {
   sessionOnly: boolean;
   status: LibrarySearchStatus;
   clear: () => Promise<void>;
-  ensureReady: (signal?: AbortSignal) => Promise<boolean>;
+  ensureReady: (
+    signal?: AbortSignal,
+    options?: { background?: boolean },
+  ) => Promise<boolean>;
+  buildProgress: number;
   hydrate: () => Promise<void>;
   invalidate: () => void;
   isPotentiallyOutdated: () => boolean;
@@ -64,6 +77,153 @@ interface RefreshFlight {
   promise: Promise<boolean>;
 }
 let refreshFlight: RefreshFlight | null = null;
+let wakeBuild: (() => void) | null = null;
+const foregroundConsumers = new Map<
+  string,
+  ReturnType<typeof createDriveRequestBudget>
+>();
+const foregroundCompletion = new Map<string, () => void>();
+const remoteConsumerTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const catalogTabId = crypto.randomUUID();
+let catalogChannel: BroadcastChannel | undefined;
+const completedSessionCatalogs = new Map<string, LibrarySearchCatalogRecord>();
+interface CatalogCoordinationMessage {
+  type:
+    | "foreground_start"
+    | "foreground_end"
+    | "foreground_exhausted"
+    | "catalog_complete";
+  record?: LibrarySearchCatalogRecord;
+  userId: string | null;
+  importsSignature: string;
+  key: string;
+}
+function catalogCoordinationChannel() {
+  if (typeof window === "undefined" || typeof BroadcastChannel === "undefined")
+    return undefined;
+  if (!catalogChannel) {
+    catalogChannel = new BroadcastChannel("drivebeats-library-catalog-v1");
+    catalogChannel.onmessage = (
+      event: MessageEvent<CatalogCoordinationMessage>,
+    ) => {
+      const message = event.data;
+      if (
+        message.userId !== useAuthStore.getState().user?.id ||
+        message.importsSignature !== getLibrarySearchImportsSignature()
+      )
+        return;
+      if (message.type === "catalog_complete") {
+        if (
+          message.record?.userId === message.userId &&
+          message.record.importsSignature === message.importsSignature
+        )
+          completedSessionCatalogs.set(
+            message.importsSignature,
+            message.record,
+          );
+        return;
+      }
+      if (message.type === "foreground_start") {
+        if (foregroundConsumers.has(message.key)) return;
+        foregroundConsumers.set(
+          message.key,
+          createDriveRequestBudget({
+            maxRequests: 20,
+            maxBytes: 16 * 1024 * 1024,
+          }),
+        );
+        remoteConsumerTimers.set(
+          message.key,
+          setTimeout(() => {
+            foregroundConsumers.delete(message.key);
+            remoteConsumerTimers.delete(message.key);
+            wakeBuild?.();
+          }, 15_000),
+        );
+      } else {
+        foregroundConsumers.delete(message.key);
+        clearTimeout(remoteConsumerTimers.get(message.key));
+        remoteConsumerTimers.delete(message.key);
+        if (message.type === "foreground_exhausted")
+          foregroundCompletion.get(message.key)?.();
+      }
+      if (!foregroundConsumers.size && document.visibilityState === "hidden")
+        refreshAbortController?.abort();
+      wakeBuild?.();
+    };
+  }
+  return catalogChannel;
+}
+function announceForeground(
+  type: CatalogCoordinationMessage["type"],
+  key: string,
+) {
+  catalogCoordinationChannel()?.postMessage({
+    type,
+    key,
+    userId: useAuthStore.getState().user?.id ?? null,
+    importsSignature: getLibrarySearchImportsSignature(),
+  } satisfies CatalogCoordinationMessage);
+}
+function detachExhaustedConsumers() {
+  for (const [key, budget] of foregroundConsumers) {
+    if (
+      budget.requestsUsed < budget.maxRequests &&
+      budget.bytesRead < budget.maxBytes
+    )
+      continue;
+    foregroundConsumers.delete(key);
+    foregroundCompletion.get(key)?.();
+    announceForeground("foreground_exhausted", key);
+  }
+}
+async function foreground(work: () => Promise<boolean>): Promise<boolean> {
+  const key = `${catalogTabId}:${crypto.randomUUID()}`;
+  foregroundConsumers.set(
+    key,
+    createDriveRequestBudget({ maxRequests: 20, maxBytes: 16 * 1024 * 1024 }),
+  );
+  let detach!: () => void;
+  const detached = new Promise<false>((resolve) => {
+    detach = () => resolve(false);
+  });
+  foregroundCompletion.set(key, detach);
+  const timeout = setTimeout(detach, 15_000);
+  announceForeground("foreground_start", key);
+  wakeBuild?.();
+  try {
+    return await Promise.race([work(), detached]);
+  } finally {
+    clearTimeout(timeout);
+    foregroundConsumers.delete(key);
+    foregroundCompletion.delete(key);
+    if (!foregroundConsumers.size && document.visibilityState === "hidden")
+      refreshAbortController?.abort();
+    announceForeground("foreground_end", key);
+    wakeBuild?.();
+  }
+}
+function waitForBuild(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", cancel);
+      if (wakeBuild === finish) wakeBuild = null;
+    };
+    const finish = () => {
+      cleanup();
+      resolve();
+    };
+    const cancel = () => {
+      cleanup();
+      reject(new DOMException("Catalog build cancelled", "AbortError"));
+    };
+    const timer = setTimeout(finish, Math.max(50, ms));
+    wakeBuild = finish;
+    signal.addEventListener("abort", cancel, { once: true });
+    if (signal.aborted) cancel();
+  });
+}
 let catalogWrites: Promise<unknown> = Promise.resolve();
 
 function queueCatalogWrite<T>(write: () => Promise<T>): Promise<T> {
@@ -92,14 +252,26 @@ function rememberUserId(userId: string | null) {
   }
 }
 
+let importsSignatureCache: {
+  rootFolders: unknown;
+  rootFiles: unknown;
+  signature: string;
+} | null = null;
 export function getLibrarySearchImportsSignature() {
   const { rootFolders, rootFiles } = useImportedDriveStore.getState();
-  return [
+  if (
+    importsSignatureCache?.rootFolders === rootFolders &&
+    importsSignatureCache.rootFiles === rootFiles
+  )
+    return importsSignatureCache.signature;
+  const signature = [
     ...rootFolders.map((folder) => `folder:${folder.id}`),
     ...rootFiles.map((track) => `track:${track.id}`),
   ]
     .toSorted()
     .join("|");
+  importsSignatureCache = { rootFolders, rootFiles, signature };
+  return signature;
 }
 
 function isOnline() {
@@ -183,7 +355,16 @@ function waitForCaller<T>(
   });
 }
 
+function detachAllForegroundConsumers() {
+  completedSessionCatalogs.clear();
+  for (const finish of foregroundCompletion.values()) finish();
+  foregroundConsumers.clear();
+  for (const timer of remoteConsumerTimers.values()) clearTimeout(timer);
+  remoteConsumerTimers.clear();
+}
+
 function adoptUser(userId: string) {
+  detachAllForegroundConsumers();
   activeUserId = userId;
   ownershipVersion += 1;
   refreshVersion += 1;
@@ -241,6 +422,7 @@ async function hydrateCurrentUser() {
 }
 
 async function wipeCatalog(seal: boolean) {
+  detachAllForegroundConsumers();
   if (seal) {
     catalogSealed = true;
     activeUserId = null;
@@ -266,6 +448,7 @@ async function wipeCatalog(seal: boolean) {
 
 export const useLibrarySearchStore = create<LibrarySearchState>((set, get) => ({
   catalog: null,
+  buildProgress: 0,
   error: null,
   failure: null,
   hydrated: false,
@@ -291,32 +474,55 @@ export const useLibrarySearchStore = create<LibrarySearchState>((set, get) => ({
     );
   },
 
-  ensureReady: async (signal) => {
+  ensureReady: async (signal, options) => {
     if (signal?.aborted)
       throw new DOMException(
         "Library Search request was cancelled",
         "AbortError",
       );
-    return waitForCaller(
-      (async () => {
-        await get().hydrate();
-        if (signal?.aborted) return false;
-        if (catalogSealed) return false;
-        if (!isOnline()) {
-          if (get().isStale() && get().status !== "loading") {
-            const failure = refreshFailure(new Error("Offline"));
-            set({ failure, error: failure?.message ?? null, status: "error" });
+    const work = () =>
+      waitForCaller(
+        (async () => {
+          await get().hydrate();
+          if (signal?.aborted) return false;
+          if (catalogSealed) return false;
+          if (!isOnline()) {
+            if (get().isStale() && get().status !== "loading") {
+              const failure = refreshFailure(new Error("Offline"));
+              set({
+                failure,
+                error: failure?.message ?? null,
+                status: "error",
+              });
+            }
+            return false;
           }
-          return false;
-        }
-        if (get().isStale()) return startRefresh(false);
-        return Boolean(get().catalog);
-      })(),
-      signal,
-    );
+          if (get().isStale()) {
+            const pending = startRefresh(false);
+            if (options?.background && signal) {
+              const cancelBackground = () => {
+                if (foregroundConsumers.size === 0)
+                  refreshAbortController?.abort();
+              };
+              signal.addEventListener("abort", cancelBackground, {
+                once: true,
+              });
+              try {
+                return await pending;
+              } finally {
+                signal.removeEventListener("abort", cancelBackground);
+              }
+            }
+            return pending;
+          }
+          return Boolean(get().catalog);
+        })(),
+        signal,
+      );
+    return options?.background ? work() : foreground(work);
   },
 
-  refresh: () => startRefresh(true),
+  refresh: () => foreground(() => startRefresh(true)),
 
   invalidate: () => set({ invalidated: true }),
   clear: () => wipeCatalog(false),
@@ -354,6 +560,7 @@ function startRefresh(supersede: boolean): Promise<boolean> {
     error: null,
     failure: null,
     status: "loading",
+    buildProgress: 0,
   });
   const flight: RefreshFlight = {
     userId,
@@ -361,7 +568,7 @@ function startRefresh(supersede: boolean): Promise<boolean> {
     promise: Promise.resolve(false),
   };
   refreshFlight = flight;
-  flight.promise = (async () => {
+  const build = async () => {
     try {
       const accessToken = await useAuthStore.getState().getValidAccessToken();
       if (
@@ -380,15 +587,101 @@ function startRefresh(supersede: boolean): Promise<boolean> {
       const { rootFolders, rootFiles } = useImportedDriveStore.getState();
       if (importsSignature !== getLibrarySearchImportsSignature())
         return startRefresh(false);
-      const tracks =
-        rootFolders.length === 0 && rootFiles.length === 0
-          ? []
-          : await buildLibrarySearchCatalogFromDrive({
-              accessToken,
-              importedFolders: rootFolders,
-              standaloneTracks: rootFiles,
-              signal: controller.signal,
-            });
+      const progressKey = `catalog:${userId}:${importsSignature}`;
+      const progress = createLibrarySearchProgress(progressKey, {
+        signal: controller.signal,
+        isCurrent: () =>
+          userId === activeUserId &&
+          importsSignature === getLibrarySearchImportsSignature() &&
+          requestVersion === refreshVersion &&
+          requestOwnershipVersion === ownershipVersion,
+      });
+      let checkpoint = await progress.load();
+      let buildStartedAt = checkpoint?.startedAt ?? Date.now();
+      let restartedInvalidToken = false;
+      let tracks: LibrarySearchCatalogRecord["tracks"];
+      for (;;) {
+        controller.signal.throwIfAborted();
+        detachExhaustedConsumers();
+        if (Date.now() - buildStartedAt > MAX_CATALOG_CHECKPOINT_AGE_MS) {
+          await progress.clear();
+          checkpoint = undefined;
+          buildStartedAt = Date.now();
+        }
+        try {
+          tracks =
+            rootFolders.length === 0 && rootFiles.length === 0
+              ? []
+              : await buildLibrarySearchCatalogFromDrive({
+                  accessToken,
+                  importedFolders: rootFolders,
+                  standaloneTracks: rootFiles,
+                  signal: controller.signal,
+                  checkpoint,
+                  startedAt: buildStartedAt,
+                  requestOptions: {
+                    accountId: userId,
+                    priority: () =>
+                      foregroundConsumers.size ? "navigation" : "background",
+                    get budget() {
+                      return foregroundConsumers.values().next().value;
+                    },
+                  },
+                  onCheckpoint: async (next, page) => {
+                    checkpoint = next;
+                    useLibrarySearchStore.setState({
+                      buildProgress:
+                        next.audioFiles.length + next.folders.length,
+                    });
+                    if (
+                      !controller.signal.aborted &&
+                      userId === activeUserId &&
+                      importsSignature === getLibrarySearchImportsSignature()
+                    ) {
+                      const persisted = await progress.save(next, page);
+                      if (!persisted && !controller.signal.aborted)
+                        useLibrarySearchStore.setState({ sessionOnly: true });
+                    }
+                  },
+                });
+          break;
+        } catch (error) {
+          if (
+            !(
+              error instanceof DriveDeferredError ||
+              error instanceof DrivePreemptedError
+            )
+          ) {
+            if (!controller.signal.aborted) {
+              const invalidToken =
+                error instanceof GoogleDriveReadError &&
+                error.status === 400 &&
+                Boolean(checkpoint?.pageToken);
+              await progress.clear();
+              if (invalidToken && !restartedInvalidToken) {
+                restartedInvalidToken = true;
+                checkpoint = undefined;
+                buildStartedAt = Date.now();
+                continue;
+              }
+            }
+            throw error;
+          }
+          detachExhaustedConsumers();
+          if (
+            error instanceof DriveDeferredError &&
+            error.reason === "coordination_unavailable" &&
+            !foregroundConsumers.size
+          )
+            throw error;
+          await waitForBuild(
+            error instanceof DriveDeferredError
+              ? Math.max(100, error.retryAfterMs)
+              : 250,
+            controller.signal,
+          );
+        }
+      }
 
       if (
         catalogSealed ||
@@ -406,7 +699,8 @@ function startRefresh(supersede: boolean): Promise<boolean> {
       }
 
       const record: LibrarySearchCatalogRecord = {
-        fetchedAt: Date.now(),
+        fetchedAt: buildStartedAt,
+        completedAt: Date.now(),
         importsSignature,
         tracks,
         userId,
@@ -434,6 +728,26 @@ function startRefresh(supersede: boolean): Promise<boolean> {
 
       if (importsSignature !== getLibrarySearchImportsSignature())
         return startRefresh(false);
+      await progress.clear();
+      if (
+        catalogSealed ||
+        controller.signal.aborted ||
+        requestVersion !== refreshVersion ||
+        requestOwnershipVersion !== ownershipVersion ||
+        userId !== activeUserId ||
+        importsSignature !== getLibrarySearchImportsSignature()
+      )
+        return false;
+      if (!persisted) {
+        completedSessionCatalogs.set(importsSignature, record);
+        catalogCoordinationChannel()?.postMessage({
+          type: "catalog_complete",
+          key: catalogTabId,
+          userId,
+          importsSignature,
+          record,
+        } satisfies CatalogCoordinationMessage);
+      }
       useLibrarySearchStore.setState({
         catalog: record,
         error: null,
@@ -467,11 +781,61 @@ function startRefresh(supersede: boolean): Promise<boolean> {
       }
       if (refreshFlight === flight) refreshFlight = null;
     }
-  })();
+  };
+  if (typeof navigator !== "undefined" && navigator.locks?.request) {
+    const requestedAt = Date.now();
+    flight.promise = navigator.locks
+      .request(
+        `drivebeats:catalog:${userId}:${importsSignature}`,
+        { signal: controller.signal },
+        async () => {
+          controller.signal.throwIfAborted();
+          // A preceding tab may have finished while this consumer waited. Reuse its
+          // complete generation instead of starting the same Drive listing again.
+          let shared = await loadLibrarySearchCatalog(userId);
+          let sharedSessionOnly = false;
+          if (!shared) {
+            shared = completedSessionCatalogs.get(importsSignature) ?? null;
+            sharedSessionOnly = Boolean(shared);
+          }
+          if (
+            shared &&
+            shared.importsSignature === importsSignature &&
+            (shared.completedAt ?? shared.fetchedAt) >= requestedAt &&
+            !catalogSealed &&
+            !controller.signal.aborted &&
+            requestVersion === refreshVersion &&
+            requestOwnershipVersion === ownershipVersion &&
+            userId === activeUserId &&
+            importsSignature === getLibrarySearchImportsSignature()
+          ) {
+            useLibrarySearchStore.setState({
+              catalog: shared,
+              hydrated: true,
+              invalidated: false,
+              sessionOnly: sharedSessionOnly,
+              error: null,
+              failure: null,
+              status: "ready",
+            });
+            if (refreshFlight === flight) refreshFlight = null;
+            if (refreshAbortController === controller)
+              refreshAbortController = null;
+            return true;
+          }
+          return build();
+        },
+      )
+      .catch((error) => {
+        if (error instanceof Error && error.name === "AbortError") return false;
+        throw error;
+      });
+  } else flight.promise = build();
   return flight.promise;
 }
 
 if (typeof window !== "undefined") {
+  catalogCoordinationChannel();
   activeUserId = useAuthStore.getState().user?.id ?? readRememberedUserId();
   if (activeUserId) {
     rememberUserId(activeUserId);
@@ -480,12 +844,19 @@ if (typeof window !== "undefined") {
       clearLibrarySearchCatalogsForOtherUsers(userId),
     );
   }
-  useAuthStore.subscribe(syncActiveUser);
+  useAuthStore.subscribe((state, previous) => {
+    if (state.isLoggingOut || (!state.user && previous.user)) {
+      detachAllForegroundConsumers();
+      refreshAbortController?.abort();
+    }
+    syncActiveUser();
+  });
   let importsSignature = getLibrarySearchImportsSignature();
   useImportedDriveStore.subscribe(() => {
     const nextSignature = getLibrarySearchImportsSignature();
     if (nextSignature === importsSignature) return;
     importsSignature = nextSignature;
+    completedSessionCatalogs.clear();
     if (!catalogSealed) {
       useLibrarySearchStore.getState().invalidate();
     }

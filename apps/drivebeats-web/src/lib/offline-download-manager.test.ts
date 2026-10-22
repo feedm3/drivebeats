@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { MetadataRecord } from "@/lib/metadata-cache-types";
 import type { OfflineTrackRecord } from "@/lib/offline-db";
 import type { OfflineDownloadManagerDependencies } from "@/lib/offline-download-manager";
 import type { PlaylistTrack } from "@/types";
@@ -11,6 +12,41 @@ type Deferred<T> = {
 
 type Database = OfflineDownloadManagerDependencies["database"];
 type CollectionRecord = Parameters<Database["putCollection"]>[1];
+
+function mockMetadataDatabase() {
+  const records = new Map<string, MetadataRecord>();
+  let epoch = 0;
+  const clear = vi.fn(async (accountId: string) => {
+    epoch++;
+    for (const [key, record] of records)
+      if (record.accountId === accountId) records.delete(key);
+    return true;
+  });
+  vi.doMock("@/lib/metadata-cache-db", async () => ({
+    ...(await vi.importActual("@/lib/metadata-cache-db")),
+    clearMetadataCache: clear,
+    loadMetadataCache: async (accountId: string) => ({
+      records: [...records.values()].filter(
+        (record) => record.accountId === accountId,
+      ),
+      epoch,
+      durable: true,
+    }),
+    loadMetadataRecord: async (accountId: string, fileId: string) => ({
+      record: records.get(`${accountId}:${fileId}`),
+      epoch,
+    }),
+    saveMetadataRecord: async (
+      record: MetadataRecord,
+      expectedEpoch: number,
+    ) => {
+      if (epoch !== expectedEpoch) return false;
+      records.set(`${record.accountId}:${record.fileId}`, record);
+      return true;
+    },
+  }));
+  return { records, clear };
+}
 
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
@@ -244,6 +280,7 @@ async function flushMicrotasks(turns = 8) {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.doUnmock("@/lib/metadata-cache-db");
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   localStorage.clear();
@@ -837,6 +874,108 @@ describe("offline download manager lifecycle and cancellation", () => {
     });
   });
 
+  it("remove-all clears metadata through the shared boundary without losing the account or cloud collections", async () => {
+    const metadataDatabase = mockMetadataDatabase();
+    const realm = await loadTestRealm();
+    const { useId3MetadataStore } = await import("@/stores/id3-metadata-store");
+    await useId3MetadataStore.getState().setAccount("synthetic-account");
+    const descriptor = {
+      id: "cached-metadata",
+      size: "123",
+      modifiedTime: "v1",
+    };
+    await useId3MetadataStore.getState().putRecord(descriptor, {
+      status: "ready",
+      tags: { title: "Cached title" },
+      loadedVia: "drive_range",
+    });
+    const generation = useId3MetadataStore.getState().generation;
+    seedPlaylist(realm.usePlaylistStore, "retained", [track("retained-track")]);
+    expect(useId3MetadataStore.getState().records[descriptor.id]).toBeDefined();
+    expect(metadataDatabase.records.size).toBe(1);
+
+    await realm.manager.removeAllDownloads();
+    expect(metadataDatabase.clear).toHaveBeenCalledWith("synthetic-account");
+    expect(metadataDatabase.records.size).toBe(0);
+
+    expect(useId3MetadataStore.getState()).toMatchObject({
+      accountId: "synthetic-account",
+      records: {},
+      cache: {},
+    });
+    expect(realm.useAuthStore.getState().accessToken).toBe("access-token");
+    expect(realm.usePlaylistStore.getState().playlists).toHaveLength(1);
+    expect(
+      await useId3MetadataStore.getState().putRecord(
+        descriptor,
+        {
+          status: "ready",
+          tags: { title: "Late result" },
+          loadedVia: "drive_range",
+        },
+        generation,
+      ),
+    ).toBe(false);
+    expect(realm.dependencies.drive.getFileMetadata).not.toHaveBeenCalled();
+    expect(realm.dependencies.drive.downloadFileMedia).not.toHaveBeenCalled();
+  });
+
+  it("propagates failed durable metadata removal instead of reporting successful cleanup", async () => {
+    const metadataDatabase = mockMetadataDatabase();
+    const realm = await loadTestRealm();
+    const { useId3MetadataStore } = await import("@/stores/id3-metadata-store");
+    await useId3MetadataStore.getState().setAccount("synthetic-account");
+    await useId3MetadataStore.getState().putRecord(
+      { id: "retained", size: "123", modifiedTime: "v1" },
+      {
+        status: "ready",
+        tags: { title: "Retained on failure" },
+        loadedVia: "drive_range",
+      },
+    );
+    const generation = useId3MetadataStore.getState().generation;
+    metadataDatabase.clear.mockResolvedValueOnce(false);
+
+    await expect(realm.manager.removeAllDownloads()).rejects.toThrow(
+      "Cached metadata could not be removed",
+    );
+
+    expect(metadataDatabase.records.size).toBe(1);
+    expect(useId3MetadataStore.getState().generation).toBeGreaterThan(
+      generation,
+    );
+    expect(useId3MetadataStore.getState().accountId).toBe("synthetic-account");
+    expect(useId3MetadataStore.getState()).toMatchObject({
+      hydrated: true,
+      durable: true,
+      records: { retained: { tags: { title: "Retained on failure" } } },
+    });
+    expect(realm.useAuthStore.getState().accessToken).toBe("access-token");
+  });
+
+  it("does not clear a new account's metadata if accounts change during audio removal", async () => {
+    const realm = await loadTestRealm();
+    const { useId3MetadataStore } = await import("@/stores/id3-metadata-store");
+    await useId3MetadataStore.getState().setAccount("first-synthetic-account");
+    const cleared = deferred<void>();
+    vi.mocked(realm.dependencies.database.clearAll).mockImplementationOnce(
+      () => cleared.promise,
+    );
+    const removal = realm.manager.removeAllDownloads();
+    await useId3MetadataStore.getState().setAccount("second-synthetic-account");
+    const descriptor = { id: "new-cache", size: "123", modifiedTime: "v1" };
+    await useId3MetadataStore.getState().putRecord(descriptor, {
+      status: "ready",
+      tags: { title: "New account" },
+      loadedVia: "drive_range",
+    });
+    cleared.resolve();
+    await removal;
+    expect(
+      useId3MetadataStore.getState().records[descriptor.id]?.tags?.title,
+    ).toBe("New account");
+  });
+
   it("prevents a stale IndexedDB completion from repopulating remove-all state", async () => {
     const item = track("stale");
     const put = deferred<void>();
@@ -1075,6 +1214,34 @@ describe("offline download manager failure policy", () => {
     });
   });
 
+  it("requeues repeated navigation preemption without spending failure attempts", async () => {
+    const item = track("preempted");
+    let preemptedError: Error;
+    let calls = 0;
+    const drive = {
+      downloadFileMedia: vi.fn(async () => {
+        if (++calls <= 5) throw preemptedError;
+        return mediaResponse();
+      }),
+      getFileMetadata: vi.fn(async () => metadataResponse(item)),
+    };
+    const realm = await loadTestRealm({ drive });
+    const { DrivePreemptedError } = await import(
+      "@/lib/drive-request-scheduler"
+    );
+    preemptedError = new DrivePreemptedError();
+    seedPlaylist(realm.usePlaylistStore, "mix", [item]);
+    await realm.manager.ensureCollectionAvailableOffline("mix");
+    expect(drive.downloadFileMedia).toHaveBeenCalledTimes(6);
+    expect(
+      realm.useOfflineStore.getState().trackJobs[item.fileId],
+    ).toMatchObject({
+      status: "downloaded",
+      attempt: 1,
+      errorCategory: undefined,
+    });
+  });
+
   it("retries a Google rate-limit 403 but blocks permission-denied 403", async () => {
     const rateLimited = track("rate-limited");
     const denied = track("denied");
@@ -1101,8 +1268,8 @@ describe("offline download manager failure policy", () => {
     expect(jobs[rateLimited.fileId]).toMatchObject({
       errorCategory: "rate-limited",
     });
-    expect(jobs[rateLimited.fileId].nextAttemptAt).toBeLessThanOrEqual(
-      before + 5 * 60_000 + 100,
+    expect(jobs[rateLimited.fileId].nextAttemptAt).toBeGreaterThanOrEqual(
+      before + 999999 * 1000,
     );
     expect(jobs[denied.fileId]).toMatchObject({
       errorCategory: "access-denied",

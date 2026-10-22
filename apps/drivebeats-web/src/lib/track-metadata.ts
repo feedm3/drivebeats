@@ -16,14 +16,11 @@ export function resolveTrackMetadata(
   parentFolderName?: string,
   id3?: { title?: string; artist?: string },
 ): TrackMetadata {
-  if (id3?.title) {
-    return {
-      title: id3.title,
-      subtitle: id3.artist,
-    };
-  }
-
-  return parseTrackMetadata(fileName, parentFolderName);
+  const fallback = parseTrackMetadata(fileName, parentFolderName);
+  return {
+    title: id3?.title ?? fallback.title,
+    subtitle: id3?.artist ?? fallback.subtitle,
+  };
 }
 
 export function parseTrackMetadata(

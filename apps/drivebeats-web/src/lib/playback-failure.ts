@@ -1,4 +1,7 @@
-import { GoogleDriveReadError } from "@/lib/drive-read-error";
+import {
+  GoogleDriveReadError,
+  getDriveReadFailure,
+} from "@/lib/drive-read-error";
 
 export type PlaybackFailureCode =
   | "audio_user_interaction_required"
@@ -7,6 +10,7 @@ export type PlaybackFailureCode =
   | "drive_access_denied"
   | "track_unavailable"
   | "drive_rate_limited"
+  | "drive_busy"
   | "drive_unavailable"
   | "network_error"
   | "playback_timeout"
@@ -15,6 +19,8 @@ export type PlaybackFailureCode =
 export interface PlaybackFailure {
   code: PlaybackFailureCode;
   message: string;
+  retryable?: boolean;
+  retryAfterMs?: number;
 }
 
 const messages: Record<PlaybackFailureCode, string> = {
@@ -29,6 +35,7 @@ const messages: Record<PlaybackFailureCode, string> = {
     "The selected track is no longer available in Google Drive.",
   drive_rate_limited:
     "Google Drive is receiving too many requests. Wait a moment, then try again.",
+  drive_busy: "DriveBeats is busy. Try again shortly.",
   drive_unavailable:
     "Google Drive could not provide the selected track. Try again shortly.",
   network_error:
@@ -52,6 +59,8 @@ export function getPlaybackFailure(error: unknown): PlaybackFailure | null {
       ? error.name
       : undefined;
   if (name === "AbortError") return null;
+  const driveFailure = getDriveReadFailure(error);
+  if (driveFailure) return driveFailure;
   let code: PlaybackFailureCode = "playback_failed";
   if (error instanceof PlaybackError) code = error.code;
   else if (error instanceof GoogleDriveReadError) {

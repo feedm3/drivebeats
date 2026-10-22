@@ -50,14 +50,25 @@ export function webMcpRecovery(
         automaticRetry: false,
         verificationTool: "drivebeats_status",
       };
+    case "library_indexing":
     case "playback_busy":
     case "sync_pending":
     case "drive_rate_limited":
+    case "drive_busy":
       return {
         action: "wait",
         message: "Wait for the current operation or rate limit to settle.",
         automaticRetry: false,
         verificationTool: "drivebeats_status",
+      };
+    case "search_snapshot_expired":
+    case "search_changed":
+    case "snapshot_limit":
+      return {
+        action: "restart_search",
+        message:
+          "Start a new search without a cursor; narrow the query if there are too many matches.",
+        automaticRetry: false,
       };
     case "network_error":
     case "drive_unavailable":

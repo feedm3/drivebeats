@@ -164,14 +164,16 @@ export function FolderSearch({
                 align="end"
                 className="w-64 text-sm"
               >
-                Search checks file names only. Enter at least two characters.
+                Search file names and music details saved on this device. Enter
+                at least two characters.
               </PopoverContent>
             </Popover>
           </div>
         </div>
       </div>
       <p id={descriptionId} className="sr-only">
-        Search checks file names only. Enter at least two characters.
+        Search file names and music details saved on this device. Enter at least
+        two characters.
       </p>
       {disabledReason ? (
         <p

@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -21,9 +22,11 @@ const manager = vi.hoisted(() => ({
   removeAllDownloads: vi.fn().mockResolvedValue(undefined),
 }));
 
-const diagnostics = vi.hoisted(() => ({
-  has: vi.fn(() => false),
-  export: vi.fn(() => '{"format":"drivebeats-offline-diagnostics-v1"}'),
+const metadata = vi.hoisted(() => ({
+  accountId: "synthetic-account" as string | null,
+  generation: 1,
+  hydrated: true,
+  usage: vi.fn().mockResolvedValue({ recordCount: 0, approximateBytes: 0 }),
 }));
 
 const offlineDb = vi.hoisted(() => ({
@@ -39,9 +42,15 @@ vi.mock("@/lib/offline-download-manager", () => ({
   offlineDownloadManager: manager,
 }));
 
-vi.mock("@/lib/offline-download-diagnostics", () => ({
-  hasOfflineDownloadDiagnostics: diagnostics.has,
-  exportOfflineDownloadDiagnostics: diagnostics.export,
+vi.mock("@/lib/metadata-cache-usage", () => ({
+  getMetadataCacheUsage: metadata.usage,
+}));
+
+vi.mock("@/stores/id3-metadata-store", () => ({
+  useId3MetadataStore: Object.assign(
+    (selector: (state: typeof metadata) => unknown) => selector(metadata),
+    { getState: () => metadata },
+  ),
 }));
 
 vi.mock("@/lib/offline-db", () => offlineDb);
@@ -137,10 +146,10 @@ describe("StorageDialog offline recovery", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    diagnostics.has.mockReturnValue(false);
-    diagnostics.export.mockReturnValue(
-      '{"format":"drivebeats-offline-diagnostics-v1"}',
-    );
+    metadata.accountId = "synthetic-account";
+    metadata.generation = 1;
+    metadata.hydrated = true;
+    metadata.usage.mockResolvedValue({ recordCount: 0, approximateBytes: 0 });
     offlineDb.getAllTrackSizes.mockResolvedValue([]);
     offlineDb.getTrackCount.mockResolvedValue(0);
     setOfflineState();
@@ -201,6 +210,11 @@ describe("StorageDialog offline recovery", () => {
 
     renderDialog();
 
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Remove all downloads" }),
+      ).toBeEnabled(),
+    );
     fireEvent.click(
       screen.getByRole("button", { name: "Remove all downloads" }),
     );
@@ -224,37 +238,85 @@ describe("StorageDialog offline recovery", () => {
     });
   });
 
-  it("shows an honest empty diagnostics state", () => {
-    diagnostics.has.mockReturnValue(false);
-
+  it("shows metadata storage and omits download diagnostics", async () => {
+    metadata.usage.mockResolvedValue({
+      recordCount: 3,
+      approximateBytes: 2048,
+    });
     renderDialog();
-
+    expect(await screen.findByText("2.0 KB")).toBeInTheDocument();
+    expect(screen.queryByText("Download diagnostics")).not.toBeInTheDocument();
     expect(
-      screen.getByText("No download diagnostics recorded yet."),
-    ).toBeInTheDocument();
+      screen.queryByText(/Estimated cached data size/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/3 tracks/)).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Copy download diagnostics" }),
-    ).toBeDisabled();
-    expect(diagnostics.export).not.toHaveBeenCalled();
+      screen.getByRole("button", { name: "Remove all downloads" }),
+    ).toBeEnabled();
   });
 
-  it("copies sanitized diagnostics only after the user requests it", async () => {
-    diagnostics.has.mockReturnValue(true);
-    const payload =
-      '{"format":"drivebeats-offline-diagnostics-v1","events":[]}';
-    diagnostics.export.mockReturnValue(payload);
-    const writeText = vi.mocked(navigator.clipboard.writeText);
-
-    renderDialog();
-
-    expect(writeText).not.toHaveBeenCalled();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Copy download diagnostics" }),
-    );
-
-    await waitFor(() => {
-      expect(diagnostics.export).toHaveBeenCalledOnce();
-      expect(writeText).toHaveBeenCalledWith(payload);
+  it("clears music metadata even when there are no audio downloads", async () => {
+    metadata.usage.mockResolvedValue({
+      recordCount: 2,
+      approximateBytes: 1024,
     });
+    renderDialog();
+    await screen.findByText("1.0 KB");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove all downloads" }),
+    );
+    expect(
+      screen.getByText(/metadata rebuilds automatically/),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove all downloads" }),
+    );
+    await waitFor(() =>
+      expect(manager.removeAllDownloads).toHaveBeenCalledOnce(),
+    );
+  });
+
+  it("waits for metadata hydration before estimating a cache that is being reset", async () => {
+    metadata.hydrated = false;
+    const rendered = renderDialog();
+    expect(metadata.usage).not.toHaveBeenCalled();
+    expect(screen.getByText("Checking…")).toBeInTheDocument();
+    metadata.hydrated = true;
+    rendered.rerender(<StorageDialog open onOpenChange={vi.fn()} />);
+    await screen.findByText("0 B");
+    expect(metadata.usage).toHaveBeenCalledOnce();
+  });
+
+  it("only reads usage while open, and discards an old account snapshot", async () => {
+    let resolveOld!: (value: {
+      recordCount: number;
+      approximateBytes: number;
+    }) => void;
+    metadata.usage.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveOld = resolve;
+      }),
+    );
+    const rendered = render(
+      <StorageDialog open={false} onOpenChange={vi.fn()} />,
+    );
+    expect(metadata.usage).not.toHaveBeenCalled();
+    rendered.rerender(<StorageDialog open onOpenChange={vi.fn()} />);
+    const oldSignal = metadata.usage.mock.calls[0][1] as AbortSignal;
+    metadata.accountId = "another-synthetic-account";
+    metadata.generation++;
+    metadata.usage.mockResolvedValue({
+      recordCount: 5,
+      approximateBytes: 5120,
+    });
+    rendered.rerender(<StorageDialog open onOpenChange={vi.fn()} />);
+    expect(oldSignal.aborted).toBe(true);
+    await screen.findByText("5.0 KB");
+    await act(async () =>
+      resolveOld({ recordCount: 99, approximateBytes: 9999 }),
+    );
+    expect(screen.queryByText(/99 tracks/)).not.toBeInTheDocument();
+    rendered.rerender(<StorageDialog open={false} onOpenChange={vi.fn()} />);
+    expect((metadata.usage.mock.calls[1][1] as AbortSignal).aborted).toBe(true);
   });
 });

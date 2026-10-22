@@ -69,6 +69,39 @@ describe("useFolderContents pagination", () => {
     mockGetValidAccessToken.mockResolvedValue("test-token");
   });
 
+  it.each(["rate_limited", "busy"])(
+    "reports retryable %s deferrals without blaming the network",
+    async (reason) => {
+      mockListGoogleDriveFiles.mockRejectedValueOnce(
+        Object.assign(new Error(reason), {
+          name: "DriveDeferredError",
+          reason,
+          retryAfterMs: 120_000,
+        }),
+      );
+      const { renderHook } = await import("@testing-library/react");
+      const { useFolderContents } = await import("@/hooks/use-folder-contents");
+      const { result } = renderHook(() => useFolderContents());
+      const onFailure = vi.fn();
+      expect(
+        await result.current.fetchFromApi(`folder-${reason}`, { onFailure }),
+      ).toBeNull();
+      expect(onFailure).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: reason === "rate_limited" ? "drive_rate_limited" : "drive_busy",
+          retryable: true,
+          retryAfterMs: 120_000,
+        }),
+      );
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.stringContaining("120 seconds"),
+      );
+      expect(toast.error).not.toHaveBeenCalledWith(
+        expect.stringContaining("Network error"),
+      );
+    },
+  );
+
   it("fetches all pages when nextPageToken is present", async () => {
     const page1Files = [{ id: "1", name: "file1.mp3", mimeType: "audio/mpeg" }];
     const page2Files = [{ id: "2", name: "file2.mp3", mimeType: "audio/mpeg" }];

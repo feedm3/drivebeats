@@ -1,5 +1,6 @@
 "use client";
 
+import { MetadataIndexProvider } from "@/components/metadata-index-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,6 +11,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ThemeProvider>
       <TooltipProvider>
         <WebMcpProvider />
+        <MetadataIndexProvider />
         {children}
         <Toaster position="top-center" />
       </TooltipProvider>

@@ -3,12 +3,11 @@ import {
   Check,
   ChevronDown,
   Download,
-  FolderOpen,
   Heart,
   Info,
   ListMusic,
   Lock,
-  Play,
+  Search,
 } from "lucide-react";
 import type { Metadata } from "next";
 import Image from "next/image";
@@ -22,7 +21,7 @@ export const metadata: Metadata = {
     absolute: "DriveBeats - Google Drive Music Player",
   },
   description:
-    "Stream MP3, FLAC, WAV, AAC, and OGG files from Google Drive, keep playlists and favorites synced across devices, and download music for offline playback.",
+    "Stream music from Google Drive, find tracks by title, artist, or album, sync playlists and favorites across devices, and download tracks for offline playback.",
 };
 
 // One primary button treatment for the whole page: hero and closing CTA must
@@ -44,12 +43,12 @@ const steps = [
   {
     n: 2,
     title: "Pick your library",
-    desc: "Choose folders or audio files from your Drive to add to your library.",
+    desc: "Choose folders or individual audio tracks from your Drive to add to your Library.",
   },
   {
     n: 3,
     title: "Play",
-    desc: "Stream, build playlists, and favorite tracks. Everything syncs so it's ready on your next device.",
+    desc: "Find a track and press play. Your playlists and favorites sync across devices; import your Library on each one.",
   },
 ];
 
@@ -58,7 +57,7 @@ const features = [
     icon: Heart,
     title: "Favorites that follow you",
     description:
-      "Heart a song on one device, find it in your Favorites on every other.",
+      "Heart a track on one device, find it in your Favorites on every other.",
   },
   {
     icon: Download,
@@ -67,28 +66,28 @@ const features = [
       "Download playlists and favorites so you can keep listening on a plane, on your commute, or anywhere without a connection.",
   },
   {
-    icon: FolderOpen,
-    title: "Import only what you want",
+    icon: Search,
+    title: "Find a track",
     description:
-      "Pick specific folders or audio files for a clean library view. Nothing else is touched.",
+      "Search your Library or just the Current Folder by filename, title, artist, or album.",
   },
   {
     icon: ListMusic,
     title: "Playlists from any folder",
     description:
-      "Combine songs from different folders into playlists. Drag to reorder, pick them up on any device.",
+      "Combine tracks from different folders into playlists. Drag to reorder, pick them up on any device.",
   },
   {
-    icon: Play,
-    title: "A real music player",
+    icon: ListMusic,
+    title: "Choose what plays next",
     description:
-      "Shuffle, repeat, progress bar, and keyboard shortcuts. Works the same whether you're streaming or playing downloaded tracks.",
+      "Use Play next or Add to queue, see your Playback Queue, and remove tracks you added. Keep browsing while the current queue plays on, with shuffle and repeat when you want them.",
   },
   {
     icon: Lock,
     title: "Private by design",
     description:
-      "Read-only Drive access. Your imported library, listening history, and offline downloads are stored on this device.",
+      "Read-only Drive access. Your imported Library, music tags, listening history, and offline downloads stay on this device. Only playlists and favorites sync.",
   },
 ];
 
@@ -96,7 +95,7 @@ const showcase = [
   {
     title: "Favorites on every device",
     description:
-      "Heart a track on one device, find it waiting on every other. Your library stays in sync, wherever you listen.",
+      "Heart a track on one device, find it waiting on every other. Playlists and favorites follow your account; your imported Library stays on each device.",
     image: {
       src: "/screenshots/2026-04-21-favorites.png",
       alt: "DriveBeats library view with a Favorites collection, folder tree sidebar, and the bottom player bar",
@@ -105,19 +104,10 @@ const showcase = [
   {
     title: "Just the folders you pick",
     description:
-      "Import what you want. No full-Drive access, no clutter — only the albums and folders you choose to bring in.",
+      "Import folders or individual tracks. Your Library contains only the music you choose, and DriveBeats never changes your Drive files.",
     image: {
       src: "/screenshots/2026-04-21-music-folder.png",
       alt: "Browsing an imported album folder in DriveBeats showing track filenames and sizes",
-    },
-  },
-  {
-    title: "Your data, your rules",
-    description:
-      "Clear downloads, delete synced cloud data, or remove your account — anytime, without leaving the app.",
-    image: {
-      src: "/screenshots/2026-04-21-storage-and-data.png",
-      alt: "DriveBeats Storage and data dialog showing device downloads, sync counts, and delete controls",
     },
   },
 ];
@@ -264,9 +254,9 @@ export default function LandingPage() {
                   Play your Google Drive music on any device
                 </h1>
                 <p className="max-w-[48ch] text-pretty text-lg text-muted-foreground md:text-xl">
-                  Pick the folders you want, stream your MP3s, FLACs, and more.
-                  Keep playlists and favorites in sync across all your devices.
-                  Download tracks for offline playback.
+                  Stream the folders and tracks you choose from Google Drive.
+                  Keep playlists and favorites in sync, and download tracks for
+                  offline playback.
                 </p>
               </div>
               <div className="flex flex-col items-center gap-3 sm:flex-row">
@@ -365,8 +355,8 @@ export default function LandingPage() {
               See it in action
             </h2>
             <p className="mt-4 max-w-[48ch] text-pretty text-lg text-muted-foreground">
-              A quick look at the library, the folders you import, and the data
-              controls you keep.
+              A quick look at your Favorites and the folders you bring into your
+              Library.
             </p>
           </div>
           <div className="flex flex-col gap-16 md:gap-24">
@@ -407,8 +397,7 @@ export default function LandingPage() {
               Your Drive music, your way
             </h2>
             <p className="mt-4 max-w-[48ch] text-pretty text-lg text-muted-foreground">
-              Everything you expect from a modern music player — nothing you
-              don&apos;t.
+              Find a track, save it for later, or line up your next listen.
             </p>
           </div>
           <dl className="grid gap-8 sm:grid-cols-2 md:gap-12 lg:grid-cols-3">
@@ -466,30 +455,36 @@ export default function LandingPage() {
               your entire Drive.
             </LandingFaqItem>
             <LandingFaqItem question="Do my files get downloaded or stored on your servers?">
-              Not on our servers. DriveBeats streams your audio from Google
-              Drive in your browser, and if you choose offline playback, the
-              downloaded tracks are stored locally in your browser on this
-              device. Only playlist and favorite metadata is synced so those
-              collections can follow you across devices.
+              DriveBeats does not keep audio files on its servers. Playback
+              streams from Google Drive in your browser. To read music tags,
+              small parts of a track pass through a DriveBeats server and are
+              held in memory only for that request. The tags and any offline
+              downloads stay in your browser on this device. Only playlist and
+              favorite metadata is synced so those collections can follow you
+              across devices.
             </LandingFaqItem>
             <LandingFaqItem question="Where is my DriveBeats data stored?">
               Playlists and favorites sync to your DriveBeats account so they
               can follow you across devices. Recently played tracks, imported
-              items, player state, and offline downloads stay local to this
-              browser. DriveBeats does not write any of this app data back to
-              your Google Drive.
+              items, music tags, the Library Search catalog, player state, and
+              offline downloads stay local to this browser. Import your Library
+              on each device; music tags rebuild there automatically. DriveBeats
+              does not write any of this app data back to your Google Drive.
             </LandingFaqItem>
             <LandingFaqItem question="Can I delete my synced data?">
-              Yes. Open Storage &amp; data in the app to delete synced playlists
-              and favorites from your account, or clear only the downloads
-              stored on this device.
+              You can delete individual playlists or remove tracks from
+              Favorites. To remove all your DriveBeats data, open Storage &amp;
+              data and choose Delete account. This deletes synced playlists and
+              favorites and clears this browser&rsquo;s local data. Your Google
+              Drive files are never changed. You can also use Remove all
+              downloads to clear this device&rsquo;s downloads and cached music
+              tags while keeping your synced playlists and favorites.
             </LandingFaqItem>
             <LandingFaqItem question="What happens if I log out?">
               Logging out removes your local DriveBeats data from this browser,
-              including imported items, recently played tracks, offline
-              downloads, and saved player state. Your synced playlists and
-              favorites stay in your account unless you delete them from Storage
-              &amp; data.
+              including imported items, music tags, the Library Search catalog,
+              recently played tracks, offline downloads, and saved player state.
+              Your synced playlists and favorites stay in your account.
             </LandingFaqItem>
             <LandingFaqItem question="Can I install DriveBeats as an app on my phone or computer?">
               Yes. DriveBeats is a Progressive Web App, so you can add it to
@@ -527,8 +522,8 @@ export default function LandingPage() {
                   Your music, on every device, for free
                 </h2>
                 <p className="max-w-[48ch] text-pretty text-lg text-muted-foreground">
-                  Stream from Google Drive, keep playlists and favorites in
-                  sync, and listen offline.
+                  Bring your music from Google Drive. Find the track you want,
+                  choose what plays next, and keep your favorites close.
                 </p>
               </div>
               <SignInButton className={primaryCtaClass} />

@@ -106,6 +106,8 @@ After this change, all 719 tests, lint, the production build, and React Doctor p
 
 ## Sanitized browser evidence
 
+The subsequent user-requested design pass adds one short benefit note: “Finishing these checks helps you find more tracks by title, artist, and album.” The popover keeps existing theme components, uses a 288 px width with a viewport cap, groups the heading and tabular counter, and separates the note with a subtle divider. Mobile body text is 16 px and desktop text 14 px. Browser checks passed on desktop, 320 px (including expanded diagnostics), and 428 px without horizontal overflow; touch controls remain 44 px. All 719 tests, lint, the production build, and the scoped React Doctor scan passed after this presentation change.
+
 The following observations were reported by the supervising agent from the authenticated browser. No account IDs, file IDs, filenames, tokens, private URLs, or tag contents are retained here. They establish the tested session/sample behavior, not universal provider or device guarantees.
 
 | Check | Observed result | Limit |

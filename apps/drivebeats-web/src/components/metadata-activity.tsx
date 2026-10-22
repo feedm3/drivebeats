@@ -120,15 +120,20 @@ export const MetadataActivity = memo(function MetadataActivity() {
           <Loader2 aria-hidden="true" />
         </span>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 max-w-[calc(100vw-2rem)] p-3">
-        <div className="flex flex-col gap-2 text-sm">
-          <p className="font-medium">Music metadata</p>
-          <p>
-            {status.total === null ||
-            (status.coveragePending && status.observedAt === null)
-              ? "Checking your Library…"
-              : `${status.checked} of ${status.total} checked`}
-          </p>
+      <PopoverContent
+        align="end"
+        className="w-72 max-w-[calc(100vw-2rem)] p-4 dark:shadow-none"
+      >
+        <div className="flex flex-col gap-3 text-base sm:text-sm">
+          <div className="flex flex-col gap-1">
+            <p className="text-balance font-semibold">Music metadata</p>
+            <p className="tabular-nums">
+              {status.total === null ||
+              (status.coveragePending && status.observedAt === null)
+                ? "Checking your Library…"
+                : `${status.checked} of ${status.total} checked`}
+            </p>
+          </div>
           {status.unresolved > 0 ? (
             <div className="flex items-center justify-between gap-2">
               <p>
@@ -226,6 +231,10 @@ export const MetadataActivity = memo(function MetadataActivity() {
               Library progress is available for this session only.
             </p>
           ) : null}
+          <p className="border-foreground/10 border-t pt-3 text-pretty text-muted-foreground">
+            Finishing these checks helps you find more tracks by title, artist,
+            and album.
+          </p>
         </div>
       </PopoverContent>
     </Popover>

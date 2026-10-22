@@ -159,7 +159,7 @@ describe("metadata activity subscriptions", () => {
     expect(screen.getByText("100 of 3000 checked")).toBeInTheDocument();
     expect(fixtures.status).toHaveBeenCalledTimes(2);
   });
-  it("keeps the same animated spinner through count updates and stops it for a real hidden pause", () => {
+  it("keeps the same animation through count updates and pauses between reads", () => {
     const view = render(<MetadataActivity />);
     const spinner = view.container.querySelector(".animate-spin");
     expect(spinner).not.toBeNull();
@@ -180,22 +180,24 @@ describe("metadata activity subscriptions", () => {
       );
       expect(view.container.querySelector(".animate-spin")).toBe(spinner);
     }
-    fixtures.status.mockReturnValue({
-      indexingState: "paused",
-      total: 3000,
-      checked: 10,
-      remaining: 2990,
-      unresolved: 0,
-      pauseReason: "hidden",
-      sessionOnlyCatalog: false,
-    });
-    act(() =>
-      useMetadataIndexStore.setState((state) => ({
-        revision: state.revision + 1,
-      })),
-    );
-    expect(spinner).toBeInTheDocument();
-    expect(spinner).not.toHaveClass("animate-spin");
+    for (const pauseReason of ["budget", "hidden", null]) {
+      fixtures.status.mockReturnValue({
+        indexingState: pauseReason ? "paused" : "running",
+        total: 3000,
+        checked: 10,
+        remaining: 2990,
+        unresolved: 0,
+        pauseReason,
+        sessionOnlyCatalog: false,
+      });
+      act(() =>
+        useMetadataIndexStore.setState((state) => ({
+          revision: state.revision + 1,
+        })),
+      );
+      expect(view.container.querySelector(".animate-spin")).toBe(spinner);
+      expect(spinner).toHaveClass("motion-reduce:animate-none");
+    }
   });
   it("shows readable failure reasons and saved track names only after the accessible expand action", async () => {
     fixtures.status.mockReturnValue({
@@ -353,11 +355,12 @@ describe("metadata activity subscriptions", () => {
   });
 
   it("keeps an open panel mounted when the last track finishes until the user closes it", () => {
-    render(<MetadataActivity />);
+    const view = render(<MetadataActivity />);
     fireEvent.click(
       screen.getByRole("button", { name: "Music metadata progress" }),
     );
     const heading = screen.getByText("Music metadata");
+    expect(view.container.querySelector(".animate-spin")).not.toBeNull();
     fixtures.status.mockReturnValue({
       indexingState: "complete",
       total: 3000,
@@ -376,6 +379,7 @@ describe("metadata activity subscriptions", () => {
     );
     expect(screen.getByText("Music metadata")).toBe(heading);
     expect(screen.getByText("3000 of 3000 checked")).toBeInTheDocument();
+    expect(view.container.querySelector(".animate-spin")).toBeNull();
     fireEvent.click(
       screen.getByRole("button", { name: "Music metadata progress" }),
     );

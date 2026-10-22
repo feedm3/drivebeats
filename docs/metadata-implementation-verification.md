@@ -98,6 +98,12 @@ The user subsequently requested that sidebar/folder navigation clear the active 
 
 The reviews are scoped evidence rather than a guarantee that no defects remain.
 
+### Spinner follow-up
+
+The user reported that the progress spinner stopped intermittently. Its animation was intentionally disabled during scheduler pauses, including ordinary waits between reads. The indicator now keeps the same CSS animation while metadata checks are running, paused, or recomputing coverage. Completed and terminal partial scans remain static, and reduced-motion preferences still disable rotation. A focused Astra review found no concrete regression. The existing UI sequence test now covers count updates, waiting, hidden-page pauses, and resumed reads without replacing the animated element; the completion test checks that animation ends.
+
+After this change, all 719 tests, lint, the production build, and React Doctor passed (the latter scored 93/100 with no findings across the two changed source files). In the signed-in production-mode local browser, successive observations recorded 20 distinct transforms across 40 samples while reading, and another 20 distinct transforms across 40 samples with the panel reporting “Waiting.” throughout. The counter advanced from 597 to 608 during verification. A screenshot captures the progress control and panel without private filenames. Two asynchronous CDP sampling attempts timed out, so motion was verified through successive read-only DOM observations instead.
+
 ## Sanitized browser evidence
 
 The following observations were reported by the supervising agent from the authenticated browser. No account IDs, file IDs, filenames, tokens, private URLs, or tag contents are retained here. They establish the tested session/sample behavior, not universal provider or device guarantees.

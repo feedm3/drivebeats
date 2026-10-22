@@ -98,7 +98,8 @@ export const MetadataActivity = memo(function MetadataActivity() {
     return null;
   const animate =
     status.indexingState === "running" ||
-    (status.coveragePending && !status.pauseReason);
+    status.indexingState === "paused" ||
+    status.coveragePending;
   return (
     <Popover open={open} onOpenChange={(nextOpen) => setOpen(nextOpen)}>
       <PopoverTrigger

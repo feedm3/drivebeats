@@ -160,9 +160,9 @@ function MobileFileMetadata({
       <span className="mt-0.5 block truncate text-xs text-muted-foreground">
         {artistAndSize}
       </span>
-      {context ? (
+      {id3?.album ? (
         <span className="mt-0.5 block truncate text-[11px] text-muted-foreground/80">
-          {context}
+          {id3.album}
         </span>
       ) : null}
     </>

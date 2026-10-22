@@ -26,7 +26,15 @@ declare module "jsmediatags" {
 }
 
 declare module "jsmediatags/build2/ID3v2TagReader" {
-  class ID3v2TagReader {}
+  class ID3v2TagReader {
+    protected _loadData(
+      reader: import("jsmediatags/build2/MediaFileReader").default,
+      callbacks: {
+        onSuccess: () => void;
+        onError: (error: { type: string; info: string }) => void;
+      },
+    ): void;
+  }
   export default ID3v2TagReader;
 }
 

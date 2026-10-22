@@ -126,12 +126,10 @@ describe("bounded installed-parser adapter", () => {
           album: "Synthetic album",
         },
       });
-      expect(ranges).toHaveLength(2);
-      expect(ranges[0]).toEqual([0, 15]);
-      expect(ranges[1][0]).toBe(16);
+      expect(ranges).toEqual([[0, 4095]]);
       expect(
         ranges.reduce((bytes, [start, end]) => bytes + end - start + 1, 0),
-      ).toBeLessThan(1024);
+      ).toBeLessThanOrEqual(4096);
     },
   );
   it("preserves ID3v2.3 global unsynchronization text while skipping the unused tail probe", async () => {
@@ -152,10 +150,7 @@ describe("bounded installed-parser adapter", () => {
       status: "ready",
       tags: { title: "AÿáB" },
     });
-    expect(ranges).toHaveLength(2);
-    expect(ranges.reduce((sum, [start, end]) => sum + end - start + 1, 0)).toBe(
-      10 + physicalBody.length,
-    );
+    expect(ranges).toEqual([[0, 4095]]);
   });
   it("reads v1 tail tags without fetching intervening audio", async () => {
     const bytes = Buffer.alloc(65536);
@@ -168,7 +163,7 @@ describe("bounded installed-parser adapter", () => {
       status: "ready",
       tags: { title: "Legacy title" },
     });
-    expect(ranges.reduce((sum, [a, b]) => sum + b - a + 1, 0)).toBe(144);
+    expect(ranges.reduce((sum, [a, b]) => sum + b - a + 1, 0)).toBe(4096 + 128);
   });
   it("reports a plausible MPEG file with no supported tag signature as no target tags", async () => {
     const bytes = Buffer.alloc(65536);
@@ -183,7 +178,7 @@ describe("bounded installed-parser adapter", () => {
       readDriveTrackMetadata(setup(Buffer.alloc(65536)).options),
     ).rejects.toMatchObject({ code: "parse_error" });
   });
-  it("accounts for artwork transfer despite text-only parser output, without overlapping ranges", async () => {
+  it("skips artwork payload while preserving text tags and nonoverlapping ranges", async () => {
     const { ranges, options } = setup(fixture(3, 262144));
     await expect(readDriveTrackMetadata(options)).resolves.toMatchObject({
       status: "ready",
@@ -192,8 +187,7 @@ describe("bounded installed-parser adapter", () => {
       (sum, [start, end]) => sum + end - start + 1,
       0,
     );
-    expect(total).toBeGreaterThan(262144);
-    expect(total).toBeLessThan(263000);
+    expect(total).toBeLessThan(8192);
     for (let index = 0; index < ranges.length; index++)
       for (const other of ranges.slice(index + 1))
         expect(ranges[index][1] < other[0] || other[1] < ranges[index][0]).toBe(
@@ -220,18 +214,158 @@ describe("bounded installed-parser adapter", () => {
         album: "Synthetic album",
       },
     });
-    expect(ranges).toHaveLength(2);
-    expect(ranges.reduce((sum, [start, end]) => sum + end - start + 1, 0)).toBe(
-      tagBytes,
-    );
+    expect(ranges).toHaveLength(1);
+    expect(
+      ranges.reduce((sum, [start, end]) => sum + end - start + 1, 0),
+    ).toBeLessThan(8192);
   });
-  it("rejects oversized declared tags before downloading their payload", async () => {
+  it("reads text from a tag with oversized artwork without downloading that artwork", async () => {
     const { options, ranges } = setup(fixture(3, 1200000));
+    await expect(readDriveTrackMetadata(options)).resolves.toMatchObject({
+      status: "ready",
+      tags: { title: "Synthetic title" },
+    });
+    expect(
+      ranges.reduce((sum, [start, end]) => sum + end - start + 1, 0),
+    ).toBeLessThan(8192);
+  });
+  it.each([2, 3, 4] as const)(
+    "finds text after large ID3v2.%i artwork without downloading the artwork",
+    async (version) => {
+      const original = fixture(version, 262144);
+      const artStart = original.indexOf(version === 2 ? "PIC" : "APIC");
+      const tagEnd =
+        10 +
+        original[6] * 2097152 +
+        original[7] * 16384 +
+        original[8] * 128 +
+        original[9];
+      const bytes = Buffer.concat([
+        original.subarray(0, 10),
+        original.subarray(artStart, tagEnd),
+        original.subarray(10, artStart),
+        original.subarray(tagEnd),
+      ]);
+      const { options, ranges } = setup(bytes);
+      await expect(readDriveTrackMetadata(options)).resolves.toMatchObject({
+        status: "ready",
+        tags: {
+          title: "Synthetic title",
+          artist: "Synthetic artist",
+          album: "Synthetic album",
+        },
+      });
+      expect(ranges.reduce((sum, [a, b]) => sum + b - a + 1, 0)).toBeLessThan(
+        8192,
+      );
+      expect(ranges).toHaveLength(2);
+    },
+  );
+  it("keeps oversized text frames bounded even when artwork can be skipped", async () => {
+    const bytes = Buffer.alloc(2 * 1024 * 1024);
+    const textLength = 1200000;
+    bytes.set([73, 68, 51, 3, 0, 0, ...syncsafe(10 + textLength)]);
+    bytes.write("TIT2", 10);
+    bytes.writeUInt32BE(textLength, 14);
+    const { options, ranges } = setup(bytes);
     await expect(readDriveTrackMetadata(options)).rejects.toMatchObject({
       code: "budget_exceeded",
     });
-    expect(ranges).toEqual([[0, 15]]);
+    expect(ranges).toEqual([[0, 4095]]);
   });
+
+  it.each(["unusual_id", "raw_v24_size", "several_artworks"] as const)(
+    "preserves installed-parser compatibility for %s within the original budgets",
+    async (kind) => {
+      const version = kind === "raw_v24_size" ? 4 : 3;
+      const frame = (id: string, value: string | number) => {
+        const payload =
+          typeof value === "number"
+            ? Buffer.alloc(value, 1)
+            : Buffer.from(`\0${value}`, "binary");
+        const header = Buffer.alloc(10);
+        header.write(id);
+        // raw_v24_size deliberately preserves a legacy nonsyncsafe APIC size.
+        header.writeUInt32BE(payload.length, 4);
+        return Buffer.concat([header, payload]);
+      };
+      const body = Buffer.concat([
+        frame("TIT2", "T"),
+        ...(kind === "unusual_id" ? [frame("Xyz1", 20)] : []),
+        ...Array.from({ length: kind === "several_artworks" ? 4 : 1 }, () =>
+          frame("APIC", kind === "raw_v24_size" ? 200 : 20000),
+        ),
+        ...(kind === "raw_v24_size" ? [] : [frame("TPE1", "A")]),
+      ]);
+      const bytes = Buffer.concat([
+        Buffer.from([73, 68, 51, version, 0, 0, ...syncsafe(body.length)]),
+        body,
+        Buffer.alloc(4096),
+      ]);
+      const { options, ranges } = setup(bytes);
+      await expect(readDriveTrackMetadata(options)).resolves.toMatchObject({
+        status: "ready",
+        tags: {
+          title: "T",
+          ...(kind === "raw_v24_size" ? {} : { artist: "A" }),
+        },
+      });
+      expect(ranges.length).toBeLessThanOrEqual(4);
+      expect(
+        ranges.reduce((sum, [a, b]) => sum + b - a + 1, 0),
+      ).toBeLessThanOrEqual(1024 * 1024);
+      for (let i = 0; i < ranges.length; i++)
+        for (const other of ranges.slice(i + 1))
+          expect(ranges[i][1] < other[0] || other[1] < ranges[i][0]).toBe(true);
+    },
+  );
+
+  it.each([
+    "overshooting_artwork",
+    "two_covers_after_text",
+    "two_covers_before_text",
+  ] as const)("keeps readable text and sparse bytes for %s", async (kind) => {
+    const frame = (id: string, value: string | number) => {
+      const payload =
+        typeof value === "number"
+          ? Buffer.alloc(value, 1)
+          : Buffer.from(`\0${value}`, "binary");
+      const header = Buffer.alloc(10);
+      header.write(id);
+      header.writeUInt32BE(payload.length, 4);
+      return Buffer.concat([header, payload]);
+    };
+    const text = [frame("TIT2", "T"), frame("TPE1", "A")];
+    const artwork =
+      kind === "overshooting_artwork"
+        ? [frame("APIC", 20000)]
+        : [frame("APIC", 300000), frame("APIC", 300000)];
+    if (kind === "overshooting_artwork") artwork[0].writeUInt32BE(20500, 4);
+    const body = Buffer.concat(
+      kind === "two_covers_before_text"
+        ? [...artwork, ...text, Buffer.alloc(2048)]
+        : [
+            ...text,
+            ...artwork,
+            Buffer.alloc(kind === "overshooting_artwork" ? 0 : 2048),
+          ],
+    );
+    const bytes = Buffer.concat([
+      Buffer.from([73, 68, 51, 3, 0, 0, ...syncsafe(body.length)]),
+      body,
+      Buffer.alloc(4096),
+    ]);
+    const { options, ranges } = setup(bytes);
+    await expect(readDriveTrackMetadata(options)).resolves.toMatchObject({
+      status: "ready",
+      tags: { title: "T", artist: "A" },
+    });
+    expect(ranges.length).toBeLessThanOrEqual(4);
+    expect(ranges.reduce((sum, [a, b]) => sum + b - a + 1, 0)).toBeLessThan(
+      16384,
+    );
+  });
+
   it("cancels an unexpected full response immediately", async () => {
     const { options } = setup(fixture(3));
     const cancel = vi.fn();
@@ -263,7 +397,7 @@ describe("bounded installed-parser adapter", () => {
     vi.mocked(readGoogleDriveFileRange).mockResolvedValue(
       new Response(new ReadableStream({ cancel }), {
         status: 206,
-        headers: { "Content-Range": `bytes 0-15/${options.size}` },
+        headers: { "Content-Range": `bytes 0-4095/${options.size}` },
       }),
     );
     const job = readDriveTrackMetadata({

@@ -276,6 +276,43 @@ describe("shared Drive transport", () => {
     });
   });
 
+  it("paces small metadata reads at 250ms, bounds the two-minute window, and leaves playback available", async () => {
+    vi.useFakeTimers();
+    installLocks();
+    const accountId = `throughput-${crypto.randomUUID()}`;
+    const transport = vi.fn(async () => new Response("tags"));
+    try {
+      for (let i = 0; i < 120; i++) {
+        const response = scheduleDriveRequest(transport, {
+          accountId,
+          priority: "background",
+          maxBytes: 4,
+        });
+        await vi.advanceTimersByTimeAsync(i ? 250 : 0);
+        expect(await (await response).text()).toBe("tags");
+      }
+      const limited = scheduleDriveRequest(transport, {
+        accountId,
+        priority: "background",
+        maxBytes: 4,
+      });
+      const rejection = expect(limited).rejects.toMatchObject({
+        reason: "budget_exceeded",
+        budgetScope: "background",
+      });
+      await vi.advanceTimersByTimeAsync(250);
+      await rejection;
+      expect(transport).toHaveBeenCalledTimes(120);
+      const playback = await scheduleDriveRequest(
+        async () => new Response("audio"),
+        { accountId, priority: "playback" },
+      );
+      expect(await playback.text()).toBe("audio");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("uses the foreground consumer budget when queued background work is promoted", async () => {
     const blocker = await scheduleDriveRequest(
       async () => new Response("audio"),

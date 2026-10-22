@@ -307,7 +307,10 @@ export async function getMetadataIndexStatusAsync(signal?: AbortSignal) {
         (track) => metadataStateFor(accountId, track),
       )
         .then((coverage) => {
-          if (!sameCoverageScope(scope, coverageScope())) return;
+          // Publish a useful snapshot even if another track finished while this
+          // scan yielded. It remains pending until an exact revision catches up;
+          // account/catalog/version changes still discard the entire snapshot.
+          if (!sameCoverageBaseScope(scope, coverageScope())) return;
           coverageAggregate = { scope, coverage, observedAt: Date.now() };
           useMetadataIndexStore.setState((state) => ({
             revision: state.revision + 1,
@@ -746,7 +749,7 @@ export function startMetadataIndex() {
                             1000,
                             result.metadata.error?.retryAfterMs ?? 2000,
                           )
-                        : 1000);
+                        : 250);
                   break;
                 }
                 if (!valid()) break;

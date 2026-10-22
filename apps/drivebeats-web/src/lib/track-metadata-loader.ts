@@ -430,7 +430,10 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
     } else {
       if (typeof navigator !== "undefined" && navigator.onLine === false)
         throw new MetadataReadError("offline", true);
-      descriptor = checks ? descriptor : await checkDescriptor();
+      // A proven catalog/collection descriptor already anchors these bytes.
+      // Verify that exact version after reading, before publishing any tags.
+      // Incomplete descriptors were strengthened above; do not re-fetch an
+      // unchanged descriptor solely to start a second version check.
       if (!updateKnownTrackDescriptor(known, descriptor))
         throw new MetadataReadError("scope_changed", true);
       useId3MetadataStore.getState().observeDescriptor(descriptor);
@@ -457,6 +460,24 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
           loadedVia: "drive_range",
         };
       else {
+        const validateReadVersion = async () => {
+          const after = await checkDescriptor();
+          if (
+            getMetadataFingerprint(after) !== getMetadataFingerprint(descriptor)
+          ) {
+            updateKnownTrackDescriptor(known, after);
+            throw new MetadataReadError("version_changed", true);
+          }
+        };
+        // Do not spend the last caller allowance on bytes that cannot be
+        // validated. The reader may still need more than one bounded range.
+        if (budget.maxRequests - budget.requestsUsed < 2)
+          throw new DriveDeferredError(
+            "budget_exceeded",
+            0,
+            undefined,
+            "consumer",
+          );
         outcome = await readDriveTrackMetadata({
           fileId: known.track.id,
           size: Number(descriptor.size),
@@ -473,14 +494,33 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
               ? useAuthStore.getState().getValidAccessToken()
               : null;
           },
+        }).catch(async (error: unknown) => {
+          if (
+            error instanceof MetadataReadError &&
+            error.code === "version_changed"
+          ) {
+            // A size mismatch can stop the range before the final validator.
+            // Strengthen the descriptor so the next bounded attempt can recover.
+            const current = await checkDescriptor();
+            updateKnownTrackDescriptor(known, current);
+            useId3MetadataStore.getState().observeDescriptor(current);
+          } else if (
+            error instanceof MetadataReadError &&
+            !error.retryable &&
+            [
+              "unsupported_format",
+              "budget_exceeded",
+              "range_unsupported",
+              "parse_error",
+            ].includes(error.code)
+          ) {
+            // A durable decoding/reading-limit result needs the same version
+            // proof as successful tags; bytes may belong to a changed file.
+            await validateReadVersion();
+          }
+          throw error;
         });
-        const after = await checkDescriptor();
-        if (
-          getMetadataFingerprint(after) !== getMetadataFingerprint(descriptor)
-        ) {
-          updateKnownTrackDescriptor(known, after);
-          throw new MetadataReadError("version_changed", true);
-        }
+        await validateReadVersion();
       }
     }
   } catch (error) {

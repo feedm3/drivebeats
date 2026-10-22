@@ -334,7 +334,9 @@ async function reserve(
         state.requests = 0;
         state.bytes = 0;
       }
-      if (state.requests >= 50 || state.bytes + bytes > 5 * 1024 * 1024)
+      // Small tag ranges should not wait as long as audio transfers. Keep a
+      // profile-wide request ceiling and the existing 5MiB byte ceiling.
+      if (state.requests >= 120 || state.bytes + bytes > 5 * 1024 * 1024)
         throw new DriveDeferredError(
           "budget_exceeded",
           Math.max(1, state.windowStarted + 120_000 - now),
@@ -345,7 +347,7 @@ async function reserve(
         throw new DriveDeferredError("paused", state.nextBackgroundAt - now);
       state.requests++;
       state.bytes += bytes;
-      state.nextBackgroundAt = now + 1000;
+      state.nextBackgroundAt = now + 250;
     }
   });
   if (budget) {

@@ -3,7 +3,7 @@ import type { Id3Metadata } from "@/lib/id3-metadata";
 export const METADATA_PARSER_VERSION = "jsmediatags-3.9.7-text-1";
 export const METADATA_POLICY_VERSION = 2;
 export const METADATA_SCHEMA_VERSION = 1;
-export const METADATA_RANGE_STRATEGY_VERSION = 2;
+export const METADATA_RANGE_STRATEGY_VERSION = 3;
 
 export interface MetadataDescriptor {
   id: string;

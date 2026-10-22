@@ -318,6 +318,50 @@ describe("automatic metadata coordinator", () => {
     });
   });
 
+  it("advances checked counts when more records arrive during a coverage scan", async () => {
+    const coordinator = await module();
+    fixtures.search.catalog = {
+      userId: "account",
+      importsSignature: "imports",
+      fetchedAt: 200,
+      tracks: Array.from({ length: 2913 }, (_, i) => track(`warming-${i}`)),
+    };
+    const snapshot = (checked: number) => ({
+      ready: checked,
+      noTargetTags: 0,
+      unresolved: 0,
+      stale: 0,
+      errors: 0,
+      unknown: 2913 - checked,
+      checked,
+      total: 2913,
+      remaining: 2913 - checked,
+      unresolvedReasons: {},
+      fields: {},
+      metadataSearchComplete: false,
+    });
+    fixtures.coverage.mockResolvedValueOnce(snapshot(1));
+    await coordinator.getMetadataIndexStatusAsync();
+    fixtures.metadata.records = { firstBatch: {} };
+    let finish!: (value: unknown) => void;
+    fixtures.coverage.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const pending = coordinator.getMetadataIndexStatusAsync();
+    // The worker completes another track while the local IndexedDB scan yields.
+    fixtures.metadata.records = { secondBatch: {} };
+    finish(snapshot(85));
+    await pending;
+    expect(coordinator.getMetadataIndexStatus()).toMatchObject({
+      checked: 85,
+      total: 2913,
+      coveragePending: true,
+      metadataSearchComplete: false,
+    });
+  });
+
   it("does not publish an aggregate whose account logs out during its IndexedDB scan", async () => {
     const coordinator = await module();
     fixtures.search.catalog = {

@@ -182,15 +182,8 @@ export async function readDriveTrackMetadata(
       reader.releaseLock();
     }
   }
-  async function load(start: number, end: number) {
-    if (
-      !Number.isSafeInteger(start) ||
-      !Number.isSafeInteger(end) ||
-      start < 0 ||
-      end < start ||
-      end >= size
-    )
-      throw new MetadataReadError("parse_error");
+  function missingRanges(start: number, end: number): [number, number][] {
+    const ranges: [number, number][] = [];
     for (let cursor = start; cursor <= end; ) {
       const covering = chunks.find(
         (chunk) =>
@@ -200,15 +193,32 @@ export async function readDriveTrackMetadata(
         cursor = covering.start + covering.bytes.length;
         continue;
       }
-      const nextChunk = chunks
+      const next = chunks
         .filter((chunk) => chunk.start > cursor)
         .sort((a, b) => a.start - b.start)[0];
-      const missingEnd = Math.min(end, nextChunk ? nextChunk.start - 1 : end);
-      await fetchRange(cursor, missingEnd);
+      const missingEnd = Math.min(end, next ? next.start - 1 : end);
+      ranges.push([cursor, missingEnd]);
       cursor = missingEnd + 1;
     }
+    return ranges;
   }
-  await load(0, 15);
+  async function load(start: number, end: number) {
+    if (
+      !Number.isSafeInteger(start) ||
+      !Number.isSafeInteger(end) ||
+      start < 0 ||
+      end < start ||
+      end >= size
+    )
+      throw new MetadataReadError("parse_error");
+    for (const [from, to] of missingRanges(start, end))
+      await fetchRange(from, to);
+  }
+
+  if (maxBytes < 16) throw new MetadataReadError("budget_exceeded");
+  // One small prefix usually contains all text frames, avoiding a separate
+  // authenticated round trip just to discover the ten-byte ID3 header.
+  await load(0, Math.min(size, maxBytes, 4096) - 1);
   const id3 = byteAt(0) === 73 && byteAt(1) === 68 && byteAt(2) === 51;
   if (id3) {
     if (
@@ -219,7 +229,10 @@ export async function readDriveTrackMetadata(
     const tagLength =
       10 + (byteAt(6) << 21) + (byteAt(7) << 14) + (byteAt(8) << 7) + byteAt(9);
     if (tagLength > size) throw new MetadataReadError("parse_error");
-    if (tagLength > maxBytes) throw new MetadataReadError("budget_exceeded");
+    // Global flags can change physical frame offsets. Keep the original bounded
+    // reader for these less common tags rather than guessing at their layout.
+    if (byteAt(5) !== 0 && tagLength > maxBytes)
+      throw new MetadataReadError("budget_exceeded");
   }
   class SparseReader extends MediaFileReader {
     constructor() {
@@ -245,6 +258,117 @@ export async function readDriveTrackMetadata(
       return byteAt(offset);
     }
   }
+  class TextTagReader extends ID3v2TagReader {
+    protected _loadData(
+      reader: InstanceType<typeof MediaFileReader>,
+      callbacks: {
+        onSuccess: () => void;
+        onError: (error: { type: string; info: string }) => void;
+      },
+    ) {
+      if (byteAt(5) !== 0) {
+        super._loadData(reader, callbacks);
+        return;
+      }
+      // jsmediatags decodes text normally, but its default loader downloads the
+      // whole tag, including artwork. Its parser only needs unwanted frames'
+      // headers, so walk those offsets without transferring their payloads.
+      const job = (async () => {
+        const version = byteAt(3);
+        const headerSize = version === 2 ? 6 : 10;
+        const idSize = version === 2 ? 3 : 4;
+        const tagEnd =
+          10 +
+          (byteAt(6) << 21) +
+          (byteAt(7) << 14) +
+          (byteAt(8) << 7) +
+          byteAt(9);
+        const wanted = new Set(["TT2", "TP1", "TAL", "TIT2", "TPE1", "TALB"]);
+        const canLoadRemainder = (start: number) => {
+          const missing = missingRanges(start, tagEnd - 1);
+          return (
+            requests + missing.length <= maxRequests &&
+            bytesRead +
+              missing.reduce((sum, [start, end]) => sum + end - start + 1, 0) <=
+              maxBytes
+          );
+        };
+        const loadRemainder = async (start: number) => {
+          if (!canLoadRemainder(start))
+            throw new MetadataReadError("budget_exceeded");
+          // Earlier headers and requested payloads are already present. The
+          // parser skips their opaque payloads, so only later bytes are needed.
+          // Fill gaps without re-downloading any cached bytes.
+          await load(start, tagEnd - 1);
+        };
+        const prefetch = async (start: number, end: number) => {
+          // Small windows coalesce adjacent text frames; load() subtracts bytes
+          // already present and never fetches across the end of the tag.
+          const cached = chunks.some(
+            (chunk) =>
+              start >= chunk.start && end < chunk.start + chunk.bytes.length,
+          );
+          if (!cached) {
+            // Use the final range for the remainder only when necessary; two
+            // artwork frames should still cost a few small windows, not a full
+            // tag download. Previous skipped payloads never need fetching.
+            if (requests >= maxRequests - 1 && canLoadRemainder(start))
+              await loadRemainder(start);
+            else
+              await load(
+                start,
+                Math.min(tagEnd - 1, Math.max(end, start + 4095)),
+              );
+          }
+        };
+        let frames = 0;
+        for (let offset = 10; offset < tagEnd - headerSize; ) {
+          signal.throwIfAborted();
+          if (++frames > 4096) throw new MetadataReadError("budget_exceeded");
+          await prefetch(offset, offset + headerSize - 1);
+          const id = Array.from({ length: idSize }, (_, i) =>
+            byteAt(offset + i),
+          );
+          if (id.every((value) => value === 0)) break;
+          // The installed parser accepts some nonstandard IDs. It needs the
+          // bounded remainder before it can interpret later offsets safely.
+          if (
+            id.some(
+              (value) => value < 48 || (value > 57 && value < 65) || value > 90,
+            )
+          ) {
+            await loadRemainder(offset);
+            return;
+          }
+          const lengthBytes = version === 2 ? 3 : 4;
+          let frameLength = 0;
+          for (let i = 0; i < lengthBytes; i++) {
+            const value = byteAt(offset + idSize + i);
+            if (version === 4 && value > 127) {
+              await loadRemainder(offset);
+              return;
+            }
+            frameLength = frameLength * (version === 4 ? 128 : 256) + value;
+          }
+          const end = offset + headerSize + frameLength;
+          const requested = wanted.has(String.fromCharCode(...id));
+          if (end > tagEnd) {
+            // Match the installed parser: an unwanted frame can run past the
+            // declared tag while earlier requested text remains readable.
+            if (requested) throw new MetadataReadError("parse_error");
+            break;
+          }
+          if (requested && frameLength)
+            await prefetch(offset + headerSize, end - 1);
+          offset = end;
+        }
+      })();
+      void job.then(callbacks.onSuccess, (error) => {
+        failure = error;
+        callbacks.onError({ type: "range", info: "Bounded text read failed" });
+      });
+    }
+  }
   return new Promise<MetadataOutcome>((resolve, reject) => {
     const onAbort = () =>
       reject(signal.reason ?? new DOMException("Cancelled", "AbortError"));
@@ -258,7 +382,7 @@ export async function readDriveTrackMetadata(
       .setTagsToRead(["title", "artist", "album"]);
     // A validated leading ID3v2 header already proves the parser choice.
     // Avoid the automatic format detector's otherwise unused ID3v1 tail read.
-    if (id3) parser.setTagReader(ID3v2TagReader);
+    if (id3) parser.setTagReader(TextTagReader);
     parser.read({
       onSuccess(result) {
         signal.removeEventListener("abort", onAbort);

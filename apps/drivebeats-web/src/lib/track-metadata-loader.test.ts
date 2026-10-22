@@ -289,7 +289,7 @@ describe("shared metadata consumer boundary", () => {
       },
       loadedNow: true,
     });
-    expect(mocks.descriptor).toHaveBeenCalledTimes(2);
+    expect(mocks.descriptor).toHaveBeenCalledOnce();
     expect(mocks.put).toHaveBeenCalledOnce();
   });
 
@@ -524,15 +524,8 @@ describe("shared metadata consumer boundary", () => {
     expect(mocks.put).not.toHaveBeenCalled();
   });
   it("discards bytes when the post-read descriptor observes a different version", async () => {
-    let call = 0;
-    mocks.descriptor.mockImplementation(
-      async () =>
-        new Response(
-          JSON.stringify({
-            ...track,
-            modifiedTime: ++call === 1 ? "v1" : "v2",
-          }),
-        ),
+    mocks.descriptor.mockResolvedValue(
+      Response.json({ ...track, modifiedTime: "v2" }),
     );
     const { ensureTrackMetadata } = await import("./track-metadata-loader");
     await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
@@ -540,6 +533,51 @@ describe("shared metadata consumer boundary", () => {
     });
     expect(mocks.put).not.toHaveBeenCalled();
   });
+  it("refreshes a stale-size descriptor after a rejected range and can retry the new version", async () => {
+    const { MetadataReadError } = await import("./drive-metadata-reader");
+    const { ensureTrackMetadata } = await import("./track-metadata-loader");
+    const current = { ...track, size: "6000", modifiedTime: "v2" };
+    mocks.descriptor.mockImplementation(async () => Response.json(current));
+    mocks.range.mockRejectedValueOnce(
+      new MetadataReadError("version_changed", true),
+    );
+    const item = known();
+    await expect(ensureTrackMetadata(item)).resolves.toMatchObject({
+      metadata: { status: "error", error: { code: "version_changed" } },
+    });
+    expect(item.track).toEqual(current);
+    expect(mocks.put).not.toHaveBeenCalled();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 31000);
+    try {
+      await expect(ensureTrackMetadata(item)).resolves.toMatchObject({
+        metadata: { status: "ready", tags: { title: "Remote" } },
+      });
+      expect(mocks.put).toHaveBeenCalledWith(
+        current,
+        expect.objectContaining({ status: "ready" }),
+        1,
+      );
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it.each(["parse_error", "budget_exceeded", "range_unsupported"])(
+    "does not save %s against an unvalidated old version",
+    async (code) => {
+      const { MetadataReadError } = await import("./drive-metadata-reader");
+      mocks.range.mockRejectedValueOnce(new MetadataReadError(code));
+      mocks.descriptor.mockImplementation(async () =>
+        Response.json({ ...track, modifiedTime: "v2" }),
+      );
+      const { ensureTrackMetadata } = await import("./track-metadata-loader");
+      await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
+        metadata: { status: "error", error: { code: "version_changed" } },
+      });
+      expect(mocks.put).not.toHaveBeenCalled();
+    },
+  );
+
   it("does not use a collection converter's synthetic MPEG MIME to fetch an unsupported file", async () => {
     const item = known();
     item.source = "collection";
@@ -569,7 +607,7 @@ describe("shared metadata consumer boundary", () => {
   });
 });
 
-it("loads a normal ID3v2 track with two sparse ranges and two version descriptor checks", async () => {
+it("reuses a proven version and verifies it once after the sparse reads", async () => {
   const bytes = Buffer.alloc(5000);
   const text = Buffer.from("\0Synthetic title", "binary");
   bytes.write("ID3");
@@ -597,9 +635,9 @@ it("loads a normal ID3v2 track with two sparse ranges and two version descriptor
     metadata: { status: "ready", tags: { title: "Synthetic title" } },
     loadedNow: true,
   });
-  expect(mocks.media).toHaveBeenCalledTimes(2);
-  expect(mocks.descriptor).toHaveBeenCalledTimes(2);
+  expect(mocks.media).toHaveBeenCalledOnce();
+  expect(mocks.descriptor).toHaveBeenCalledOnce();
   expect(
     mocks.media.mock.calls.length + mocks.descriptor.mock.calls.length,
-  ).toBe(4);
+  ).toBe(2);
 });

@@ -31,3 +31,15 @@ _Avoid_: Global Search, Drive search
 **Current Folder Search**:
 A search limited to the Current Folder using filenames and current audio title, artist, and album tags cached on this device.
 _Avoid_: Local search
+
+**Playlist**:
+A named, saved collection of Playable Tracks in a user-chosen order.
+_Avoid_: Playback Queue
+
+**Playback Queue**:
+The sequence of Playable Tracks selected for the current listening activity.
+_Avoid_: Playlist when referring only to what will play next
+
+**DJ Mode**:
+An optional listening mode in which AI selects upcoming Playable Tracks from the user's Library.
+_Avoid_: Shuffle when referring to AI selection

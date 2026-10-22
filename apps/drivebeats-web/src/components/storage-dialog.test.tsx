@@ -160,29 +160,29 @@ describe("StorageDialog offline recovery", () => {
   });
 
   it.each([
-    [
-      "granted",
-      "Granted (protected)",
-      "should not remove downloads automatically",
-    ],
-    ["not-granted", "Not granted (best effort)", "may remove downloads"],
-    ["unsupported", "Unsupported", "cannot request offline storage protection"],
-    [
-      "unknown",
-      "Unknown (not checked)",
-      "checked when you enable offline downloads",
-    ],
+    ["granted", false],
+    ["not-granted", true],
+    ["unsupported", true],
+    ["unknown", true],
   ] as const)(
-    "renders the actual %s persistence state",
-    (persistence, label, description) => {
+    "shows plain download advice only when needed for %s storage",
+    async (persistence, showsAdvice) => {
       setOfflineState({ persistence });
-
+      offlineDb.getTrackCount.mockResolvedValue(1);
       renderDialog();
-
+      await waitFor(() =>
+        expect(
+          screen.getByText("Downloaded tracks").parentElement,
+        ).toHaveTextContent("1"),
+      );
+      const advice = screen.queryByText(
+        "Your browser may remove downloads when space is low. You can download them again.",
+      );
+      if (showsAdvice) expect(advice).toBeInTheDocument();
+      else expect(advice).not.toBeInTheDocument();
       expect(
-        screen.getByText(`Offline storage protection: ${label}`),
-      ).toBeInTheDocument();
-      expect(screen.getByText(new RegExp(description))).toBeInTheDocument();
+        screen.queryByText(/Offline storage protection/),
+      ).not.toBeInTheDocument();
     },
   );
 
@@ -245,6 +245,9 @@ describe("StorageDialog offline recovery", () => {
     });
     renderDialog();
     expect(await screen.findByText("2.0 KB")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Your browser may remove downloads/),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Download diagnostics")).not.toBeInTheDocument();
     expect(
       screen.queryByText(/Estimated cached data size/),

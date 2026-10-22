@@ -6,8 +6,6 @@ import {
   HardDrive,
   Loader2,
   RotateCcw,
-  ShieldAlert,
-  ShieldCheck,
   Trash2,
   TriangleAlert,
   UserX,
@@ -34,10 +32,7 @@ import { formatBytes } from "@/lib/utils";
 import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { useLibrarySearchStore } from "@/stores/library-search-store";
 import { getFavoriteTracks, useLibraryStore } from "@/stores/library-store";
-import {
-  type StoragePersistenceStatus,
-  useOfflineStore,
-} from "@/stores/offline-store";
+import { useOfflineStore } from "@/stores/offline-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
 
 type View = "main" | "confirm-downloads" | "confirm-account";
@@ -46,28 +41,6 @@ interface StorageDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-const PERSISTENCE_COPY: Record<
-  StoragePersistenceStatus,
-  { label: string; description: string }
-> = {
-  granted: {
-    label: "Granted (protected)",
-    description: "The browser should not remove downloads automatically.",
-  },
-  "not-granted": {
-    label: "Not granted (best effort)",
-    description: "iOS may remove downloads when device storage is low.",
-  },
-  unsupported: {
-    label: "Unsupported",
-    description: "This browser cannot request offline storage protection.",
-  },
-  unknown: {
-    label: "Unknown (not checked)",
-    description: "Protection is checked when you enable offline downloads.",
-  },
-};
 
 export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
   const [view, setView] = useState<View>("main");
@@ -108,7 +81,6 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
     trackCount > 0 ||
     Object.keys(trackJobs).length > 0 ||
     Object.keys(offlineCollections).length > 0;
-  const persistenceCopy = PERSISTENCE_COPY[storagePersistence];
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -267,23 +239,12 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
                   </span>
                 </div>
               )}
-              <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-                <div className="flex items-start gap-2">
-                  {storagePersistence === "granted" ? (
-                    <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-500" />
-                  ) : (
-                    <ShieldAlert className="mt-0.5 size-4 shrink-0 text-amber-500" />
-                  )}
-                  <div>
-                    <p className="font-medium">
-                      Offline storage protection: {persistenceCopy.label}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {persistenceCopy.description}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              {trackCount > 0 && storagePersistence !== "granted" ? (
+                <p className="text-pretty text-muted-foreground">
+                  Your browser may remove downloads when space is low. You can
+                  download them again.
+                </p>
+              ) : null}
 
               {(hasStorageFullFailure || hasStorageUnavailableFailure) && (
                 <div

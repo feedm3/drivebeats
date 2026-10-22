@@ -65,7 +65,7 @@ export function FileListSkeleton() {
               </span>
             </TableHead>
             <TableHead className="hidden h-11 w-11 px-0 sm:table-cell" />
-            <TableHead className="h-11 w-11 px-0" />
+            <TableHead className="h-11 w-14 pl-0 pr-3" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -93,7 +93,7 @@ export function FileListSkeleton() {
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="w-11 px-0 py-0">
+                <TableCell className="w-14 py-0 pl-0 pr-3">
                   <div className="flex justify-center">
                     <div className="flex size-8 items-center justify-center rounded-md text-muted-foreground/35">
                       <MoreHorizontal className="size-3.5" />

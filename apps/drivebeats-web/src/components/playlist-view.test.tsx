@@ -153,6 +153,11 @@ describe("PlaylistView offline recovery controls", () => {
     });
     expect(manager.removeCollectionDownloads).not.toHaveBeenCalled();
 
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Remove downloads" }),
+      ).toBeEnabled();
+    });
     fireEvent.click(screen.getByRole("button", { name: "Remove downloads" }));
     expect(manager.removeCollectionDownloads).not.toHaveBeenCalled();
 

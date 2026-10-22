@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 
 function Slider({
   className,
+  "aria-label": ariaLabel,
   defaultValue,
   value,
   min = 0,
@@ -35,6 +36,7 @@ function Slider({
   return (
     <SliderPrimitive.Root
       data-slot="slider"
+      aria-label={ariaLabel}
       defaultValue={defaultValue}
       value={value}
       min={min}
@@ -85,6 +87,7 @@ function Slider({
           //    stays exactly on the value and dragging keeps its grab offset.
           <SliderPrimitive.Thumb
             data-slot="slider-thumb"
+            getAriaLabel={ariaLabel ? () => ariaLabel : undefined}
             key={thumbKeys[thumbIndex]}
             className="block size-4 shrink-0 rounded-full border border-primary bg-primary shadow-sm opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 pointer-coarse:before:absolute pointer-coarse:before:-inset-3.5 pointer-coarse:before:content-[''] transition-[color,box-shadow,opacity] ring-ring/50 hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
           />

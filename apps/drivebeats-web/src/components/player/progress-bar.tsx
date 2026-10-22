@@ -21,6 +21,7 @@ export function ProgressBar() {
         {formatTime(currentTime)}
       </span>
       <Slider
+        aria-label="Playback position"
         value={[currentTime]}
         max={duration || 100}
         step={0.1}

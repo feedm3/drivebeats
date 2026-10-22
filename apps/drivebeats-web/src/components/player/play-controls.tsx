@@ -5,7 +5,7 @@ import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { hasNextTrack, usePlayerStore } from "@/stores/player-store";
 
 const toggleControlClass =
-  "size-8 aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:hover:bg-primary/20 aria-pressed:hover:text-primary dark:aria-pressed:hover:bg-primary/25";
+  "size-11 sm:size-8 aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:hover:bg-primary/20 aria-pressed:hover:text-primary dark:aria-pressed:hover:bg-primary/25";
 
 export function PlayControls() {
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -37,11 +37,9 @@ export function PlayControls() {
   });
 
   return (
-    // The transport buttons stay 32px/40px visually; `touch-target` on Button
-    // widens each hit area to 44px. gap-2 would leave the 32px pairs only 40px
-    // apart centre-to-centre, so their expanded areas would overlap — gap-3
-    // puts every neighbouring pair at >=44px apart on touch.
-    <div className="flex items-center justify-center gap-2 pointer-coarse:gap-3">
+    // Mobile uses real 44px buttons and a 48px Play target. On desktop,
+    // preserve the compact controls and spacing for their expanded touch areas.
+    <div className="flex items-center justify-center gap-3 sm:gap-2 sm:pointer-coarse:gap-3">
       <IconTooltip label={`Shuffle is ${shuffle ? "on" : "off"}`}>
         <Button
           variant="ghost"
@@ -64,7 +62,7 @@ export function PlayControls() {
         <Button
           variant="ghost"
           size="icon"
-          className="size-8"
+          className="size-11 sm:size-8"
           aria-label="Previous track"
           onClick={() => void previous()}
         >
@@ -76,7 +74,7 @@ export function PlayControls() {
         <Button
           variant="default"
           size="icon"
-          className="size-10 rounded-full"
+          className="size-12 rounded-full sm:size-10"
           aria-label={isLoading ? "Loading" : isPlaying ? "Pause" : "Play"}
           onClick={togglePlay}
           disabled={
@@ -100,7 +98,7 @@ export function PlayControls() {
         <Button
           variant="ghost"
           size="icon"
-          className="size-8"
+          className="size-11 sm:size-8"
           aria-label="Next track"
           onClick={() => void next()}
           disabled={!hasNext}

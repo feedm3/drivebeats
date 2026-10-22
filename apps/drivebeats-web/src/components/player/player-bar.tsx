@@ -10,6 +10,7 @@ import { useLibraryStore } from "@/stores/library-store";
 import { hasNextTrack, usePlayerStore } from "@/stores/player-store";
 import { PlayControls } from "./play-controls";
 import { PlaybackQueuePopover } from "./playback-queue-popover";
+import { PlayerOptionsPopover } from "./player-options-popover";
 import { ProgressBar } from "./progress-bar";
 import { TrackInfo } from "./track-info";
 import { VolumeControl } from "./volume-control";
@@ -396,7 +397,7 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
         e.target instanceof HTMLTextAreaElement ||
         (e.target instanceof Element &&
           e.target.closest(
-            "button, a, [role='button'], [contenteditable='true'], [data-playback-queue]",
+            "button, a, [role='button'], [contenteditable='true'], [data-playback-queue], [data-player-options]",
           ))
       )
         return;
@@ -462,41 +463,21 @@ export function PlayerBar({ onNavigateToTrack }: PlayerBarProps) {
     >
       {/* The bar is `fixed`, so it escapes the shell's padding and needs its
           own horizontal insets for landscape on notched devices. */}
-      <div className="mx-auto max-w-[1440px] px-safe-4">
-        {/* On coarse pointers the seek slider grows its own 44px tap strip
-            (see slider.tsx), which already contains the gutter this padding
-            used to provide — dropping `pt-3` there keeps the visible track in
-            the same place instead of pushing the whole bar 12px taller, and
-            keeps the strip inside the bar so it cannot swallow taps on the
-            list scrolling behind it. */}
-        <div className="flex items-center gap-3 pt-3 pointer-coarse:pt-0">
+      <div className="mx-auto grid grid-cols-1 max-w-[1440px] gap-2 px-safe-4 py-3 sm:block sm:py-0">
+        <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:pt-3 sm:pointer-coarse:pt-0">
           <div className="min-w-0 flex-1">
             <ProgressBar />
           </div>
           <PlaybackQueuePopover />
         </div>
-        <div className="flex items-center gap-1 py-3 sm:hidden">
+        <div className="flex min-h-11 items-center gap-2 sm:hidden">
           {trackLabel}
-          {/* gap-3 on touch: the two 32px icon buttons need 44px between
-              centres so their expanded hit areas meet but never overlap. */}
-          {currentTrack ? (
-            <div className="flex shrink-0 items-center gap-1 pointer-coarse:gap-3">
-              <FavoriteToggleButton
-                fileId={currentTrack.id}
-                fileName={currentTrack.name}
-                mimeType={currentTrack.mimeType}
-                parents={currentTrack.parents}
-                size="icon-sm"
-                className="text-muted-foreground/80"
-              />
-              <AddToPlaylistPopover file={currentTrack} />
-            </div>
-          ) : null}
+          <PlayerOptionsPopover track={currentTrack} />
         </div>
-        <div className="relative flex items-center justify-center pb-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:py-3">
+        <div className="relative flex min-h-12 items-center justify-center sm:grid sm:grid-cols-3 sm:gap-4 sm:py-3">
           <div className="hidden sm:block">{trackLabel}</div>
           <PlayControls />
-          <div className="absolute right-0 sm:static standalone:hidden">
+          <div className="hidden sm:block standalone:hidden">
             <div className="flex items-center justify-end gap-1 pointer-coarse:gap-3">
               {currentTrack ? (
                 <FavoriteToggleButton

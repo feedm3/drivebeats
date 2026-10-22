@@ -76,7 +76,7 @@ function getEmptyStateDescription(collectionId: string) {
     return "Tracks appear here after you spend a bit of time listening";
   }
 
-  return "Use the + button on file rows to add songs";
+  return "Use the track menu to add tracks to this playlist";
 }
 
 // --- Drag-reorder logic isolated in a hook, driven by refs to avoid per-mousemove renders ---
@@ -381,6 +381,12 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
   const activeTrackId = pendingTrackId ?? currentTrack?.id;
   const isPlayingThisPlaylist = playingPlaylistId === collection.id;
   const isRecentlyPlayed = collection.id === RECENTLY_PLAYED_COLLECTION_ID;
+  const isFavorites = collection.id === FAVORITES_COLLECTION_ID;
+  const rowInfoLabel = isRecentlyPlayed
+    ? "Last played"
+    : isFavorites
+      ? "Plays on this device"
+      : undefined;
 
   return (
     <div className="mx-auto flex h-full min-w-0 flex-col overflow-hidden px-4 pt-7">
@@ -655,16 +661,22 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                 </span>
               </div>
               {collection.tracks.map((track, index) => {
-                const lastPlayedAt = isRecentlyPlayed
-                  ? libraryTracks[track.fileId]?.lastPlayedAt
-                  : undefined;
+                const lastPlayedAt = libraryTracks[track.fileId]?.lastPlayedAt;
+                const playCount = libraryTracks[track.fileId]?.playCount ?? 0;
+                const rowInfo = isRecentlyPlayed
+                  ? lastPlayedAt
+                    ? formatRelativeDate(lastPlayedAt)
+                    : "Not played yet"
+                  : isFavorites
+                    ? `${playCount} ${playCount === 1 ? "play" : "plays"}`
+                    : undefined;
                 return (
                   <div
                     key={track.fileId}
                     className="border-b last:border-b-0"
                     style={{
                       contentVisibility: "auto",
-                      containIntrinsicSize: "auto 52px",
+                      containIntrinsicSize: "auto 64px",
                     }}
                   >
                     <PlaylistTrackItem
@@ -678,9 +690,18 @@ export function PlaylistView({ collection, onBack }: PlaylistViewProps) {
                         currentTrack?.id === track.fileId
                       }
                       isPlaying={isPlaying}
-                      subtitle={
-                        lastPlayedAt
-                          ? formatRelativeDate(lastPlayedAt)
+                      rowInfo={rowInfo}
+                      rowInfoLabel={rowInfoLabel}
+                      isFavorites={isFavorites}
+                      onMoveUp={
+                        isEditablePlaylist && index > 0
+                          ? () => handleReorder(index, index - 1)
+                          : undefined
+                      }
+                      onMoveDown={
+                        isEditablePlaylist &&
+                        index < collection.tracks.length - 1
+                          ? () => handleReorder(index, index + 1)
                           : undefined
                       }
                       isDragging={drag.fromIndex === index}

@@ -8,16 +8,15 @@ import {
   Loader2,
   Music4,
   RotateCcw,
-  X,
 } from "lucide-react";
+import { useId, useState } from "react";
+import { FavoriteToggleButton } from "@/components/favorite-toggle-button";
 import { NowPlayingBars } from "@/components/now-playing-bars";
-import { QueueTrackActions } from "@/components/queue-track-actions";
-import { Button } from "@/components/ui/button";
-import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { TrackRowMenu } from "@/components/track-row-menu";
 import { useCachedTrackTags } from "@/hooks/use-cached-track-tags";
 import { playlistTrackToDriveFile } from "@/lib/audio";
 import { resolveTrackMetadata } from "@/lib/track-metadata";
-import { cn } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 import type {
   OfflineDownloadErrorCategory,
   OfflineTrackJob,
@@ -34,7 +33,11 @@ interface PlaylistTrackItemProps {
   dropIndicator: "above" | "below" | null;
   isReorderable?: boolean;
   offlineJob?: OfflineTrackJob;
-  subtitle?: string;
+  rowInfo?: string;
+  rowInfoLabel?: string;
+  isFavorites?: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
   onPlay: () => void;
   onRemove: () => void;
   removeLabel?: string;
@@ -89,17 +92,27 @@ export function PlaylistTrackItem({
   dropIndicator,
   isReorderable = true,
   offlineJob,
-  subtitle,
+  rowInfo,
+  rowInfoLabel,
+  isFavorites = false,
+  onMoveUp,
+  onMoveDown,
   onPlay,
   onRemove,
   removeLabel = "Remove from playlist",
 }: PlaylistTrackItemProps) {
-  const id3 = useCachedTrackTags(playlistTrackToDriveFile(track));
+  const file = playlistTrackToDriveFile(track);
+  const id3 = useCachedTrackTags(file);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const detailsId = useId();
   const { title, subtitle: metadataSubtitle } = resolveTrackMetadata(
     track.fileName,
     track.parentFolderName,
     id3,
   );
+  const desktopSubtitle = [metadataSubtitle, id3?.album]
+    .filter(Boolean)
+    .join(" · ");
   const offlineLabel = getOfflineLabel(offlineJob);
   const isActionRequiredFailure =
     offlineJob?.status === "failed" &&
@@ -107,142 +120,166 @@ export function PlaylistTrackItem({
     ACTION_REQUIRED_FAILURES.has(offlineJob.errorCategory);
 
   return (
-    <div
-      data-track-index={index}
-      data-active={isActive ? true : undefined}
-      className={cn(
-        "group relative flex w-full min-w-0 cursor-pointer items-center py-2 transition-colors hover:bg-muted/50 data-[active]:bg-primary/6",
-        isDragging && "opacity-30",
-      )}
-    >
-      {dropIndicator === "above" && (
-        <div className="absolute inset-x-0 top-0 z-10 h-0.5 bg-primary" />
-      )}
-      {dropIndicator === "below" && (
-        <div className="absolute inset-x-0 bottom-0 z-10 h-0.5 bg-primary" />
-      )}
-      {isReorderable ? (
+    <>
+      <div
+        data-track-index={index}
+        data-active={isActive ? true : undefined}
+        className={cn(
+          "group relative flex w-full min-w-0 cursor-pointer min-h-16 items-center transition-colors hover:bg-muted/50 data-[active]:bg-primary/6",
+          isDragging && "opacity-30",
+        )}
+      >
+        {dropIndicator === "above" && (
+          <div className="absolute inset-x-0 top-0 z-10 h-0.5 bg-primary" />
+        )}
+        {dropIndicator === "below" && (
+          <div className="absolute inset-x-0 bottom-0 z-10 h-0.5 bg-primary" />
+        )}
+        {isReorderable ? (
+          <button
+            type="button"
+            className="hidden sm:flex h-11 w-11 shrink-0 items-center justify-center self-center touch-none text-muted-foreground opacity-100 transition-opacity cursor-grab active:cursor-grabbing md:pointer-fine:opacity-0 md:pointer-fine:group-hover:opacity-100 md:pointer-fine:focus-visible:opacity-100"
+            data-drag-handle
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Reorder ${track.fileName}`}
+          >
+            <GripVertical className="size-4" />
+          </button>
+        ) : (
+          <div className="hidden w-3 shrink-0 sm:block" aria-hidden="true" />
+        )}
         <button
           type="button"
-          className="flex h-11 w-11 shrink-0 items-center justify-center self-center touch-none text-muted-foreground opacity-100 transition-opacity cursor-grab active:cursor-grabbing md:pointer-fine:opacity-0 md:pointer-fine:group-hover:opacity-100 md:pointer-fine:focus-visible:opacity-100"
-          data-drag-handle
-          onClick={(e) => e.stopPropagation()}
-          aria-label={`Reorder ${track.fileName}`}
+          className="flex min-w-0 flex-1 cursor-pointer min-h-16 items-center gap-3 overflow-hidden rounded-lg px-2 py-2 text-left"
+          aria-label={`Play ${track.fileName}`}
+          onClick={onPlay}
         >
-          <GripVertical className="size-4" />
-        </button>
-      ) : (
-        <div className="w-4 shrink-0" aria-hidden="true" />
-      )}
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 overflow-hidden rounded-lg px-2 py-2 text-left"
-        aria-label={`Play ${track.fileName}`}
-        onClick={onPlay}
-      >
-        {isCurrentlyPlaying ? (
-          <span
-            className={cn(
-              "shrink-0",
-              isActive ? "text-primary" : "text-muted-foreground",
-            )}
-          >
-            <NowPlayingBars className="size-4" paused={!isPlaying} />
-          </span>
-        ) : (
-          <span
-            className={cn(
-              "hidden shrink-0 md:inline-flex",
-              isActive ? "text-primary" : "text-muted-foreground",
-            )}
-          >
-            <Music4 className="size-4" />
-          </span>
-        )}
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{title}</span>
-          {metadataSubtitle && (
-            <span className="block truncate text-xs text-muted-foreground">
-              {metadataSubtitle}
-            </span>
-          )}
-          {offlineJob?.status === "failed" && offlineLabel && (
+          {isCurrentlyPlaying ? (
             <span
               className={cn(
-                "block text-xs",
-                isActionRequiredFailure
-                  ? "text-destructive"
-                  : "text-amber-600 dark:text-amber-400",
+                "shrink-0",
+                isActive ? "text-primary" : "text-muted-foreground",
               )}
             >
-              {offlineLabel}
+              <NowPlayingBars className="size-4" paused={!isPlaying} />
+            </span>
+          ) : (
+            <span
+              className={cn(
+                "shrink-0",
+                isActive ? "text-primary" : "text-muted-foreground",
+              )}
+            >
+              <Music4 className="size-4" />
             </span>
           )}
-        </span>
-        {offlineJob && offlineLabel && (
-          <span
-            className={cn(
-              "shrink-0 ml-1",
-              offlineJob.status === "downloaded"
-                ? "text-emerald-500"
-                : offlineJob.status === "failed"
-                  ? isActionRequiredFailure
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium">{title}</span>
+            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+              <span className="sm:hidden">{metadataSubtitle}</span>
+              <span className="hidden sm:inline" title={desktopSubtitle}>
+                {desktopSubtitle}
+              </span>
+            </span>
+            {offlineJob?.status === "failed" && offlineLabel && (
+              <span
+                className={cn(
+                  "block text-xs",
+                  isActionRequiredFailure
                     ? "text-destructive"
-                    : "text-amber-600 dark:text-amber-400"
-                  : "text-muted-foreground",
-            )}
-            title={offlineLabel}
-            role="img"
-            aria-label={offlineLabel}
-          >
-            {offlineJob.status === "downloaded" ? (
-              <Check aria-hidden="true" className="size-3" />
-            ) : offlineJob.status === "downloading" ||
-              offlineJob.status === "updating" ? (
-              <Loader2 aria-hidden="true" className="size-3 animate-spin" />
-            ) : offlineJob.status === "failed" ? (
-              isActionRequiredFailure ? (
-                <CircleAlert aria-hidden="true" className="size-3" />
-              ) : (
-                <RotateCcw aria-hidden="true" className="size-3" />
-              )
-            ) : (
-              <ArrowDown aria-hidden="true" className="size-3" />
+                    : "text-amber-600 dark:text-amber-400",
+                )}
+              >
+                {offlineLabel}
+              </span>
             )}
           </span>
-        )}
-      </button>
-      {subtitle && (
-        <span className="max-w-28 shrink-0 truncate px-2 text-xs tabular-nums text-muted-foreground">
-          {subtitle}
-        </span>
-      )}
-      <QueueTrackActions track={playlistTrackToDriveFile(track)} />
-      {/* On coarse pointers the 24px remove button carries a 44px `touch-target`
-          overlay. Without a slot wide enough to contain it, that overlay hangs
-          10px over the neighbouring play target and — painting later — would
-          turn a tap near the row edge into a removal. `w-14` plus centring keeps
-          the whole hit area inside this slot. */}
-      <div className="flex shrink-0 items-center pr-2 pointer-coarse:w-14 pointer-coarse:justify-center">
-        <IconTooltip label={removeLabel} side="left">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            // Was hover-only, so on a phone the remove action could never be
-            // reached. Same rule as the drag handle and the file-list row
-            // actions: visible by default, hidden until hover only where a
-            // hovering pointer actually exists.
-            className="opacity-100 md:pointer-fine:opacity-0 md:pointer-fine:group-hover:opacity-100 md:pointer-fine:focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemove();
-            }}
-            aria-label={`${removeLabel} ${track.fileName}`}
+          {offlineJob && offlineLabel && (
+            <span
+              className={cn(
+                "shrink-0 ml-1",
+                offlineJob.status === "downloaded"
+                  ? "text-emerald-500"
+                  : offlineJob.status === "failed"
+                    ? isActionRequiredFailure
+                      ? "text-destructive"
+                      : "text-amber-600 dark:text-amber-400"
+                    : "text-muted-foreground",
+              )}
+              title={offlineLabel}
+              role="img"
+              aria-label={offlineLabel}
+            >
+              {offlineJob.status === "downloaded" ? (
+                <Check aria-hidden="true" className="size-3" />
+              ) : offlineJob.status === "downloading" ||
+                offlineJob.status === "updating" ? (
+                <Loader2 aria-hidden="true" className="size-3 animate-spin" />
+              ) : offlineJob.status === "failed" ? (
+                isActionRequiredFailure ? (
+                  <CircleAlert aria-hidden="true" className="size-3" />
+                ) : (
+                  <RotateCcw aria-hidden="true" className="size-3" />
+                )
+              ) : (
+                <ArrowDown aria-hidden="true" className="size-3" />
+              )}
+            </span>
+          )}
+        </button>
+        {rowInfo ? (
+          <span
+            className="hidden max-w-32 shrink-0 truncate px-2 text-xs tabular-nums text-muted-foreground sm:block"
+            title={`${rowInfoLabel}: ${rowInfo}`}
           >
-            <X className="size-3.5" />
-          </Button>
-        </IconTooltip>
+            {rowInfo}
+          </span>
+        ) : (
+          <div className="hidden shrink-0 sm:block">
+            <FavoriteToggleButton
+              fileId={track.fileId}
+              fileName={track.fileName}
+              mimeType={file.mimeType}
+              parents={track.parents}
+              size="icon-sm"
+              className="size-11"
+            />
+          </div>
+        )}
+        <div className="shrink-0 pr-3">
+          <TrackRowMenu
+            file={file}
+            detailsOpen={detailsOpen}
+            detailsId={detailsId}
+            onDetails={() => setDetailsOpen((value) => !value)}
+            favoriteVisibility={
+              isFavorites ? "never" : rowInfo ? "always" : "mobile"
+            }
+            onRemove={onRemove}
+            removeLabel={removeLabel}
+            onMoveUp={onMoveUp}
+            onMoveDown={onMoveDown}
+          />
+        </div>
       </div>
-    </div>
+      {detailsOpen ? (
+        <div id={detailsId} className="bg-muted/20 px-4 py-3">
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs">
+            {rowInfo ? (
+              <>
+                <dt className="text-muted-foreground">{rowInfoLabel}</dt>
+                <dd>{rowInfo}</dd>
+              </>
+            ) : null}
+            <dt className="text-muted-foreground">Album</dt>
+            <dd className="break-words">{id3?.album || "No album tag"}</dd>
+            <dt className="text-muted-foreground">Size</dt>
+            <dd>{track.size ? formatBytes(Number(track.size)) : "—"}</dd>
+            <dt className="text-muted-foreground">File</dt>
+            <dd className="break-words">{track.fileName}</dd>
+          </dl>
+        </div>
+      ) : null}
+    </>
   );
 }

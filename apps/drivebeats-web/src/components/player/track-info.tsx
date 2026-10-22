@@ -29,7 +29,7 @@ export function TrackInfo({ onNavigateToTrack }: TrackInfoProps) {
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      <span className="hidden size-8 shrink-0 sm:flex items-center justify-center rounded-lg bg-primary/10 text-primary">
         <svg
           width="16"
           height="16"
@@ -47,27 +47,37 @@ export function TrackInfo({ onNavigateToTrack }: TrackInfoProps) {
           <circle cx="18" cy="16" r="3" />
         </svg>
       </span>
-      <div
-        key={currentTrack.id}
-        className="min-w-0 flex-1 animate-in fade-in duration-200"
-      >
-        {canNavigate ? (
-          <button
-            type="button"
-            className="block max-w-full truncate text-left text-sm font-semibold hover:underline"
-            onClick={onNavigateToTrack}
-          >
+      {canNavigate ? (
+        <button
+          key={currentTrack.id}
+          type="button"
+          className="flex min-h-11 min-w-0 flex-1 flex-col justify-center text-left animate-in fade-in duration-200 hover:underline sm:min-h-8"
+          onClick={onNavigateToTrack}
+        >
+          <span className="block w-full truncate text-sm font-semibold">
             {title}
-          </button>
-        ) : (
-          <span className="block truncate text-sm font-semibold">{title}</span>
-        )}
-        {subtitle && (
-          <span className="block truncate text-xs text-muted-foreground">
-            {subtitle}
           </span>
-        )}
-      </div>
+          {subtitle ? (
+            <span className="block w-full truncate text-xs text-muted-foreground">
+              {subtitle}
+            </span>
+          ) : null}
+        </button>
+      ) : (
+        <div
+          key={currentTrack.id}
+          className="flex min-h-11 min-w-0 flex-1 flex-col justify-center animate-in fade-in duration-200 sm:min-h-8"
+        >
+          <span className="block w-full truncate text-sm font-semibold">
+            {title}
+          </span>
+          {subtitle ? (
+            <span className="block w-full truncate text-xs text-muted-foreground">
+              {subtitle}
+            </span>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

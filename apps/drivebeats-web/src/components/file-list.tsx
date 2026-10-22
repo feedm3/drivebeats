@@ -1,18 +1,7 @@
 "use client";
 
-import {
-  Folder,
-  Heart,
-  Info,
-  ListEnd,
-  ListStart,
-  MoreHorizontal,
-  Music4,
-  Search,
-} from "lucide-react";
+import { Folder, Music4, Search } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
-import { AddToPlaylistPopover } from "@/components/add-to-playlist-popover";
 import { FavoriteToggleButton } from "@/components/favorite-toggle-button";
 import {
   FILE_TABLE_SHELL_CLASS,
@@ -20,13 +9,8 @@ import {
 } from "@/components/file-list-skeleton";
 import { HighlightedName } from "@/components/highlighted-name";
 import { NowPlayingBars } from "@/components/now-playing-bars";
+import { TrackRowMenu } from "@/components/track-row-menu";
 import { Button } from "@/components/ui/button";
-import {
-  POPOVER_MENU_ITEM_CLASS,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
@@ -47,7 +31,6 @@ import {
 } from "@/lib/metadata-index-coordinator";
 import { resolveTrackMetadata } from "@/lib/track-metadata";
 import { cn } from "@/lib/utils";
-import { useLibraryStore } from "@/stores/library-store";
 import { usePlayerStore } from "@/stores/player-store";
 import type { DriveFile, FolderEntry } from "@/types";
 import { FOLDER_MIME } from "@/types";
@@ -70,111 +53,6 @@ type NameSortDirection = "asc" | "desc";
 const INITIAL_VISIBLE_FILE_COUNT = 200;
 const VISIBLE_FILE_BATCH_SIZE = 200;
 const rowActionCellClassName = "w-11 px-0 py-0";
-
-function FileRowMenu({
-  file,
-  folderStack,
-  onDetails,
-  detailsOpen,
-}: {
-  file: DriveFile;
-  folderStack: FolderEntry[];
-  onDetails: () => void;
-  detailsOpen: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const favorite = useLibraryStore((state) =>
-    Boolean(state.tracks[file.id]?.isFavorite),
-  );
-  const folder = isFolder(file);
-  function queue(position: "next" | "end") {
-    usePlayerStore.getState().queueTrack(file, position, folderStack);
-    setOpen(false);
-    toast.success(position === "next" ? "Will play next" : "Added to queue");
-  }
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="size-11"
-            aria-label={`More options for ${file.name}`}
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-          />
-        }
-      >
-        <MoreHorizontal aria-hidden="true" />
-      </PopoverTrigger>
-      {open ? (
-        <PopoverContent
-          align="end"
-          aria-label={`Options for ${file.name}`}
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
-          {!folder ? (
-            <button
-              type="button"
-              className={cn(POPOVER_MENU_ITEM_CLASS, "min-h-11 sm:hidden")}
-              onClick={() => {
-                void useLibraryStore.getState().toggleFavorite({
-                  fileId: file.id,
-                  fileName: file.name,
-                  mimeType: file.mimeType,
-                  parents: file.parents,
-                });
-                setOpen(false);
-              }}
-            >
-              <Heart className={cn("size-4", favorite && "fill-current")} />
-              {favorite ? "Remove from favorites" : "Add to favorites"}
-            </button>
-          ) : null}
-          <AddToPlaylistPopover file={file} menuItem />
-          {!folder ? (
-            <>
-              <button
-                type="button"
-                className={cn(POPOVER_MENU_ITEM_CLASS, "min-h-11")}
-                onClick={() => queue("next")}
-              >
-                <ListStart className="size-4" />
-                Play next
-              </button>
-              <button
-                type="button"
-                className={cn(POPOVER_MENU_ITEM_CLASS, "min-h-11")}
-                onClick={() => queue("end")}
-              >
-                <ListEnd className="size-4" />
-                Add to queue
-              </button>
-              <button
-                type="button"
-                className={cn(POPOVER_MENU_ITEM_CLASS, "min-h-11")}
-                aria-expanded={detailsOpen}
-                aria-controls={
-                  detailsOpen ? `track-details-${file.id}` : undefined
-                }
-                onClick={() => {
-                  onDetails();
-                  setOpen(false);
-                }}
-              >
-                <Info className="size-4" />
-                {detailsOpen ? "Hide track details" : "Track details"}
-              </button>
-            </>
-          ) : null}
-        </PopoverContent>
-      ) : null}
-    </Popover>
-  );
-}
 
 function isFolder(file: DriveFile) {
   return file.mimeType === FOLDER_MIME;
@@ -405,8 +283,8 @@ const FileListRow = memo(function FileListRow({
             />
           ) : null}
         </TableCell>
-        <TableCell className={rowActionCellClassName}>
-          <FileRowMenu
+        <TableCell className="w-14 py-0 pl-0 pr-3">
+          <TrackRowMenu
             file={file}
             folderStack={
               playlistFolderStacks?.[
@@ -652,7 +530,7 @@ export function FileList({
                   </button>
                 </TableHead>
                 <TableHead className="hidden h-11 w-11 px-0 sm:table-cell" />
-                <TableHead className="h-11 w-11 px-0" />
+                <TableHead className="h-11 w-14 pl-0 pr-3" />
               </TableRow>
             </TableHeader>
             <TableBody>

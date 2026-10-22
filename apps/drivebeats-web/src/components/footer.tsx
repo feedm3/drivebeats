@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function Footer() {
   return (
@@ -21,6 +22,9 @@ export function Footer() {
         >
           Made by Fabian Dietenberger
         </a>
+      </div>
+      <div className="mt-4 flex justify-center">
+        <ThemeToggle />
       </div>
     </footer>
   );

@@ -27,7 +27,7 @@ export function ThemeToggle({ size = "default" }: ThemeToggleProps) {
 
   useEffect(() => setMounted(true), []);
 
-  // Placeholder must track the coarse-pointer sizes below or the header jumps
+  // Placeholder must track the coarse-pointer sizes below or the layout jumps
   // on hydration.
   if (!mounted) {
     return (
@@ -51,9 +51,7 @@ export function ThemeToggle({ size = "default" }: ThemeToggleProps) {
   // These grow with real padding instead, which moves the segments apart as
   // it grows them. Both variants reach a square 44x44 on coarse pointers
   // (16px icon + 2x14px) — padding has to stay symmetric or the segments
-  // turn into narrow portrait slivers that read as squashed together. The
-  // header variant then measures 140px, which still clears the ~157px the
-  // 320px marketing header leaves beside the wordmark.
+  // turn into narrow portrait slivers that read as squashed together.
   const buttonClass =
     size === "menu"
       ? "rounded-full p-1.5 pointer-coarse:p-3.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"

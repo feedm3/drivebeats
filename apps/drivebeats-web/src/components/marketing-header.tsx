@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { SignInButton } from "@/components/sign-in-button";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 export function MarketingHeader() {
   return (
@@ -25,7 +24,6 @@ export function MarketingHeader() {
           DriveBeats
         </Link>
         <div className="ml-auto flex items-center gap-2">
-          <ThemeToggle />
           <SignInButton className="hidden h-9 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:inline-flex" />
         </div>
       </div>

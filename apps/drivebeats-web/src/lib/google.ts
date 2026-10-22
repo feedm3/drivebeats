@@ -107,7 +107,7 @@ function verifyJwtSignature(
 ) {
   const signingInput = `${headerSegment}.${payloadSegment}`;
   const publicKey = createPublicKey({
-    key: jwk as JsonWebKey,
+    key: { ...jwk },
     format: "jwk",
   });
 

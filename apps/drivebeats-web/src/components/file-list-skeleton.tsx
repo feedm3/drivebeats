@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Heart, Music4, Plus } from "lucide-react";
+import { Folder, Heart, MoreHorizontal, Music4 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
@@ -17,43 +17,36 @@ const LOADING_ROWS = [
     id: "loading-folder-1",
     type: "folder" as const,
     nameWidth: "w-40",
-    sizeWidth: null,
   },
   {
     id: "loading-folder-2",
     type: "folder" as const,
     nameWidth: "w-52",
-    sizeWidth: null,
   },
   {
     id: "loading-folder-3",
     type: "folder" as const,
     nameWidth: "w-36",
-    sizeWidth: null,
   },
   {
     id: "loading-track-1",
     type: "track" as const,
     nameWidth: "w-56",
-    sizeWidth: "w-14",
   },
   {
     id: "loading-track-2",
     type: "track" as const,
     nameWidth: "w-44",
-    sizeWidth: "w-12",
   },
   {
     id: "loading-track-3",
     type: "track" as const,
     nameWidth: "w-48",
-    sizeWidth: "w-16",
   },
   {
     id: "loading-track-4",
     type: "track" as const,
     nameWidth: "w-52",
-    sizeWidth: "w-14",
   },
 ];
 
@@ -71,13 +64,8 @@ export function FileListSkeleton() {
                 Name
               </span>
             </TableHead>
-            <TableHead className="h-11 w-9 px-0.5" />
-            <TableHead className="h-11 w-9 px-0.5" />
-            <TableHead className="hidden h-11 w-[96px] px-4 text-right sm:table-cell">
-              <span className="text-xs font-semibold tracking-[0.16em] uppercase">
-                Size
-              </span>
-            </TableHead>
+            <TableHead className="hidden h-11 w-11 px-0 sm:table-cell" />
+            <TableHead className="h-11 w-11 px-0" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -86,8 +74,8 @@ export function FileListSkeleton() {
 
             return (
               <TableRow key={row.id}>
-                <TableCell className="max-w-0 p-0 sm:p-4">
-                  <div className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left">
+                <TableCell className="max-w-0 p-0 sm:px-3 sm:py-0">
+                  <div className="flex min-h-16 w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left">
                     <span className="shrink-0 text-muted-foreground">
                       <Icon className="size-4" />
                     </span>
@@ -96,7 +84,7 @@ export function FileListSkeleton() {
                     />
                   </div>
                 </TableCell>
-                <TableCell className="w-9 px-0.5">
+                <TableCell className="hidden w-11 px-0 py-0 sm:table-cell">
                   <div className="flex justify-center">
                     <div className="flex size-8 items-center justify-center rounded-md text-muted-foreground/35">
                       {row.type === "folder" ? null : (
@@ -105,23 +93,12 @@ export function FileListSkeleton() {
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="w-9 px-0.5">
+                <TableCell className="w-11 px-0 py-0">
                   <div className="flex justify-center">
                     <div className="flex size-8 items-center justify-center rounded-md text-muted-foreground/35">
-                      <Plus className="size-3.5" />
+                      <MoreHorizontal className="size-3.5" />
                     </div>
                   </div>
-                </TableCell>
-                <TableCell className="hidden text-right text-muted-foreground tabular-nums sm:table-cell">
-                  {row.type === "folder" ? (
-                    "—"
-                  ) : (
-                    <div className="flex justify-end">
-                      <Skeleton
-                        className={cn("h-4 rounded-full", row.sizeWidth)}
-                      />
-                    </div>
-                  )}
                 </TableCell>
               </TableRow>
             );

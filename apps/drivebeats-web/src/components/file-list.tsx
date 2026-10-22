@@ -1,7 +1,17 @@
 "use client";
 
-import { Folder, Music4, Search } from "lucide-react";
+import {
+  Folder,
+  Heart,
+  Info,
+  ListEnd,
+  ListStart,
+  MoreHorizontal,
+  Music4,
+  Search,
+} from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { AddToPlaylistPopover } from "@/components/add-to-playlist-popover";
 import { FavoriteToggleButton } from "@/components/favorite-toggle-button";
 import {
@@ -10,8 +20,13 @@ import {
 } from "@/components/file-list-skeleton";
 import { HighlightedName } from "@/components/highlighted-name";
 import { NowPlayingBars } from "@/components/now-playing-bars";
-import { QueueTrackActions } from "@/components/queue-track-actions";
 import { Button } from "@/components/ui/button";
+import {
+  POPOVER_MENU_ITEM_CLASS,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
@@ -32,6 +47,7 @@ import {
 } from "@/lib/metadata-index-coordinator";
 import { resolveTrackMetadata } from "@/lib/track-metadata";
 import { cn } from "@/lib/utils";
+import { useLibraryStore } from "@/stores/library-store";
 import { usePlayerStore } from "@/stores/player-store";
 import type { DriveFile, FolderEntry } from "@/types";
 import { FOLDER_MIME } from "@/types";
@@ -53,17 +69,112 @@ interface FileListProps {
 type NameSortDirection = "asc" | "desc";
 const INITIAL_VISIBLE_FILE_COUNT = 200;
 const VISIBLE_FILE_BATCH_SIZE = 200;
-// Row actions are revealed on hover, but only where hovering exists: the
-// `pointer-fine` capability query keeps them permanently visible on a tablet,
-// which is wide enough for `md:` yet has no pointer to hover with.
-const rowActionClassName =
-  "opacity-100 transition-none md:pointer-fine:opacity-0 md:pointer-fine:group-hover:opacity-100 md:pointer-fine:focus-visible:opacity-100";
-// The two action columns are 36px wide on a mouse. On touch each button's hit
-// area grows to 44px, so the columns grow to match: 44px columns put the two
-// buttons exactly 44px apart centre-to-centre, which is the closest they can
-// sit without one stealing taps from the other.
-const rowActionCellClassName =
-  "w-9 px-0.5 pointer-coarse:w-11 pointer-coarse:px-0";
+const rowActionCellClassName = "w-11 px-0 py-0";
+
+function FileRowMenu({
+  file,
+  folderStack,
+  onDetails,
+  detailsOpen,
+}: {
+  file: DriveFile;
+  folderStack: FolderEntry[];
+  onDetails: () => void;
+  detailsOpen: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const favorite = useLibraryStore((state) =>
+    Boolean(state.tracks[file.id]?.isFavorite),
+  );
+  const folder = isFolder(file);
+  function queue(position: "next" | "end") {
+    usePlayerStore.getState().queueTrack(file, position, folderStack);
+    setOpen(false);
+    toast.success(position === "next" ? "Will play next" : "Added to queue");
+  }
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-11"
+            aria-label={`More options for ${file.name}`}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          />
+        }
+      >
+        <MoreHorizontal aria-hidden="true" />
+      </PopoverTrigger>
+      {open ? (
+        <PopoverContent
+          align="end"
+          aria-label={`Options for ${file.name}`}
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {!folder ? (
+            <button
+              type="button"
+              className={cn(POPOVER_MENU_ITEM_CLASS, "min-h-11 sm:hidden")}
+              onClick={() => {
+                void useLibraryStore.getState().toggleFavorite({
+                  fileId: file.id,
+                  fileName: file.name,
+                  mimeType: file.mimeType,
+                  parents: file.parents,
+                });
+                setOpen(false);
+              }}
+            >
+              <Heart className={cn("size-4", favorite && "fill-current")} />
+              {favorite ? "Remove from favorites" : "Add to favorites"}
+            </button>
+          ) : null}
+          <AddToPlaylistPopover file={file} menuItem />
+          {!folder ? (
+            <>
+              <button
+                type="button"
+                className={cn(POPOVER_MENU_ITEM_CLASS, "min-h-11")}
+                onClick={() => queue("next")}
+              >
+                <ListStart className="size-4" />
+                Play next
+              </button>
+              <button
+                type="button"
+                className={cn(POPOVER_MENU_ITEM_CLASS, "min-h-11")}
+                onClick={() => queue("end")}
+              >
+                <ListEnd className="size-4" />
+                Add to queue
+              </button>
+              <button
+                type="button"
+                className={cn(POPOVER_MENU_ITEM_CLASS, "min-h-11")}
+                aria-expanded={detailsOpen}
+                aria-controls={
+                  detailsOpen ? `track-details-${file.id}` : undefined
+                }
+                onClick={() => {
+                  onDetails();
+                  setOpen(false);
+                }}
+              >
+                <Info className="size-4" />
+                {detailsOpen ? "Hide track details" : "Track details"}
+              </button>
+            </>
+          ) : null}
+        </PopoverContent>
+      ) : null}
+    </Popover>
+  );
+}
 
 function isFolder(file: DriveFile) {
   return file.mimeType === FOLDER_MIME;
@@ -80,6 +191,7 @@ function onRowKeyDown(
   event: React.KeyboardEvent<HTMLTableRowElement>,
   onActivate: () => void,
 ) {
+  if (event.target !== event.currentTarget) return;
   if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
     onActivate();
@@ -122,26 +234,19 @@ function sortFilesByName(
   });
 }
 
-function MobileFileMetadata({
+function FileMetadata({
   file,
   context,
   searchQuery,
-  cachedTags,
+  tags,
 }: {
-  cachedTags?: Id3Metadata;
   file: DriveFile;
   context?: string;
   searchQuery: string;
+  tags?: Id3Metadata;
 }) {
-  const liveTags = useCachedTrackTags(file);
-  const id3 = cachedTags ?? liveTags;
-  const folder = isFolder(file);
-  const metadata = resolveTrackMetadata(file.name, file.parentFolderName, id3);
-  const artistAndSize = [metadata.subtitle, formatSize(file.size)]
-    .filter(Boolean)
-    .join(" · ");
-
-  if (folder) {
+  const metadata = resolveTrackMetadata(file.name, file.parentFolderName, tags);
+  if (isFolder(file))
     return (
       <>
         <HighlightedName name={file.name} searchQuery={searchQuery} />
@@ -152,19 +257,16 @@ function MobileFileMetadata({
         ) : null}
       </>
     );
-  }
-
+  const subtitle = [metadata.subtitle, tags?.album].filter(Boolean).join(" · ");
   return (
     <>
       <HighlightedName name={metadata.title} searchQuery={searchQuery} />
       <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-        {artistAndSize}
-      </span>
-      {id3?.album ? (
-        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground/80">
-          {id3.album}
+        <span className="sm:hidden">{metadata.subtitle}</span>
+        <span className="hidden sm:inline" title={subtitle}>
+          {subtitle}
         </span>
-      ) : null}
+      </span>
     </>
   );
 }
@@ -203,6 +305,10 @@ const FileListRow = memo(function FileListRow({
   togglePlay,
 }: FileListRowProps) {
   const rowRef = useRef<HTMLTableRowElement>(null);
+  const liveTags = useCachedTrackTags(file);
+  const tags = cachedTags ?? liveTags;
+  const metadata = resolveTrackMetadata(file.name, file.parentFolderName, tags);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   useEffect(() => {
     if (!rowRef.current || isFolder(file)) return;
     return observeVisibleMetadataTrack(rowRef.current, file);
@@ -233,99 +339,105 @@ const FileListRow = memo(function FileListRow({
       });
 
   return (
-    <TableRow
-      ref={rowRef}
-      title={file.name}
-      data-active={isActive || undefined}
-      tabIndex={0}
-      role="button"
-      aria-label={folder ? `Open folder ${file.name}` : `Play ${file.name}`}
-      // `active:bg-muted` is the touch press state: with the iOS tap highlight
-      // removed, `hover:` alone leaves a tap on the row looking dead.
-      className="group cursor-pointer active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-      onClick={onActivate}
-      onKeyDown={(event) => onRowKeyDown(event, onActivate)}
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.effectAllowed = "copy";
-        e.dataTransfer.setData("application/drivebeats", dragData);
-      }}
-    >
-      <TableCell className="max-w-0 p-0 sm:p-4">
-        <div
-          className={cn(
-            "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-all",
-            isActive && "text-primary",
-          )}
-        >
-          <span
+    <>
+      <TableRow
+        ref={rowRef}
+        title={file.name}
+        data-active={isActive || undefined}
+        tabIndex={0}
+        role="button"
+        aria-label={folder ? `Open folder ${file.name}` : `Play ${file.name}`}
+        // `active:bg-muted` is the touch press state: with the iOS tap highlight
+        // removed, `hover:` alone leaves a tap on the row looking dead.
+        className="group cursor-pointer active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        onClick={onActivate}
+        onKeyDown={(event) => onRowKeyDown(event, onActivate)}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = "copy";
+          e.dataTransfer.setData("application/drivebeats", dragData);
+        }}
+      >
+        <TableCell className="max-w-0 p-0 sm:px-3 sm:py-0">
+          <div
             className={cn(
-              "shrink-0",
-              isPlayingAncestor || isActive
-                ? "text-primary"
-                : "text-muted-foreground",
+              "flex min-h-16 w-full items-center gap-3 px-2 py-2 text-left",
+              isActive && "text-primary",
             )}
           >
-            {isPlayingAncestor || isCurrentlyPlaying ? (
-              <NowPlayingBars className="size-4" paused={isPlaybackPaused} />
-            ) : folder ? (
-              <Folder className="size-4" />
-            ) : (
-              <Music4 className="size-4" />
-            )}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="sm:hidden">
-              <MobileFileMetadata
+            <span
+              className={cn(
+                "shrink-0",
+                isPlayingAncestor || isActive
+                  ? "text-primary"
+                  : "text-muted-foreground",
+              )}
+            >
+              {isPlayingAncestor || isCurrentlyPlaying ? (
+                <NowPlayingBars className="size-4" paused={isPlaybackPaused} />
+              ) : folder ? (
+                <Folder className="size-4" />
+              ) : (
+                <Music4 className="size-4" />
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <FileMetadata
                 file={file}
                 context={context}
-                cachedTags={cachedTags}
+                tags={tags}
                 searchQuery={searchQuery}
               />
             </span>
-            <span className="hidden sm:block">
-              <MobileFileMetadata
-                file={file}
-                context={context}
-                cachedTags={cachedTags}
-                searchQuery={searchQuery}
-              />
-            </span>
-          </span>
-        </div>
-      </TableCell>
-      <TableCell className={rowActionCellClassName}>
-        {!folder ? (
-          <FavoriteToggleButton
-            fileId={file.id}
-            fileName={file.name}
-            mimeType={file.mimeType}
-            parents={file.parents}
-            size="icon-sm"
-            className={rowActionClassName}
-          />
-        ) : null}
-      </TableCell>
-      <TableCell className={rowActionCellClassName}>
-        <AddToPlaylistPopover file={file} className={rowActionClassName} />
-      </TableCell>
-      <TableCell className="w-11 px-0">
-        {!folder ? (
-          <QueueTrackActions
-            track={file}
+          </div>
+        </TableCell>
+        <TableCell
+          className={cn(rowActionCellClassName, "hidden sm:table-cell")}
+        >
+          {!folder ? (
+            <FavoriteToggleButton
+              fileId={file.id}
+              fileName={file.name}
+              mimeType={file.mimeType}
+              parents={file.parents}
+              size="icon-sm"
+              className="size-11"
+            />
+          ) : null}
+        </TableCell>
+        <TableCell className={rowActionCellClassName}>
+          <FileRowMenu
+            file={file}
             folderStack={
               playlistFolderStacks?.[
                 playableTracks.findIndex((track) => track.id === file.id)
               ] ?? folderStack
             }
-            className={rowActionClassName}
+            onDetails={() => setDetailsOpen((value) => !value)}
+            detailsOpen={detailsOpen}
           />
-        ) : null}
-      </TableCell>
-      <TableCell className="hidden text-right text-muted-foreground tabular-nums sm:table-cell">
-        {folder ? "—" : formatSize(file.size)}
-      </TableCell>
-    </TableRow>
+        </TableCell>
+      </TableRow>
+      {detailsOpen ? (
+        <TableRow
+          id={`track-details-${file.id}`}
+          className="bg-muted/20 hover:bg-muted/20"
+        >
+          <TableCell colSpan={3} className="px-4 py-3 whitespace-normal">
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs">
+              <dt className="text-muted-foreground">Title</dt>
+              <dd className="break-words">{metadata.title}</dd>
+              <dt className="text-muted-foreground">Album</dt>
+              <dd className="break-words">{tags?.album || "No album tag"}</dd>
+              <dt className="text-muted-foreground">Size</dt>
+              <dd>{formatSize(file.size)}</dd>
+              <dt className="text-muted-foreground">File</dt>
+              <dd className="break-words">{file.name}</dd>
+            </dl>
+          </TableCell>
+        </TableRow>
+      ) : null}
+    </>
   );
 });
 
@@ -539,14 +651,8 @@ export function FileList({
                     </span>
                   </button>
                 </TableHead>
-                <TableHead className={cn("h-11", rowActionCellClassName)} />
-                <TableHead className={cn("h-11", rowActionCellClassName)} />
+                <TableHead className="hidden h-11 w-11 px-0 sm:table-cell" />
                 <TableHead className="h-11 w-11 px-0" />
-                <TableHead className="hidden h-11 w-[96px] px-4 text-right sm:table-cell">
-                  <span className="text-xs font-semibold tracking-[0.16em] uppercase">
-                    Size
-                  </span>
-                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -583,15 +689,15 @@ export function FileList({
               })}
             </TableBody>
           </Table>
-          {visibleFiles.length < filteredFiles.length ? (
-            <div
-              ref={loadMoreRef}
-              className="flex h-14 items-center justify-center px-4 text-xs text-muted-foreground"
-            >
-              Showing {visibleFiles.length} of {filteredFiles.length} items
-            </div>
-          ) : null}
         </div>
+        {visibleFiles.length < filteredFiles.length ? (
+          <div
+            ref={loadMoreRef}
+            className="flex h-14 items-center justify-center px-4 text-xs text-muted-foreground"
+          >
+            Showing {visibleFiles.length} of {filteredFiles.length} items
+          </div>
+        ) : null}
       </div>
     </ScrollArea>
   );

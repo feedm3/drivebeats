@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import {
+  POPOVER_MENU_ITEM_CLASS,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -31,11 +32,13 @@ import { FOLDER_MIME } from "@/types";
 interface AddToPlaylistPopoverProps {
   file: DriveFile;
   className?: string;
+  menuItem?: boolean;
 }
 
 export function AddToPlaylistPopover({
   file,
   className,
+  menuItem = false,
 }: AddToPlaylistPopoverProps) {
   const addTracks = usePlaylistStore((s) => s.addTracks);
   const removeTrack = usePlaylistStore((s) => s.removeTrack);
@@ -122,6 +125,33 @@ export function AddToPlaylistPopover({
     setNewName("");
   }
 
+  const trigger = (
+    <PopoverTrigger
+      render={
+        <button
+          type="button"
+          // Not a <Button>, so it opts into `touch-target` by hand.
+          className={cn(
+            menuItem
+              ? cn(POPOVER_MENU_ITEM_CLASS, "min-h-11")
+              : "touch-target inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-[opacity,color,background-color] hover:bg-accent hover:text-foreground",
+            className,
+          )}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          aria-label={
+            menuItem
+              ? `Add to playlist: ${file.name}`
+              : `Add ${file.name} to playlist`
+          }
+        />
+      }
+    >
+      <Plus className="size-3.5" />
+      {menuItem ? "Add to playlist" : null}
+    </PopoverTrigger>
+  );
+
   return (
     <Popover
       open={open}
@@ -136,26 +166,19 @@ export function AddToPlaylistPopover({
         setPlaylistsSnapshot(usePlaylistStore.getState().playlists);
       }}
     >
-      <IconTooltip label="Add to playlist" side="top" align="end">
-        <PopoverTrigger
-          render={
-            <button
-              type="button"
-              // Not a <Button>, so it opts into `touch-target` by hand.
-              className={cn(
-                "touch-target inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-[opacity,color,background-color] hover:bg-accent hover:text-foreground",
-                className,
-              )}
-              onClick={(e) => e.stopPropagation()}
-              aria-label={`Add ${file.name} to playlist`}
-            />
-          }
-        >
-          <Plus className="size-3.5" />
-        </PopoverTrigger>
-      </IconTooltip>
+      {menuItem ? (
+        trigger
+      ) : (
+        <IconTooltip label="Add to playlist" side="top" align="end">
+          {trigger}
+        </IconTooltip>
+      )}
       {open ? (
-        <PopoverContent side="left" align="start" className="w-52">
+        <PopoverContent
+          side={menuItem ? "bottom" : "left"}
+          align="start"
+          className="w-52"
+        >
           <div className="max-h-60 overflow-y-auto">
             {playlistsSnapshot.map((p) => {
               const isInPlaylist = !isFolder && containedPlaylistIds.has(p.id);

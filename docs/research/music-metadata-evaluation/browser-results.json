@@ -1,0 +1,1880 @@
+{
+  "results": {
+    "chromium": {
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "samples": [
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "tagged.mp3",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "tagged.flac",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 3,
+            "bytes": 8435
+          },
+          "file": "tagged.m4a",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 4,
+            "bytes": 8435
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "tagged.wav",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "error": "tagFormat"
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {},
+            "requests": 2,
+            "bytes": 4224
+          },
+          "file": "tagged.aac",
+          "local": {
+            "tags": {}
+          },
+          "old": {
+            "error": "tagFormat"
+          },
+          "remote": {
+            "tags": {},
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "remoteForward4k": {
+            "error": "budget_exceeded",
+            "requests": 4,
+            "bytes": 16384
+          },
+          "file": "tagged.ogg",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "error": "tagFormat"
+          },
+          "remote": {
+            "error": "budget_exceeded",
+            "requests": 4,
+            "bytes": 12416
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "id3v22.mp3",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "id3v23.mp3",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "id3v24.mp3",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "error": "budget_exceeded",
+            "requests": 4,
+            "bytes": 196618
+          },
+          "file": "art-262144.mp3",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 4,
+            "bytes": 266467
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "art-1200000.mp3",
+          "local": {
+            "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)"
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095], [1200020, 1200098]]
+          },
+          "remoteForward4k": {
+            "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "art-first.mp3",
+          "local": {
+            "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)"
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "T",
+                "artist": "A"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095], [4096, 20073]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            },
+            "requests": 3,
+            "bytes": 24170
+          },
+          "file": "unusual-id.mp3",
+          "local": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            },
+            "requests": 4,
+            "bytes": 24298
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "T"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "T"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "raw-v24-size.mp3",
+          "local": {
+            "tags": {
+              "title": "T"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "T"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "T"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "T",
+                "artist": "A"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [
+              [0, 4095],
+              [20032, 24127],
+              [40042, 44137],
+              [60052, 80073]
+            ]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            },
+            "requests": 4,
+            "bytes": 84170
+          },
+          "file": "several-artworks.mp3",
+          "local": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            },
+            "requests": 4,
+            "bytes": 84298
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "T",
+                "artist": "A"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095], [20032, 24127], [40042, 40053]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            },
+            "requests": 3,
+            "bytes": 44150
+          },
+          "file": "two-artworks.mp3",
+          "local": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            },
+            "requests": 4,
+            "bytes": 44278
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "T"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "T"
+            },
+            "requests": 3,
+            "bytes": 24128
+          },
+          "file": "malformed-art-length.mp3",
+          "local": {
+            "tags": {
+              "title": "T"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "T"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "T"
+            },
+            "requests": 4,
+            "bytes": 24256
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095], [320782, 320909]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          },
+          "file": "tail-v1.mp3",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 4,
+            "bytes": 4256
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "no_target_tags",
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095], [320654, 320781]]
+          },
+          "remoteForward4k": {
+            "tags": {},
+            "requests": 2,
+            "bytes": 4224
+          },
+          "file": "tagless.mp3",
+          "local": {
+            "tags": {}
+          },
+          "old": {
+            "error": "tagFormat"
+          },
+          "remote": {
+            "tags": {},
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 3,
+            "bytes": 8435
+          },
+          "file": "tagged.mp4",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 4,
+            "bytes": 8435
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "id3.aac",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "application": {
+            "error": "parse_error",
+            "ranges": [[0, 4095], [65408, 65535]]
+          },
+          "remoteForward4k": {
+            "error": "budget_exceeded",
+            "requests": 4,
+            "bytes": 16384
+          },
+          "file": "malformed.mp3",
+          "local": {
+            "error": "Failed to determine audio format"
+          },
+          "old": {
+            "error": "tagFormat"
+          },
+          "remote": {
+            "error": "budget_exceeded",
+            "requests": 4,
+            "bytes": 12416
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "A\u00ff\u00e1B"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "A\u00ff\u0000\u00e1"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "global-unsync.mp3",
+          "local": {
+            "tags": {
+              "title": "A\u00ff\u0000\u00e1"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "A\u00ff\u00e1B"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "A\u00ff\u0000\u00e1"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 8192
+          },
+          "file": "flac-art.flac",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 3,
+            "bytes": 8320
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4204
+          },
+          "file": "tail-info.wav",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "error": "tagFormat"
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        }
+      ],
+      "timings": {
+        "candidate": {
+          "median": 2.9000000059604645,
+          "p95": 3.600000001490116,
+          "max": 3.7000000029802322
+        },
+        "previous": {
+          "median": 3,
+          "p95": 3.2000000029802322,
+          "max": 3.2999999970197678
+        }
+      },
+      "longTasks": []
+    },
+    "firefox": {
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:151.0) Gecko/20100101 Firefox/151.0",
+      "samples": [
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "tagged.mp3",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "tagged.flac",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 3,
+            "bytes": 8435
+          },
+          "file": "tagged.m4a",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 4,
+            "bytes": 8435
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "tagged.wav",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "error": "tagFormat"
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {},
+            "requests": 2,
+            "bytes": 4224
+          },
+          "file": "tagged.aac",
+          "local": {
+            "tags": {}
+          },
+          "old": {
+            "error": "tagFormat"
+          },
+          "remote": {
+            "tags": {},
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "remoteForward4k": {
+            "error": "budget_exceeded",
+            "requests": 4,
+            "bytes": 16384
+          },
+          "file": "tagged.ogg",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "error": "tagFormat"
+          },
+          "remote": {
+            "error": "budget_exceeded",
+            "requests": 4,
+            "bytes": 12416
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "id3v22.mp3",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "id3v23.mp3",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "id3v24.mp3",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "error": "budget_exceeded",
+            "requests": 4,
+            "bytes": 196618
+          },
+          "file": "art-262144.mp3",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 4,
+            "bytes": 266467
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "art-1200000.mp3",
+          "local": {
+            "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)"
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095], [1200020, 1200098]]
+          },
+          "remoteForward4k": {
+            "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "art-first.mp3",
+          "local": {
+            "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)"
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "T",
+                "artist": "A"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095], [4096, 20073]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            },
+            "requests": 3,
+            "bytes": 24170
+          },
+          "file": "unusual-id.mp3",
+          "local": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            },
+            "requests": 4,
+            "bytes": 24298
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "T"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "T"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "raw-v24-size.mp3",
+          "local": {
+            "tags": {
+              "title": "T"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "T"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "T"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "T",
+                "artist": "A"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [
+              [0, 4095],
+              [20032, 24127],
+              [40042, 44137],
+              [60052, 80073]
+            ]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            },
+            "requests": 4,
+            "bytes": 84170
+          },
+          "file": "several-artworks.mp3",
+          "local": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            },
+            "requests": 4,
+            "bytes": 84298
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "T",
+                "artist": "A"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095], [20032, 24127], [40042, 40053]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            },
+            "requests": 3,
+            "bytes": 44150
+          },
+          "file": "two-artworks.mp3",
+          "local": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "T",
+              "artist": "A"
+            },
+            "requests": 4,
+            "bytes": 44278
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "T"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "T"
+            },
+            "requests": 3,
+            "bytes": 24128
+          },
+          "file": "malformed-art-length.mp3",
+          "local": {
+            "tags": {
+              "title": "T"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "T"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "T"
+            },
+            "requests": 4,
+            "bytes": 24256
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "Synthetic title",
+                "artist": "Synthetic artist",
+                "album": "Synthetic album"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095], [320782, 320909]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          },
+          "file": "tail-v1.mp3",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 4,
+            "bytes": 4256
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "no_target_tags",
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095], [320654, 320781]]
+          },
+          "remoteForward4k": {
+            "tags": {},
+            "requests": 2,
+            "bytes": 4224
+          },
+          "file": "tagless.mp3",
+          "local": {
+            "tags": {}
+          },
+          "old": {
+            "error": "tagFormat"
+          },
+          "remote": {
+            "tags": {},
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 3,
+            "bytes": 8435
+          },
+          "file": "tagged.mp4",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 4,
+            "bytes": 8435
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "id3.aac",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "application": {
+            "error": "parse_error",
+            "ranges": [[0, 4095], [65408, 65535]]
+          },
+          "remoteForward4k": {
+            "error": "budget_exceeded",
+            "requests": 4,
+            "bytes": 16384
+          },
+          "file": "malformed.mp3",
+          "local": {
+            "error": "Failed to determine audio format"
+          },
+          "old": {
+            "error": "tagFormat"
+          },
+          "remote": {
+            "error": "budget_exceeded",
+            "requests": 4,
+            "bytes": 12416
+          }
+        },
+        {
+          "application": {
+            "outcome": {
+              "status": "ready",
+              "tags": {
+                "title": "A\u00ff\u00e1B"
+              },
+              "loadedVia": "drive_range"
+            },
+            "ranges": [[0, 4095]]
+          },
+          "remoteForward4k": {
+            "tags": {
+              "title": "A\u00ff\u0000\u00e1"
+            },
+            "requests": 1,
+            "bytes": 4096
+          },
+          "file": "global-unsync.mp3",
+          "local": {
+            "tags": {
+              "title": "A\u00ff\u0000\u00e1"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "A\u00ff\u00e1B"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "A\u00ff\u0000\u00e1"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 8192
+          },
+          "file": "flac-art.flac",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 3,
+            "bytes": 8320
+          }
+        },
+        {
+          "remoteForward4k": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4204
+          },
+          "file": "tail-info.wav",
+          "local": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            }
+          },
+          "old": {
+            "error": "tagFormat"
+          },
+          "remote": {
+            "tags": {
+              "title": "Synthetic title",
+              "artist": "Synthetic artist",
+              "album": "Synthetic album"
+            },
+            "requests": 2,
+            "bytes": 4224
+          }
+        }
+      ],
+      "timings": {
+        "candidate": {
+          "median": 1,
+          "p95": 2,
+          "max": 3
+        },
+        "previous": {
+          "median": 3,
+          "p95": 4,
+          "max": 4
+        }
+      },
+      "longTasks": []
+    }
+  },
+  "wireSummary": {
+    "requests": 298,
+    "bytes": 2328616
+  }
+}

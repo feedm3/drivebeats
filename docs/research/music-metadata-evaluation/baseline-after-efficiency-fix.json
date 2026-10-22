@@ -1,0 +1,210 @@
+{
+  "sourceFile": "apps/drivebeats-web/src/lib/drive-metadata-reader.ts",
+  "sourceSha256": "be2371dcb474e34265dd4f167405da0eb25487efb8a06b9f07cfeb4e15204838",
+  "results": [
+    {
+      "name": "tagged.mp3",
+      "requests": [[0, 4095]],
+      "bytes": 4096,
+      "outcome": {
+        "status": "ready",
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "loadedVia": "drive_range"
+      }
+    },
+    {
+      "name": "id3v22.mp3",
+      "requests": [[0, 4095]],
+      "bytes": 4096,
+      "outcome": {
+        "status": "ready",
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "loadedVia": "drive_range"
+      }
+    },
+    {
+      "name": "id3v23.mp3",
+      "requests": [[0, 4095]],
+      "bytes": 4096,
+      "outcome": {
+        "status": "ready",
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "loadedVia": "drive_range"
+      }
+    },
+    {
+      "name": "id3v24.mp3",
+      "requests": [[0, 4095]],
+      "bytes": 4096,
+      "outcome": {
+        "status": "ready",
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "loadedVia": "drive_range"
+      }
+    },
+    {
+      "name": "art-262144.mp3",
+      "requests": [[0, 4095]],
+      "bytes": 4096,
+      "outcome": {
+        "status": "ready",
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "loadedVia": "drive_range"
+      }
+    },
+    {
+      "name": "art-1200000.mp3",
+      "requests": [[0, 4095]],
+      "bytes": 4096,
+      "outcome": {
+        "status": "ready",
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "loadedVia": "drive_range"
+      }
+    },
+    {
+      "name": "art-first.mp3",
+      "requests": [[0, 4095], [1200020, 1200098]],
+      "bytes": 4175,
+      "outcome": {
+        "status": "ready",
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "loadedVia": "drive_range"
+      }
+    },
+    {
+      "name": "unusual-id.mp3",
+      "requests": [[0, 4095], [4096, 20073]],
+      "bytes": 20074,
+      "outcome": {
+        "status": "ready",
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "loadedVia": "drive_range"
+      }
+    },
+    {
+      "name": "raw-v24-size.mp3",
+      "requests": [[0, 4095]],
+      "bytes": 4096,
+      "outcome": {
+        "status": "ready",
+        "tags": {
+          "title": "T"
+        },
+        "loadedVia": "drive_range"
+      }
+    },
+    {
+      "name": "several-artworks.mp3",
+      "requests": [[0, 4095], [20032, 24127], [40042, 44137], [60052, 80073]],
+      "bytes": 32310,
+      "outcome": {
+        "status": "ready",
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "loadedVia": "drive_range"
+      }
+    },
+    {
+      "name": "two-artworks.mp3",
+      "requests": [[0, 4095], [20032, 24127], [40042, 40053]],
+      "bytes": 8204,
+      "outcome": {
+        "status": "ready",
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "loadedVia": "drive_range"
+      }
+    },
+    {
+      "name": "malformed-art-length.mp3",
+      "requests": [[0, 4095]],
+      "bytes": 4096,
+      "outcome": {
+        "status": "ready",
+        "tags": {
+          "title": "T"
+        },
+        "loadedVia": "drive_range"
+      }
+    },
+    {
+      "name": "tail-v1.mp3",
+      "requests": [[0, 4095], [320782, 320909]],
+      "bytes": 4224,
+      "outcome": {
+        "status": "ready",
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "loadedVia": "drive_range"
+      }
+    },
+    {
+      "name": "tagless.mp3",
+      "requests": [[0, 4095], [320654, 320781]],
+      "bytes": 4224,
+      "outcome": {
+        "status": "no_target_tags",
+        "loadedVia": "drive_range"
+      }
+    },
+    {
+      "name": "malformed.mp3",
+      "requests": [[0, 4095], [65408, 65535]],
+      "bytes": 4224,
+      "outcome": {
+        "error": "parse_error"
+      }
+    },
+    {
+      "name": "global-unsync.mp3",
+      "requests": [[0, 4095]],
+      "bytes": 4096,
+      "outcome": {
+        "status": "ready",
+        "tags": {
+          "title": "A\u00ff\u00e1B"
+        },
+        "loadedVia": "drive_range"
+      }
+    }
+  ]
+}

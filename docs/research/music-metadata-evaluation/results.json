@@ -1,0 +1,1659 @@
+{
+  "versions": {
+    "musicMetadata": "12.2.3",
+    "strtok3": "10.6.2",
+    "jsmediatags": "3.9.7",
+    "node": "v24.22.1"
+  },
+  "policy": {
+    "maxBytes": 1048576,
+    "maxMediaRequests": 4,
+    "readAhead": 65536,
+    "skipCovers": true,
+    "skipPostHeaders": true,
+    "duration": false
+  },
+  "results": [
+    {
+      "name": "tagged.mp3",
+      "size": 320908,
+      "local": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "ms": 7.84
+      },
+      "previous": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[320780, 320782], [320876, 320907], [0, 9], [10, 125]],
+        "bytes": 161,
+        "ms": 3.1
+      },
+      "random4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[320780, 320907], [0, 4095]],
+        "bytes": 4224,
+        "ms": 12.7
+      },
+      "random64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[320780, 320907], [0, 65535]],
+        "bytes": 65664,
+        "ms": 1.52
+      },
+      "forward4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 4095]],
+        "bytes": 4096,
+        "ms": 0.83
+      },
+      "forward64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.91
+      }
+    },
+    {
+      "name": "tagged.flac",
+      "size": 318279,
+      "local": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "ms": 2.93
+      },
+      "previous": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[318151, 318153], [318247, 318278], [0, 9], [10, 41]],
+        "bytes": 77,
+        "ms": 1.85
+      },
+      "random4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[318151, 318278], [0, 4095]],
+        "bytes": 4224,
+        "ms": 1.81
+      },
+      "random64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[318151, 318278], [0, 65535]],
+        "bytes": 65664,
+        "ms": 1.16
+      },
+      "forward4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 4095]],
+        "bytes": 4096,
+        "ms": 0.59
+      },
+      "forward64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.58
+      }
+    },
+    {
+      "name": "tagged.m4a",
+      "size": 324776,
+      "local": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "ms": 4.84
+      },
+      "previous": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[324648, 324650], [324744, 324775], [0, 7], [8, 11]],
+        "bytes": 47,
+        "ms": 1.28
+      },
+      "random4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [
+          [324648, 324775],
+          [0, 4095],
+          [320424, 324519],
+          [324533, 324647]
+        ],
+        "bytes": 8435,
+        "ms": 2.09
+      },
+      "random64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[324648, 324775], [0, 65535], [320424, 324647]],
+        "bytes": 69888,
+        "ms": 1.57
+      },
+      "forward4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 4095], [320424, 324519], [324533, 324775]],
+        "bytes": 8435,
+        "ms": 1.23
+      },
+      "forward64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 65535], [320424, 324775]],
+        "bytes": 69888,
+        "ms": 1.03
+      }
+    },
+    {
+      "name": "tagged.wav",
+      "size": 3528152,
+      "local": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "ms": 2.83
+      },
+      "previous": {
+        "error": "tagFormat"
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[3528024, 3528026], [3528120, 3528151], [0, 7], [8, 11]],
+        "bytes": 47,
+        "ms": 1.2
+      },
+      "random4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[3528024, 3528151], [0, 4095]],
+        "bytes": 4224,
+        "ms": 1.38
+      },
+      "random64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[3528024, 3528151], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.83
+      },
+      "forward4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 4095]],
+        "bytes": 4096,
+        "ms": 0.4
+      },
+      "forward64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.48
+      }
+    },
+    {
+      "name": "tagged.aac",
+      "size": 326421,
+      "local": {
+        "tags": {},
+        "ms": 0.56
+      },
+      "previous": {
+        "error": "tagFormat"
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[326293, 326295], [326389, 326420], [0, 9], [10, 1023]],
+        "bytes": 1059,
+        "ms": 1.11
+      },
+      "random4k": {
+        "tags": {},
+        "warnings": [],
+        "requests": [[326293, 326420], [0, 4095]],
+        "bytes": 4224,
+        "ms": 0.82
+      },
+      "random64k": {
+        "tags": {},
+        "warnings": [],
+        "requests": [[326293, 326420], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.78
+      },
+      "forward4k": {
+        "tags": {},
+        "warnings": [],
+        "requests": [[0, 4095], [326293, 326420]],
+        "bytes": 4224,
+        "ms": 0.55
+      },
+      "forward64k": {
+        "tags": {},
+        "warnings": [],
+        "requests": [[0, 65535], [326293, 326420]],
+        "bytes": 65664,
+        "ms": 0.65
+      }
+    },
+    {
+      "name": "tagged.ogg",
+      "size": 72062,
+      "local": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "ms": 4.42
+      },
+      "previous": {
+        "error": "tagFormat"
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[71934, 71936], [72030, 72061], [0, 26], [27, 27]],
+        "bytes": 63,
+        "ms": 1.24
+      },
+      "random4k": {
+        "error": "budget_exceeded",
+        "requests": [[71934, 72061], [0, 4095], [4096, 8191], [8192, 12287]],
+        "bytes": 12416,
+        "ms": 1.36
+      },
+      "random64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[71934, 72061], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.93
+      },
+      "forward4k": {
+        "error": "budget_exceeded",
+        "requests": [[0, 4095], [4096, 8191], [8192, 12287], [12288, 16383]],
+        "bytes": 16384,
+        "ms": 1.19
+      },
+      "forward64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.57
+      }
+    },
+    {
+      "name": "id3v22.mp3",
+      "size": 320859,
+      "local": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "ms": 0.66
+      },
+      "previous": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[320731, 320733], [320827, 320858], [0, 9], [10, 76]],
+        "bytes": 112,
+        "ms": 1.08
+      },
+      "random4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[320731, 320858], [0, 4095]],
+        "bytes": 4224,
+        "ms": 0.82
+      },
+      "random64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[320731, 320858], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.76
+      },
+      "forward4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 4095]],
+        "bytes": 4096,
+        "ms": 0.4
+      },
+      "forward64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.47
+      }
+    },
+    {
+      "name": "id3v23.mp3",
+      "size": 320871,
+      "local": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "ms": 0.45
+      },
+      "previous": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[320743, 320745], [320839, 320870], [0, 9], [10, 88]],
+        "bytes": 124,
+        "ms": 1.01
+      },
+      "random4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[320743, 320870], [0, 4095]],
+        "bytes": 4224,
+        "ms": 0.76
+      },
+      "random64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[320743, 320870], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.67
+      },
+      "forward4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 4095]],
+        "bytes": 4096,
+        "ms": 0.37
+      },
+      "forward64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.42
+      }
+    },
+    {
+      "name": "id3v24.mp3",
+      "size": 320871,
+      "local": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "ms": 0.45
+      },
+      "previous": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[320743, 320745], [320839, 320870], [0, 9], [10, 88]],
+        "bytes": 124,
+        "ms": 0.99
+      },
+      "random4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[320743, 320870], [0, 4095]],
+        "bytes": 4224,
+        "ms": 0.68
+      },
+      "random64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[320743, 320870], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.68
+      },
+      "forward4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 4095]],
+        "bytes": 4096,
+        "ms": 0.36
+      },
+      "forward64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.48
+      }
+    },
+    {
+      "name": "art-262144.mp3",
+      "size": 583025,
+      "local": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "ms": 0.48
+      },
+      "previous": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[582897, 582899], [582993, 583024], [0, 9], [10, 262242]],
+        "bytes": 262278,
+        "ms": 1.22
+      },
+      "random4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [
+          [582897, 583024],
+          [0, 4095],
+          [4096, 262242],
+          [262243, 266338]
+        ],
+        "bytes": 266467,
+        "ms": 1.73
+      },
+      "random64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [
+          [582897, 583024],
+          [0, 65535],
+          [65536, 262242],
+          [262243, 327778]
+        ],
+        "bytes": 327907,
+        "ms": 1.13
+      },
+      "forward4k": {
+        "error": "budget_exceeded",
+        "requests": [
+          [0, 4095],
+          [4096, 65545],
+          [65546, 131081],
+          [131082, 196617]
+        ],
+        "bytes": 196618,
+        "ms": 1.04
+      },
+      "forward64k": {
+        "error": "budget_exceeded",
+        "requests": [
+          [0, 65535],
+          [65536, 131071],
+          [131072, 196607],
+          [196608, 262143]
+        ],
+        "bytes": 262144,
+        "ms": 1.14
+      }
+    },
+    {
+      "name": "art-1200000.mp3",
+      "size": 1520881,
+      "local": {
+        "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+        "ms": 0.27
+      },
+      "previous": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        }
+      },
+      "exact": {
+        "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+        "requests": [[1520753, 1520755], [1520849, 1520880], [0, 9]],
+        "bytes": 45,
+        "ms": 0.79
+      },
+      "random4k": {
+        "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+        "requests": [[1520753, 1520880], [0, 4095]],
+        "bytes": 4224,
+        "ms": 0.95
+      },
+      "random64k": {
+        "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+        "requests": [[1520753, 1520880], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.65
+      },
+      "forward4k": {
+        "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+        "requests": [[0, 4095]],
+        "bytes": 4096,
+        "ms": 0.28
+      },
+      "forward64k": {
+        "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.36
+      }
+    },
+    {
+      "name": "art-first.mp3",
+      "size": 1520881,
+      "local": {
+        "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+        "ms": 0.21
+      },
+      "previous": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        }
+      },
+      "exact": {
+        "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+        "requests": [[1520753, 1520755], [1520849, 1520880], [0, 9]],
+        "bytes": 45,
+        "ms": 0.67
+      },
+      "random4k": {
+        "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+        "requests": [[1520753, 1520880], [0, 4095]],
+        "bytes": 4224,
+        "ms": 0.78
+      },
+      "random64k": {
+        "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+        "requests": [[1520753, 1520880], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.67
+      },
+      "forward4k": {
+        "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+        "requests": [[0, 4095]],
+        "bytes": 4096,
+        "ms": 0.3
+      },
+      "forward64k": {
+        "error": "Metadata size 1200089 exceeds allocation limit 1048576 (buffering limit)",
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.35
+      }
+    },
+    {
+      "name": "unusual-id.mp3",
+      "size": 340856,
+      "local": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "ms": 0.36
+      },
+      "previous": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[340728, 340730], [340824, 340855], [0, 9], [10, 20073]],
+        "bytes": 20109,
+        "ms": 0.95
+      },
+      "random4k": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "warnings": ["Invalid ID3v2.3 frame-header-ID: Xyz1"],
+        "requests": [
+          [340728, 340855],
+          [0, 4095],
+          [4096, 20073],
+          [20074, 24169]
+        ],
+        "bytes": 24298,
+        "ms": 1.19
+      },
+      "random64k": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "warnings": ["Invalid ID3v2.3 frame-header-ID: Xyz1"],
+        "requests": [[340728, 340855], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.62
+      },
+      "forward4k": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "warnings": ["Invalid ID3v2.3 frame-header-ID: Xyz1"],
+        "requests": [[0, 4095], [4096, 20073], [20074, 24169]],
+        "bytes": 24170,
+        "ms": 0.75
+      },
+      "forward64k": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "warnings": ["Invalid ID3v2.3 frame-header-ID: Xyz1"],
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.38
+      }
+    },
+    {
+      "name": "raw-v24-size.mp3",
+      "size": 321014,
+      "local": {
+        "tags": {
+          "title": "T"
+        },
+        "ms": 0.38
+      },
+      "previous": {
+        "tags": {
+          "title": "T"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[320886, 320888], [320982, 321013], [0, 9], [10, 231]],
+        "bytes": 267,
+        "ms": 0.9
+      },
+      "random4k": {
+        "tags": {
+          "title": "T"
+        },
+        "warnings": [
+          "Invalid ID3v2.4 frame-header-ID: \u0001\u0001\u0001\u0001",
+          "Illegal ID3v2 tag length"
+        ],
+        "requests": [[320886, 321013], [0, 4095]],
+        "bytes": 4224,
+        "ms": 0.63
+      },
+      "random64k": {
+        "tags": {
+          "title": "T"
+        },
+        "warnings": [
+          "Invalid ID3v2.4 frame-header-ID: \u0001\u0001\u0001\u0001",
+          "Illegal ID3v2 tag length"
+        ],
+        "requests": [[320886, 321013], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.72
+      },
+      "forward4k": {
+        "tags": {
+          "title": "T"
+        },
+        "warnings": [
+          "Invalid ID3v2.4 frame-header-ID: \u0001\u0001\u0001\u0001",
+          "Illegal ID3v2 tag length"
+        ],
+        "requests": [[0, 4095]],
+        "bytes": 4096,
+        "ms": 0.35
+      },
+      "forward64k": {
+        "tags": {
+          "title": "T"
+        },
+        "warnings": [
+          "Invalid ID3v2.4 frame-header-ID: \u0001\u0001\u0001\u0001",
+          "Illegal ID3v2 tag length"
+        ],
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.4
+      }
+    },
+    {
+      "name": "several-artworks.mp3",
+      "size": 400856,
+      "local": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "ms": 0.32
+      },
+      "previous": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[400728, 400730], [400824, 400855], [0, 9], [10, 80073]],
+        "bytes": 80109,
+        "ms": 1.09
+      },
+      "random4k": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "warnings": [],
+        "requests": [
+          [400728, 400855],
+          [0, 4095],
+          [4096, 80073],
+          [80074, 84169]
+        ],
+        "bytes": 84298,
+        "ms": 1.21
+      },
+      "random64k": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "warnings": [],
+        "requests": [[400728, 400855], [0, 65535], [65536, 131071]],
+        "bytes": 131200,
+        "ms": 0.84
+      },
+      "forward4k": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "warnings": [],
+        "requests": [[0, 4095], [4096, 65545], [65546, 80073], [80074, 84169]],
+        "bytes": 84170,
+        "ms": 0.95
+      },
+      "forward64k": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "warnings": [],
+        "requests": [[0, 65535], [65536, 131071]],
+        "bytes": 131072,
+        "ms": 0.67
+      }
+    },
+    {
+      "name": "two-artworks.mp3",
+      "size": 360836,
+      "local": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "ms": 0.32
+      },
+      "previous": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[360708, 360710], [360804, 360835], [0, 9], [10, 40053]],
+        "bytes": 40089,
+        "ms": 0.94
+      },
+      "random4k": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "warnings": [],
+        "requests": [
+          [360708, 360835],
+          [0, 4095],
+          [4096, 40053],
+          [40054, 44149]
+        ],
+        "bytes": 44278,
+        "ms": 1.1
+      },
+      "random64k": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "warnings": [],
+        "requests": [[360708, 360835], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.58
+      },
+      "forward4k": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "warnings": [],
+        "requests": [[0, 4095], [4096, 40053], [40054, 44149]],
+        "bytes": 44150,
+        "ms": 0.74
+      },
+      "forward64k": {
+        "tags": {
+          "title": "T",
+          "artist": "A"
+        },
+        "warnings": [],
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.38
+      }
+    },
+    {
+      "name": "malformed-art-length.mp3",
+      "size": 340814,
+      "local": {
+        "tags": {
+          "title": "T"
+        },
+        "ms": 0.29
+      },
+      "previous": {
+        "tags": {
+          "title": "T"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[340686, 340688], [340782, 340813], [0, 9], [10, 20031]],
+        "bytes": 20067,
+        "ms": 0.89
+      },
+      "random4k": {
+        "tags": {
+          "title": "T"
+        },
+        "warnings": ["Illegal ID3v2 tag length"],
+        "requests": [
+          [340686, 340813],
+          [0, 4095],
+          [4096, 20031],
+          [20032, 24127]
+        ],
+        "bytes": 24256,
+        "ms": 1.33
+      },
+      "random64k": {
+        "tags": {
+          "title": "T"
+        },
+        "warnings": ["Illegal ID3v2 tag length"],
+        "requests": [[340686, 340813], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.79
+      },
+      "forward4k": {
+        "tags": {
+          "title": "T"
+        },
+        "warnings": ["Illegal ID3v2 tag length"],
+        "requests": [[0, 4095], [4096, 20031], [20032, 24127]],
+        "bytes": 24128,
+        "ms": 0.65
+      },
+      "forward64k": {
+        "tags": {
+          "title": "T"
+        },
+        "warnings": ["Illegal ID3v2 tag length"],
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.33
+      }
+    },
+    {
+      "name": "tail-v1.mp3",
+      "size": 320910,
+      "local": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "ms": 0.43
+      },
+      "previous": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [
+          [320782, 320784],
+          [320767, 320781],
+          [320750, 320766],
+          [0, 9]
+        ],
+        "bytes": 45,
+        "ms": 0.9
+      },
+      "random4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [
+          [320782, 320909],
+          [320767, 320781],
+          [320750, 320766],
+          [0, 4095]
+        ],
+        "bytes": 4256,
+        "ms": 1.02
+      },
+      "random64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [
+          [320782, 320909],
+          [320767, 320781],
+          [320750, 320766],
+          [0, 65535]
+        ],
+        "bytes": 65696,
+        "ms": 0.86
+      },
+      "forward4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 4095], [320782, 320909]],
+        "bytes": 4224,
+        "ms": 0.46
+      },
+      "forward64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 65535], [320782, 320909]],
+        "bytes": 65664,
+        "ms": 0.53
+      }
+    },
+    {
+      "name": "tagless.mp3",
+      "size": 320782,
+      "local": {
+        "tags": {},
+        "ms": 0.27
+      },
+      "previous": {
+        "error": "tagFormat"
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[320654, 320656], [320750, 320781], [0, 9], [10, 1023]],
+        "bytes": 1059,
+        "ms": 0.86
+      },
+      "random4k": {
+        "tags": {},
+        "warnings": [],
+        "requests": [[320654, 320781], [0, 4095]],
+        "bytes": 4224,
+        "ms": 0.64
+      },
+      "random64k": {
+        "tags": {},
+        "warnings": [],
+        "requests": [[320654, 320781], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.49
+      },
+      "forward4k": {
+        "tags": {},
+        "warnings": [],
+        "requests": [[0, 4095], [320654, 320781]],
+        "bytes": 4224,
+        "ms": 0.47
+      },
+      "forward64k": {
+        "tags": {},
+        "warnings": [],
+        "requests": [[0, 65535], [320654, 320781]],
+        "bytes": 65664,
+        "ms": 0.49
+      }
+    },
+    {
+      "name": "tagged.mp4",
+      "size": 324776,
+      "local": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "ms": 0.82
+      },
+      "previous": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[324648, 324650], [324744, 324775], [0, 7], [8, 11]],
+        "bytes": 47,
+        "ms": 0.89
+      },
+      "random4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [
+          [324648, 324775],
+          [0, 4095],
+          [320424, 324519],
+          [324533, 324647]
+        ],
+        "bytes": 8435,
+        "ms": 1.4
+      },
+      "random64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[324648, 324775], [0, 65535], [320424, 324647]],
+        "bytes": 69888,
+        "ms": 1.12
+      },
+      "forward4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 4095], [320424, 324519], [324533, 324775]],
+        "bytes": 8435,
+        "ms": 1.15
+      },
+      "forward64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 65535], [320424, 324775]],
+        "bytes": 69888,
+        "ms": 0.85
+      }
+    },
+    {
+      "name": "id3.aac",
+      "size": 326510,
+      "local": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "ms": 0.33
+      },
+      "previous": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[326382, 326384], [326478, 326509], [0, 9], [10, 88]],
+        "bytes": 124,
+        "ms": 0.98
+      },
+      "random4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[326382, 326509], [0, 4095]],
+        "bytes": 4224,
+        "ms": 0.83
+      },
+      "random64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[326382, 326509], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.63
+      },
+      "forward4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 4095]],
+        "bytes": 4096,
+        "ms": 0.33
+      },
+      "forward64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.35
+      }
+    },
+    {
+      "name": "malformed.mp3",
+      "size": 65536,
+      "local": {
+        "error": "Failed to determine audio format",
+        "ms": 0.17
+      },
+      "previous": {
+        "error": "tagFormat"
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[65408, 65410], [65504, 65535], [0, 9], [10, 1023]],
+        "bytes": 1059,
+        "ms": 0.85
+      },
+      "random4k": {
+        "error": "budget_exceeded",
+        "requests": [[65408, 65535], [0, 4095], [4096, 8191], [8192, 12287]],
+        "bytes": 12416,
+        "ms": 0.99
+      },
+      "random64k": {
+        "tags": {},
+        "warnings": [],
+        "requests": [[65408, 65535], [0, 65407]],
+        "bytes": 65536,
+        "ms": 0.64
+      },
+      "forward4k": {
+        "error": "budget_exceeded",
+        "requests": [[0, 4095], [4096, 8191], [8192, 12287], [12288, 16383]],
+        "bytes": 16384,
+        "ms": 0.81
+      },
+      "forward64k": {
+        "tags": {},
+        "warnings": [],
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.4
+      }
+    },
+    {
+      "name": "global-unsync.mp3",
+      "size": 320808,
+      "local": {
+        "tags": {
+          "title": "A\u00ff\u0000\u00e1"
+        },
+        "ms": 0.31
+      },
+      "previous": {
+        "tags": {
+          "title": "A\u00ff\u00e1B"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[320680, 320682], [320776, 320807], [0, 9], [10, 25]],
+        "bytes": 61,
+        "ms": 0.9
+      },
+      "random4k": {
+        "tags": {
+          "title": "A\u00ff\u0000\u00e1"
+        },
+        "warnings": ["Illegal ID3v2 tag length"],
+        "requests": [[320680, 320807], [0, 4095]],
+        "bytes": 4224,
+        "ms": 0.59
+      },
+      "random64k": {
+        "tags": {
+          "title": "A\u00ff\u0000\u00e1"
+        },
+        "warnings": ["Illegal ID3v2 tag length"],
+        "requests": [[320680, 320807], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.55
+      },
+      "forward4k": {
+        "tags": {
+          "title": "A\u00ff\u0000\u00e1"
+        },
+        "warnings": ["Illegal ID3v2 tag length"],
+        "requests": [[0, 4095]],
+        "bytes": 4096,
+        "ms": 0.33
+      },
+      "forward64k": {
+        "tags": {
+          "title": "A\u00ff\u0000\u00e1"
+        },
+        "warnings": ["Illegal ID3v2 tag length"],
+        "requests": [[0, 65535]],
+        "bytes": 65536,
+        "ms": 0.35
+      }
+    },
+    {
+      "name": "flac-art.flac",
+      "size": 1518283,
+      "local": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "ms": 0.39
+      },
+      "previous": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        }
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[1518155, 1518157], [1518251, 1518282], [0, 9], [10, 41]],
+        "bytes": 77,
+        "ms": 0.9
+      },
+      "random4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[1518155, 1518282], [0, 4095], [1200046, 1204141]],
+        "bytes": 8320,
+        "ms": 1.01
+      },
+      "random64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[1518155, 1518282], [0, 65535], [1200046, 1265581]],
+        "bytes": 131200,
+        "ms": 0.81
+      },
+      "forward4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 4095], [1200046, 1204141]],
+        "bytes": 8192,
+        "ms": 0.48
+      },
+      "forward64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 65535], [1200046, 1265581]],
+        "bytes": 131072,
+        "ms": 0.58
+      }
+    },
+    {
+      "name": "tail-info.wav",
+      "size": 3528152,
+      "local": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "ms": 0.42
+      },
+      "previous": {
+        "error": "tagFormat"
+      },
+      "exact": {
+        "error": "budget_exceeded",
+        "requests": [[3528024, 3528026], [3528120, 3528151], [0, 7], [8, 11]],
+        "bytes": 47,
+        "ms": 0.88
+      },
+      "random4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[3528024, 3528151], [0, 4095]],
+        "bytes": 4224,
+        "ms": 0.8
+      },
+      "random64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[3528024, 3528151], [0, 65535]],
+        "bytes": 65664,
+        "ms": 0.59
+      },
+      "forward4k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 4095], [3528044, 3528151]],
+        "bytes": 4204,
+        "ms": 0.48
+      },
+      "forward64k": {
+        "tags": {
+          "title": "Synthetic title",
+          "artist": "Synthetic artist",
+          "album": "Synthetic album"
+        },
+        "warnings": [],
+        "requests": [[0, 65535], [3528044, 3528151]],
+        "bytes": 65644,
+        "ms": 0.52
+      }
+    }
+  ],
+  "faultChecks": {
+    "version": {
+      "error": "version_changed",
+      "requests": [[320743, 320870]],
+      "bytes": 128,
+      "ms": 0.37
+    },
+    "stall": {
+      "error": "Deadline",
+      "requests": [[320743, 320870]],
+      "bytes": 0,
+      "ms": 31.71
+    },
+    "requestBudget": {
+      "error": "budget_exceeded",
+      "requests": [[320743, 320870]],
+      "bytes": 128,
+      "ms": 1.43
+    },
+    "mp4Budget": {
+      "error": "budget_exceeded",
+      "requests": [[324648, 324775], [0, 65535]],
+      "bytes": 65664,
+      "ms": 1.27
+    },
+    "byteBudget": {
+      "error": "budget_exceeded",
+      "requests": [],
+      "bytes": 0,
+      "ms": 0.03
+    },
+    "preAborted": {
+      "error": "Cancelled",
+      "requests": [],
+      "bytes": 0
+    }
+  },
+  "bundles": {
+    "candidate": {
+      "bytes": 271541,
+      "gzip": 80726
+    },
+    "previous": {
+      "bytes": 52062,
+      "gzip": 13882
+    }
+  }
+}

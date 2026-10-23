@@ -19,7 +19,8 @@ export function CloudLibrarySync() {
     // separately refuses to apply a payload once the session itself changed.
     const isCancelled = () => cancelled;
 
-    // The gate restored portable data. Hydrate collections on this mount.
+    // The gate verified migration and bound the portable cache. A returning
+    // visit can still be restoring tags while collections hydrate here.
     void runCloudLibrarySync({ force: true, isCancelled });
     let lastPortableRestoreAt = Date.now();
 

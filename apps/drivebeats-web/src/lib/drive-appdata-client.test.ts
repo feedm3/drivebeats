@@ -305,6 +305,22 @@ afterEach(async () => {
 });
 
 describe("portable metadata and imported choices", () => {
+  it("defers missing-tag extraction without HTTP while a returning account revalidates", async () => {
+    const { client, state } = await load();
+    await client.deferDriveAppDataRestore("a", "generation-a", "revalidating");
+    expect(await client.waitForDriveAppDataRestore("a")).toBe(false);
+    expect(state.getState()).toMatchObject({
+      accountId: "a",
+      generation: "generation-a",
+      status: "restoring",
+      error: null,
+    });
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.audio).not.toHaveBeenCalled();
+    await client.restoreDriveAppData("a", "generation-a");
+    expect(await client.waitForDriveAppDataRestore("a")).toBe(true);
+  });
+
   it.each([3, 67, 129])(
     "restores %i acknowledged tags before loader work without descriptor/audio requests",
     async (count) => {

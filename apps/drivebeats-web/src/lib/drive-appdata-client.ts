@@ -1032,10 +1032,11 @@ export function restoreDriveAppData(
   return flight;
 }
 
-/** Offline startup after a separately verified consent/readiness marker. No HTTP. */
+/** Bind cached data after verified migration, deferring extraction until restore. No HTTP. */
 export async function deferDriveAppDataRestore(
   accountId: string,
   generation: string,
+  reason: "offline" | "revalidating" = "offline",
 ) {
   if (
     useDriveAppDataStore.getState().accountId !== accountId ||
@@ -1046,8 +1047,8 @@ export async function deferDriveAppDataRestore(
   }
   listenForLocalChanges();
   useDriveAppDataStore.setState({
-    status: "error",
-    error: "offline_restore_pending",
+    status: reason === "offline" ? "error" : "restoring",
+    error: reason === "offline" ? "offline_restore_pending" : null,
   });
   await useId3MetadataStore.getState().setAccount(accountId);
   const imported = useImportedDriveStore.getState();

@@ -59,6 +59,18 @@ after bounded parallel/latest-only reads, private Firefox measured 351ms–5547m
 for sampled backup reads and 1876ms for collection sync. These are local-dev
 observations against real Google and isolated Neon, not production measurements.
 
+A returning-visit regression reproduced the migration gate on every online
+reload, even with account- and generation-scoped proof of completed migration.
+That existing proof now opens the cached Library while bootstrap and tag restore
+continue in the background. Cache binding still defers missing-tag extraction;
+server consent/recovery rejection invalidates readiness and pauses playback.
+Missing or mismatched proof still requires bootstrap. The initial server render
+uses the Library skeleton, and restore copy no longer repeats migration warnings.
+Local Firefox reloads at desktop, 320px and 428px opened the Library with existing
+collections. All 927 tests, lint/typecheck and production build passed; React
+Doctor reported no issues. The held-bootstrap/restore regression failed before
+the fix and passed afterward.
+
 ## Authorized production rollout
 
 On 23 October 2026 the user explicitly authorized committing/pushing main, then

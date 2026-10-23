@@ -3,6 +3,7 @@
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { AppLoadingShell } from "@/components/app-loading-shell";
 import { LogoutConfirmationDialog } from "@/components/logout-confirmation-dialog";
 import { StorageDialog } from "@/components/storage-dialog";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import {
 } from "@/lib/drive-appdata-client";
 import { hasRequiredGoogleScopes } from "@/lib/google-scopes";
 import { useAuthStore } from "@/stores/auth-store";
+import { usePlayerStore } from "@/stores/player-store";
 
 const cutoffFormatter = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "long",
@@ -38,7 +40,7 @@ interface RequiredAppDataGateProps {
   children: React.ReactNode;
 }
 
-/** Mount network consumers, player controls and WebMCP only after migration. */
+/** First migration gates normal use; verified returning visits restore in the background. */
 export function RequiredAppDataGate({
   initialUser,
   initialAccountGeneration,
@@ -59,6 +61,9 @@ export function RequiredAppDataGate({
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [storageOpen, setStorageOpen] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [checkingLocalReadiness, setCheckingLocalReadiness] = useState(
+    initialUser !== null,
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is an explicit user-requested retry.
   useEffect(() => {
@@ -84,11 +89,30 @@ export function RequiredAppDataGate({
         clearTimeout(timer);
       }
     };
-    useAuthStore.getState().setAppDataReady(false);
+    const canResume =
+      !!initialAccountGeneration &&
+      hasVerifiedAppDataReadiness(
+        initialUser.id,
+        initialAccountGeneration,
+        initialGrantedScopes,
+      ) &&
+      !useAuthStore.getState().appDataConsentRequired;
+    if (!canResume) {
+      useAuthStore.getState().setAppDataReady(false);
+      setCheckingLocalReadiness(false);
+    }
     setStatus("loading");
     setPhase("checking");
     setMessage(null);
-    const resumeVerifiedOffline = async () => {
+    const blockPlayback = () => {
+      const auth = useAuthStore.getState();
+      const wasReady = auth.appDataReady;
+      auth.setAppDataReady(false);
+      // Audio survives a component unmount, including this gate closing.
+      if (wasReady && auth.user?.id === initialUser.id)
+        usePlayerStore.getState().pause();
+    };
+    const resumeVerified = async (reason: "offline" | "revalidating") => {
       if (
         !initialAccountGeneration ||
         !hasVerifiedAppDataReadiness(
@@ -99,17 +123,27 @@ export function RequiredAppDataGate({
         useAuthStore.getState().appDataConsentRequired
       )
         return false;
-      await deferDriveAppDataRestore(initialUser.id, initialAccountGeneration);
+      await deferDriveAppDataRestore(
+        initialUser.id,
+        initialAccountGeneration,
+        reason,
+      );
       if (!disposed) {
         useAuthStore.getState().hydrateServerSession(initialUser);
         useAuthStore.getState().setAppDataReady(true, true);
+        setCheckingLocalReadiness(false);
       }
       return true;
     };
     let receivedResponse = false;
     void (async () => {
       try {
-        if (!navigator.onLine && (await resumeVerifiedOffline())) return;
+        const resumed = canResume
+          ? await resumeVerified(navigator.onLine ? "revalidating" : "offline")
+          : false;
+        if (disposed) return;
+        setCheckingLocalReadiness(false);
+        if (!navigator.onLine && resumed) return;
         const { response, result } = await withinDeadline(
           (async () => {
             const response = await fetch("/api/appdata/bootstrap", {
@@ -135,6 +169,8 @@ export function RequiredAppDataGate({
             "appdata_cleanup_pending",
           ].includes(result.code)
         ) {
+          clearVerifiedAppDataReadiness(initialUser.id);
+          blockPlayback();
           setStatus("error");
           setMessage(
             result.code === "appdata_saved_file_missing"
@@ -145,13 +181,21 @@ export function RequiredAppDataGate({
         }
         if (response.status === 401 || response.status === 403) {
           clearVerifiedAppDataReadiness(initialUser.id);
+          blockPlayback();
           setStatus("consent");
           return;
         }
         if (!response.ok || result.ready !== true) {
+          blockPlayback();
           throw new Error(
             "Your Google Drive backup could not be prepared. Check your connection and retry.",
           );
+        }
+        const returning =
+          resumed && result.generation === initialAccountGeneration;
+        if (resumed && !returning) {
+          clearVerifiedAppDataReadiness(initialUser.id);
+          blockPlayback();
         }
         if (
           result.generation === initialAccountGeneration &&
@@ -171,15 +215,12 @@ export function RequiredAppDataGate({
         // A restore error defers missing-tag extraction in the portable cache.
         // It must not stop playback after the account migration is complete.
         setPhase("restoring");
-        await withinDeadline(
-          restoreDriveAppData(
-            initialUser.id,
-            typeof result.generation === "string"
-              ? result.generation
-              : undefined,
-          ).catch(() => undefined),
-          60_000,
+        const restoring = restoreDriveAppData(
+          initialUser.id,
+          typeof result.generation === "string" ? result.generation : undefined,
         ).catch(() => undefined);
+        if (returning) useAuthStore.getState().setAppDataReady(true);
+        await withinDeadline(restoring, 60_000).catch(() => undefined);
         // The UI deadline releases playback after verified bootstrap. The
         // existing restore keeps running; its store still defers extraction.
         if (!disposed) useAuthStore.getState().setAppDataReady(true);
@@ -190,10 +231,11 @@ export function RequiredAppDataGate({
         if (
           !disposed &&
           !receivedResponse &&
-          (await resumeVerifiedOffline().catch(() => false))
+          (await resumeVerified("offline").catch(() => false))
         )
           return;
         if (!disposed) {
+          setCheckingLocalReadiness(false);
           setStatus("error");
           setMessage(
             error instanceof DOMException && error.name === "TimeoutError"
@@ -217,6 +259,7 @@ export function RequiredAppDataGate({
       () => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)),
       1000,
     );
+
     return () => clearInterval(timer);
   }, [ready, status, initialUser]);
 
@@ -257,6 +300,15 @@ export function RequiredAppDataGate({
       </>
     );
 
+  // Server rendering cannot read the account-scoped browser proof. Use a
+  // neutral shell until it is checked, rather than flashing migration copy.
+  if (initialUser && checkingLocalReadiness && !consentRequired)
+    return (
+      <div className="h-dvh">
+        <AppLoadingShell />
+      </div>
+    );
+
   const needsSignIn = !initialUser;
   const needsConsent =
     !needsSignIn && (status === "consent" || consentRequired);
@@ -269,7 +321,9 @@ export function RequiredAppDataGate({
             : needsConsent
               ? "Connect Google Drive backup"
               : status === "loading"
-                ? "Preparing your Library"
+                ? phase === "restoring"
+                  ? "Restoring your Library"
+                  : "Preparing your Library"
                 : "Backup needs attention"}
         </h1>
         <p className="text-sm text-muted-foreground">
@@ -277,9 +331,11 @@ export function RequiredAppDataGate({
             ? "Sign in with Google to restore your Library and playlists. Your music files stay unchanged."
             : needsConsent
               ? "Approve the required app-folder access to continue. DriveBeats saves your playlists, favorites, imported choices and music tags in its hidden Google Drive folder. Your music files are never changed."
-              : "DriveBeats moves existing playlists and favorites once, then restores your saved Library choices and music tags. A large Library may take a minute or more."}
+              : phase === "restoring"
+                ? "Restoring your saved Library choices and music tags on this browser. A large Library may take a minute or more."
+                : "DriveBeats moves existing playlists and favorites once, then restores your saved Library choices and music tags. A large Library may take a minute or more."}
         </p>
-        {cutoff && (
+        {cutoff && phase === "checking" && (
           <p className="text-sm text-muted-foreground">
             Old playlists and favorites must be moved by{" "}
             {cutoffFormatter.format(new Date(cutoff))} (Europe/Berlin).

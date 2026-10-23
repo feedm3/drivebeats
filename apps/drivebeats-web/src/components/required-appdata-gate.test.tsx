@@ -16,6 +16,7 @@ import {
 import { GOOGLE_APPDATA_SCOPE, GOOGLE_DRIVE_SCOPE } from "@/lib/google-scopes";
 import { useAuthStore } from "@/stores/auth-store";
 import { useDriveAppDataStore } from "@/stores/drive-appdata-store";
+import { usePlayerStore } from "@/stores/player-store";
 
 const restore = vi.hoisted(() => vi.fn());
 const deferRestore = vi.hoisted(() => vi.fn());
@@ -164,10 +165,125 @@ it("records readiness only after verified migrated bootstrap and reuses it offli
     </>,
   );
   expect(await screen.findByText("Downloaded player")).toBeInTheDocument();
-  expect(deferRestore).toHaveBeenCalledWith(user.id, "generation-a");
+  expect(deferRestore).toHaveBeenCalledWith(user.id, "generation-a", "offline");
   expect(fetchMock).not.toHaveBeenCalled();
   expect(refresh).not.toHaveBeenCalled();
   expect(useAuthStore.getState().user?.id).toBe(user.id);
+});
+
+it("keeps a verified returning Library visible while bootstrap and tag restore are pending", async () => {
+  saveVerifiedAppDataReadiness(user.id, "generation-a", 1);
+  let finishBootstrap!: (response: Response) => void;
+  let finishRestore!: () => void;
+  fetchMock.mockReturnValue(
+    new Promise((resolve) => {
+      finishBootstrap = resolve;
+    }),
+  );
+  restore.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finishRestore = resolve;
+    }),
+  );
+  render(
+    <RequiredAppDataGate
+      initialUser={user}
+      initialAccountGeneration="generation-a"
+      initialGrantedScopes={requiredScopes}
+    >
+      <p>Returning Library</p>
+    </RequiredAppDataGate>,
+  );
+  await act(async () => {});
+  expect(screen.getByText("Returning Library")).toBeInTheDocument();
+  expect(useAuthStore.getState().appDataOfflineReady).toBe(true);
+  expect(fetchMock).toHaveBeenCalledOnce();
+  expect(
+    screen.queryByRole("heading", { name: "Preparing your Library" }),
+  ).not.toBeInTheDocument();
+  await act(async () =>
+    finishBootstrap(
+      Response.json({
+        ready: true,
+        generation: "generation-a",
+        source: "drive",
+        migrationVersion: 1,
+      }),
+    ),
+  );
+  expect(screen.getByText("Returning Library")).toBeInTheDocument();
+  expect(useAuthStore.getState().appDataOfflineReady).toBe(false);
+  fetchMock.mockReturnValue(
+    new Promise((resolve) => {
+      finishBootstrap = resolve;
+    }),
+  );
+  fireEvent.online(window);
+  expect(screen.getByText("Returning Library")).toBeInTheDocument();
+  await act(async () => {});
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(screen.getByText("Returning Library")).toBeInTheDocument();
+  await act(async () => finishRestore());
+  await act(async () =>
+    finishBootstrap(Response.json({ ready: true, generation: "generation-a" })),
+  );
+});
+
+it.each(["absent", "other-account", "other-generation", "missing-consent"])(
+  "waits for online verification with %s readiness",
+  async (scenario) => {
+    if (scenario !== "absent")
+      saveVerifiedAppDataReadiness(
+        scenario === "other-account" ? "account-b" : user.id,
+        scenario === "other-generation" ? "old-generation" : "generation-a",
+        1,
+      );
+    fetchMock.mockReturnValue(new Promise(() => {}));
+    render(
+      <RequiredAppDataGate
+        initialUser={user}
+        initialAccountGeneration="generation-a"
+        initialGrantedScopes={
+          scenario === "missing-consent" ? [GOOGLE_DRIVE_SCOPE] : requiredScopes
+        }
+      >
+        <p>Returning Library</p>
+      </RequiredAppDataGate>,
+    );
+    await act(async () => {});
+    expect(screen.queryByText("Returning Library")).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(deferRestore).not.toHaveBeenCalled();
+  },
+);
+
+it("closes the cached Library if the server reports a replacement account generation", async () => {
+  saveVerifiedAppDataReadiness(user.id, "generation-a", 1);
+  fetchMock.mockResolvedValue(
+    Response.json({ ready: true, generation: "replacement-generation" }),
+  );
+  let finishRestore!: () => void;
+  restore.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finishRestore = resolve;
+    }),
+  );
+  render(
+    <RequiredAppDataGate
+      initialUser={user}
+      initialAccountGeneration="generation-a"
+      initialGrantedScopes={requiredScopes}
+    >
+      <p>Returning Library</p>
+    </RequiredAppDataGate>,
+  );
+  await screen.findByRole("heading", { name: "Restoring your Library" });
+  expect(screen.queryByText("Returning Library")).not.toBeInTheDocument();
+  expect(
+    hasVerifiedAppDataReadiness(user.id, "generation-a", requiredScopes),
+  ).toBe(false);
+  await act(async () => finishRestore());
+  expect(screen.getByText("Returning Library")).toBeInTheDocument();
 });
 
 it.each(["absent", "other-account", "other-generation", "missing-consent"])(
@@ -232,13 +348,19 @@ it("uses verified local playback when the network fails despite an online browse
     </>,
   );
   expect(await screen.findByText("Downloaded player")).toBeInTheDocument();
-  expect(deferRestore).toHaveBeenCalledWith(user.id, "generation-a");
+  expect(deferRestore).toHaveBeenCalledWith(user.id, "generation-a", "offline");
   expect(refresh).not.toHaveBeenCalled();
 });
 it("invalidates offline readiness on an authoritative consent rejection", async () => {
+  const pause = vi
+    .spyOn(usePlayerStore.getState(), "pause")
+    .mockImplementation(() => {});
   saveVerifiedAppDataReadiness(user.id, "generation-a", 1);
-  fetchMock.mockResolvedValue(
-    Response.json({ code: "appdata_consent_required" }, { status: 403 }),
+  let rejectAccess!: (response: Response) => void;
+  fetchMock.mockReturnValue(
+    new Promise((resolve) => {
+      rejectAccess = resolve;
+    }),
   );
   render(
     <RequiredAppDataGate
@@ -249,12 +371,19 @@ it("invalidates offline readiness on an authoritative consent rejection", async 
       <p>Downloaded player</p>
     </RequiredAppDataGate>,
   );
+  expect(await screen.findByText("Downloaded player")).toBeInTheDocument();
+  await act(async () =>
+    rejectAccess(
+      Response.json({ code: "appdata_consent_required" }, { status: 403 }),
+    ),
+  );
   await screen.findByRole("button", { name: "Approve access with Google" });
   expect(screen.queryByText("Downloaded player")).not.toBeInTheDocument();
   expect(
     hasVerifiedAppDataReadiness(user.id, "generation-a", requiredScopes),
   ).toBe(false);
-  expect(deferRestore).not.toHaveBeenCalled();
+  expect(restore).not.toHaveBeenCalled();
+  expect(pause).toHaveBeenCalledOnce();
 });
 
 it("offers sign-in in a clean cached shell without mounting the player or bootstrapping", () => {
@@ -338,6 +467,7 @@ it.each([
 ])(
   "offers account recovery rather than a consent loop for %s",
   async (code) => {
+    saveVerifiedAppDataReadiness(user.id, "signed-generation", 1);
     fetchMock.mockResolvedValue(
       Response.json(
         { code },
@@ -348,6 +478,7 @@ it.each([
       <RequiredAppDataGate
         initialUser={user}
         initialAccountGeneration="signed-generation"
+        initialGrantedScopes={requiredScopes}
       >
         <p>Player and tools</p>
       </RequiredAppDataGate>,
@@ -362,6 +493,9 @@ it.each([
       recoveryGeneration: "signed-generation",
     });
     expect(screen.queryByText("Player and tools")).not.toBeInTheDocument();
+    expect(
+      hasVerifiedAppDataReadiness(user.id, "signed-generation", requiredScopes),
+    ).toBe(false);
   },
 );
 

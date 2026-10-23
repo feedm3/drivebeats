@@ -3,7 +3,8 @@
 Date: 23 October 2026. Original main checkout; baseline
 `56259144d6a6be2d38c1c97472fa90bba77ebe36`. Three untracked handover/design/task
 documents were preexisting; baseline copies/hashes are in ignored
-`.cache/appdata-baseline`. No commits, push or production rollout performed.
+`.cache/appdata-baseline`. Initial local verification preceded the authorized
+production rollout recorded below.
 
 ## Implemented contracts
 
@@ -58,6 +59,46 @@ after bounded parallel/latest-only reads, private Firefox measured 351ms–5547m
 for sampled backup reads and 1876ms for collection sync. These are local-dev
 observations against real Google and isolated Neon, not production measurements.
 
+## Authorized production rollout
+
+On 23 October 2026 the user explicitly authorized committing/pushing main, then
+applying production migrations and pushing. Commit
+`a0e99b151297e01d794d3b58bb633b9f9434a30c` preserves the two newer remote
+dependency/formatter commits. After the rebase, all 921 tests, lint/TypeScript
+and the production build passed again. GitHub validation
+[39929206029](https://github.com/feedm3/drivebeats/actions/runs/39929206029)
+also passed installation, lint, tests and build.
+
+Applied frozen migrations 0011–0013, in order in one transaction, to project
+`old-night-81938469`, production branch `br-rapid-mud-agwwmwmp`, database
+`neondb`. Verified all five control tables, eight lifecycle/coordination functions
+and three legacy write fences. Before/after counts were unchanged: 94 playlists,
+991 playlist entries, 221 favorites and 322 users. No credentials were exported.
+Neon reports six hours of retained history for this project.
+
+Vercel production deployment `dpl_CuiTKP2od1nQZG4oFrRgxWk6AJ5q` is READY;
+inspection of `www.drivebeats.app` resolved to that deployment and exact commit.
+Actual production Firefox showed required reconnect, then Musik, Banger (16)
+and Favorites (25). Production control records confirmed one committed,
+readback-verified migration and zero unresolved uploads. A reload restored the
+Library without another consent prompt. Playback position advanced from 0.3 to
+12.6 seconds and returned to paused state.
+
+The user reported that production metadata progress began around 412 despite
+greater localhost coverage. Read-only comparison confirmed the same account has
+different backup generations in the isolated test and production databases.
+Both had committed tag batches and zero pending operations at the comparison;
+production restores its own generation's registered operation manifest, not the
+test generation. Localhost work was retained, but was not promoted into
+production. This environment transition is distinct from multiple production
+devices restoring the same generation.
+
+The 30-day rollout row remains unset. Automatic approval review rejected its
+creation because starting the immutable cleanup cutoff was outside the explicit
+migration/push approval. A separate approval was requested; no new collection
+cleanup automation was created. The existing 29 October `track_metadata`
+retirement automation is unchanged.
+
 ## Authorized isolated database
 
 User approved an isolated test branch/database. Neon initially returned no projects
@@ -66,8 +107,9 @@ for unscoped listing; the Vercel-managed organization exposed DriveBeats project
 `br-broad-dust-agjjin8c`, from parent `br-rapid-mud-agwwmwmp`; endpoint
 `ep-wild-bar-agwxh13u.c-2.eu-central-1.aws.neon.tech`.
 
-Applied 0011, 0012 and 0013 only to that isolated branch. Existing credentials are
-reused against its hostname in a child dev process; env files were not changed or
+During local verification, applied 0011, 0012 and 0013 only to that isolated branch.
+The later authorized production application is recorded above. Existing credentials
+are reused against its hostname in a child dev process; env files were not changed or
 new passwords exported. Applied frozen hashes:
 
 - 0012: `e5a6f4a58eb380667afbaed2e993857a76651d7ace2d292758169cb5c4717db1`
@@ -75,8 +117,9 @@ new passwords exported. Applied frozen hashes:
 
 The requested 300s suspend setting was rejected HTTP412 before creation. The branch
 uses the account-enforced suspend_timeout_seconds=0 and requires authorized
-cleanup after review; keep this cost/state explicit. Production read-only checks
-found no appdata control table and unchanged 94 playlists / 221 favorites.
+cleanup after review; keep this cost/state explicit. Before the later production
+rollout, read-only checks found no appdata control table and unchanged
+94 playlists / 221 favorites.
 
 ## Verification
 
@@ -122,7 +165,8 @@ and no longer block rollout. Automated SQL/provider fixture coverage remains.
 
 Remaining runtime coverage limits: actual
 cross-account switching, abrupt process termination across multiple representative
-saved subsets and deployed Vercel behavior. Real user account/reset was never
+saved subsets, and production cross-session/concurrency acceptance beyond the
+production smoke checks above. Real user account/reset was never
 used destructively. Local engine/provider fixtures and successful HTTP/builds
 are separate from those unperformed real-account checks.
 

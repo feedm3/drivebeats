@@ -1,8 +1,10 @@
 # Retire legacy Neon collections after verified rollout
 
-Status: prepared; no production rollout timestamp, cutoff or automation exists for
-this feature. The fixed window begins only after authorized, verified production
-rollout. This is separate from the 29 October track_metadata retirement.
+Status: production migrations 0011–0013 and release `a0e99b1` deployed and smoke
+verified on 23 October 2026; no production rollout timestamp, cutoff or automation
+exists for this feature. Explicit permission to start the fixed window is pending.
+This is separate from the 29 October track_metadata retirement. See
+[production evidence](../research/drive-appdata-implementation-evidence.md#authorized-production-rollout).
 
 ## Release gates
 

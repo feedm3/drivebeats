@@ -27,31 +27,37 @@ export function ManageFoldersDialog({
   onFolderRemoved,
 }: ManageFoldersDialogProps) {
   const rootFolders = useImportedDriveStore((state) => state.rootFolders);
+  const rootFiles = useImportedDriveStore((state) => state.rootFiles);
+  const removeRootFile = useImportedDriveStore((state) => state.removeRootFile);
   const removeRootFolder = useImportedDriveStore(
     (state) => state.removeRootFolder,
   );
 
   const folders = useMemo(
     () =>
-      sortFoldersNatural(
-        rootFolders.filter((folder) => folder.mimeType === FOLDER_MIME),
-      ),
-    [rootFolders],
+      sortFoldersNatural([
+        ...rootFolders.filter((folder) => folder.mimeType === FOLDER_MIME),
+        ...rootFiles,
+      ]),
+    [rootFolders, rootFiles],
   );
 
-  const handleRemove = (id: string) => {
-    removeRootFolder(id);
-    useFolderCacheStore.getState().invalidate(id);
+  const handleRemove = (id: string, isFolder: boolean) => {
+    if (isFolder) {
+      removeRootFolder(id);
+      useFolderCacheStore.getState().invalidate(id);
+    } else removeRootFile(id);
     onFolderRemoved?.();
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogTitle>Remove folders</DialogTitle>
+        <DialogTitle>Remove Library items</DialogTitle>
         <DialogDescription>
-          Folders are only removed from Drivebeats. Your files in Google Drive
-          are not changed.
+          Removing an Imported Folder or Standalone Track removes that Library
+          choice on every device. Your music files and existing downloads stay
+          unchanged.
         </DialogDescription>
 
         {/* No inner scroller: DialogContent already caps its own height and
@@ -59,7 +65,7 @@ export function ManageFoldersDialog({
         <div className="mt-4 rounded-md border">
           {folders.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-              No imported folders.
+              No Imported Folders or Standalone Tracks.
             </div>
           ) : (
             <ul className="divide-y">
@@ -82,11 +88,13 @@ export function ManageFoldersDialog({
                     type="button"
                     variant="ghost"
                     size="icon-lg"
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    className="min-h-11 min-w-11 text-destructive hover:bg-destructive/10 hover:text-destructive"
                     aria-label={`Remove ${folder.name}`}
-                    onClick={() => handleRemove(folder.id)}
+                    onClick={() =>
+                      handleRemove(folder.id, folder.mimeType === FOLDER_MIME)
+                    }
                   >
-                    <Trash2 className="size-4" />
+                    <Trash2 aria-hidden="true" />
                   </Button>
                 </li>
               ))}

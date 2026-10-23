@@ -9,10 +9,19 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useMetadataIndexStore } from "@/lib/metadata-index-coordinator";
 import { useMetadataLoaderStore } from "@/lib/track-metadata-loader";
+import { useDriveAppDataStore } from "@/stores/drive-appdata-store";
 import { useId3MetadataStore } from "@/stores/id3-metadata-store";
+import { useLibrarySearchStore } from "@/stores/library-search-store";
 import { MetadataActivity } from "./metadata-activity";
 
-const fixtures = vi.hoisted(() => ({ status: vi.fn(), diagnostics: vi.fn() }));
+const fixtures = vi.hoisted(() => ({
+  status: vi.fn(),
+  diagnostics: vi.fn(),
+  restore: vi.fn(),
+}));
+vi.mock("@/lib/drive-appdata-client", () => ({
+  restoreDriveAppData: fixtures.restore,
+}));
 vi.mock("@/lib/metadata-diagnostics", () => ({
   getMetadataUnresolvedDiagnostics: fixtures.diagnostics,
 }));
@@ -38,7 +47,12 @@ vi.mock("@/stores/id3-metadata-store", async () => {
 });
 vi.mock("@/stores/library-search-store", async () => {
   const { create } = await import("zustand");
-  return { useLibrarySearchStore: create(() => ({ status: "ready" })) };
+  return {
+    useLibrarySearchStore: create(() => ({
+      status: "ready",
+      buildProgress: 0,
+    })),
+  };
 });
 vi.mock("@/components/ui/popover", async () => {
   const { createContext, useContext } = await import("react");
@@ -84,6 +98,8 @@ vi.mock("@/components/ui/popover", async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fixtures.restore.mockResolvedValue(undefined);
+  useDriveAppDataStore.setState(useDriveAppDataStore.getInitialState(), true);
   fixtures.status.mockReturnValue({
     indexingState: "running",
     coverageScopeVersion: 1,
@@ -449,4 +465,77 @@ describe("metadata activity subscriptions", () => {
     expect(screen.getByText("Track A.mp3")).toBeVisible();
     expect(screen.getByText("Track C.mp3")).toBeVisible();
   });
+});
+
+it("updates discovery progress while a cold Library catalog is still building", () => {
+  useLibrarySearchStore.setState({ status: "loading", buildProgress: 0 });
+  fixtures.status.mockImplementation(() => ({
+    indexingState: "running",
+    coverageScopeVersion: 1,
+    coveragePending: false,
+    observedAt: null,
+    total: null,
+    checked: 0,
+    unresolved: 0,
+    pauseReason: null,
+    catalogItemsDiscovered: useLibrarySearchStore.getState().buildProgress,
+  }));
+  render(<MetadataActivity />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Music metadata progress" }),
+  );
+  expect(screen.getByText("Checking your Library…")).toBeInTheDocument();
+  act(() => useLibrarySearchStore.setState({ buildProgress: 287 }));
+  expect(screen.getByText("287 Library items found…")).toBeInTheDocument();
+  act(() => useLibrarySearchStore.setState({ buildProgress: 586 }));
+  expect(screen.getByText("586 Library items found…")).toBeInTheDocument();
+});
+
+it("offers a touch-sized restore retry with a clear paused state and an actionable failure", async () => {
+  useDriveAppDataStore.setState({
+    accountId: "account-a",
+    status: "error",
+    error: "offline",
+  });
+  fixtures.status.mockReturnValue({
+    indexingState: "paused",
+    coverageScopeVersion: 1,
+    coveragePending: true,
+    observedAt: 1,
+    total: 3000,
+    checked: 85,
+    unresolved: 0,
+    pauseReason: "appdata_restore_required",
+  });
+  let rejectRestore!: (reason: Error) => void;
+  fixtures.restore.mockReturnValueOnce(
+    new Promise((_resolve, reject) => {
+      rejectRestore = reject;
+    }),
+  );
+  const view = render(<MetadataActivity />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Music metadata progress" }),
+  );
+  expect(
+    screen.getByText(
+      /Metadata checks are paused until your Google Drive backup is restored/,
+    ),
+  ).toBeInTheDocument();
+  expect(view.container.querySelector(".animate-spin")).toBeNull();
+  const retry = screen.getByRole("button", {
+    name: "Retry Google Drive backup",
+  });
+  expect(retry).toHaveClass("min-h-11", "min-w-11");
+  fireEvent.click(retry);
+  expect(fixtures.restore).toHaveBeenCalledWith("account-a");
+  expect(
+    screen.getByRole("button", { name: "Retrying backup…" }),
+  ).toBeDisabled();
+  await act(async () => rejectRestore(new Error("offline")));
+  expect(screen.getByRole("alert")).toHaveTextContent("Storage & data");
+  expect(
+    screen.getByRole("button", { name: "Retry Google Drive backup" }),
+  ).toBeEnabled();
+  expect(useDriveAppDataStore.getState().status).toBe("error");
 });

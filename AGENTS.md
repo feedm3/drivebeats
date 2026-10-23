@@ -47,9 +47,9 @@ Keep database access easy to audit.
 
 ## Sync Boundaries
 
-- `playlists` and `favorites` are cloud-synced through Neon.
-- Extracted title, artist, and album tags stay in the account- and content-version-scoped browser cache; they never sync through Neon. New browsers rebuild tags and initially display filenames. Collection file descriptors remain separate from extracted tags.
-- `recently played`, imported Drive items, player state, and offline downloads remain device-local.
+- Playlists, favorites, Imported Folder/Standalone Track choices and completed, content-version-scoped tags sync through DriveBeats-owned hidden Google app data. Required app-folder consent and verified one-time migration gate normal use.
+- Neon retains account/authentication and durable coordination records. Legacy collections are a migration source only until the global rollout cutoff; see `docs/operations/retire-neon-collections.md` before retirement work.
+- `recently played`, descendant catalogs, player state, and offline downloads remain device-local. Restore saved tags before missing-tag extraction; WebMCP `cache_only` stays network-free.
 - Do not store the full imported folder tree in the database.
 - Only store metadata needed for synced features. Never store audio blobs in Neon.
 - The Library Search catalog stays account-scoped and device-local; publish only complete catalog generations.
@@ -66,13 +66,11 @@ For sync-related changes, also verify:
 
 - playlist and favorite changes appear after switching devices or refreshing another session
 - logout clears local device data but does not delete synced cloud data
-- deleting cloud data removes synced playlists and favorites without writing anything back to Google Drive
+- account deletion fences and drains writers, deletes and verifies all app-owned hidden data before removing credentials; use disposable accounts for destructive verification
 
 ## Google Drive Access Policy
 
-Treat Google Drive as strictly read-only in this codebase. Never add code that writes, edits, moves, renames, uploads,
-trashes, deletes, or changes permissions for Drive files or folders. All Drive integrations must be limited to reading
-metadata, listing content, and streaming user-selected audio with the minimum required access.
+Music files and folders in Google Drive remain strictly read-only: only read metadata, list content and stream user-selected audio. The sole write exception is versioned DriveBeats data inside `appDataFolder`, through the authenticated server coordinator with `drive.appdata`. Never write audio, change music files/folders or their permissions, or expose arbitrary Drive write targets. Preserve existing applied migrations.
 
 ## Mobile-First Design
 

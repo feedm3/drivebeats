@@ -2,6 +2,8 @@
 
 import { toast } from "sonner";
 import { clearBackgroundProgress } from "@/lib/background-progress-db";
+import { clearPendingCollectionSaves } from "@/lib/cloud-library-api";
+import { stopDriveAppData } from "@/lib/drive-appdata-client";
 import { clearFolderListings } from "@/lib/folder-cache-db";
 import { stopMetadataIndex } from "@/lib/metadata-index-coordinator";
 import { clearOfflineDownloadDiagnostics } from "@/lib/offline-download-diagnostics";
@@ -38,6 +40,8 @@ async function purgeServiceWorkerCaches() {
 
 export async function clearLocalData() {
   toast.dismiss();
+  const accountId = useAuthStore.getState().user?.id;
+  if (accountId) await stopDriveAppData(accountId, { clearLocal: true });
   stopMetadataIndex();
   await clearBackgroundProgress();
 
@@ -103,6 +107,11 @@ export async function clearLocalData() {
   // pseudonymization needs a coordinated migration rather than deleting state.
   for (const key of APP_STORAGE_KEYS) {
     window.localStorage.removeItem(key);
+  }
+  await clearPendingCollectionSaves();
+  for (const key of Object.keys(window.localStorage)) {
+    if (key.startsWith("drivebeats-appdata-ready-v1:"))
+      window.localStorage.removeItem(key);
   }
   clearOfflineDownloadDiagnostics();
 

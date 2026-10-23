@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { initializeAppDataAccount } from "@/db/appdata-control";
 import { AUTH_SESSION_COOKIE, serializeAuthSession } from "@/lib/auth-session";
 import {
   exchangeCodeForTokens,
@@ -124,6 +125,12 @@ export async function GET(request: NextRequest) {
     return recovery;
   }
 
+  let accountGeneration: string;
+  try {
+    accountGeneration = (await initializeAppDataAccount(user.id)).generation;
+  } catch {
+    return redirectWithAuthError(request, "authentication_failed");
+  }
   const response = NextResponse.redirect(new URL("/app", request.url));
   response.headers.set("Cache-Control", "no-store");
 
@@ -141,6 +148,7 @@ export async function GET(request: NextRequest) {
     AUTH_SESSION_COOKIE,
     serializeAuthSession({
       user,
+      accountGeneration,
       grantedScopes: parseGrantedGoogleScopes(data.scope),
     }),
     {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withAppDataErrors } from "@/lib/appdata-response";
 import {
   deletePlaylistRecord,
   renamePlaylistRecord,
@@ -8,7 +9,7 @@ import { getServerAuthSession } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
-export async function PATCH(
+export const PATCH = withAppDataErrors(async function PATCH(
   request: Request,
   context: { params: Promise<{ playlistId: string }> },
 ) {
@@ -38,9 +39,9 @@ export async function PATCH(
     { ok: true },
     { headers: { "Cache-Control": "no-store" } },
   );
-}
+});
 
-export async function DELETE(
+export const DELETE = withAppDataErrors(async function DELETE(
   _request: Request,
   context: { params: Promise<{ playlistId: string }> },
 ) {
@@ -58,4 +59,4 @@ export async function DELETE(
     { ok: true },
     { headers: { "Cache-Control": "no-store" } },
   );
-}
+});

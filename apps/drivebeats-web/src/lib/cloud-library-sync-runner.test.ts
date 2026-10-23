@@ -441,7 +441,7 @@ describe("runCloudLibrarySync", () => {
     expect(mockReplaceFavoritesFromCloud).not.toHaveBeenCalled();
   });
 
-  it("bootstraps local data into an empty cloud on first run", async () => {
+  it("does not resurrect stale local collections into an empty Drive authority", async () => {
     window.localStorage.removeItem(CLOUD_BOOTSTRAP_KEY);
     playlistState.playlists = [
       { id: "p1", name: "Road trip", tracks: [track()] },
@@ -451,13 +451,8 @@ describe("runCloudLibrarySync", () => {
     const { runCloudLibrarySync } = await loadRunner();
     await runCloudLibrarySync({ force: true });
 
-    expect(mockBootstrapCloudLibrarySync).toHaveBeenCalledTimes(1);
-    expect(mockBootstrapCloudLibrarySync).toHaveBeenCalledWith({
-      playlists: playlistState.playlists,
-      favorites: [],
-    });
-    // Fetched once before and once after the bootstrap upload.
-    expect(mockFetchCloudLibrarySync).toHaveBeenCalledTimes(2);
+    expect(mockBootstrapCloudLibrarySync).not.toHaveBeenCalled();
+    expect(mockFetchCloudLibrarySync).toHaveBeenCalledTimes(1);
     expect(window.localStorage.getItem(CLOUD_BOOTSTRAP_KEY)).toBe("1");
   });
 

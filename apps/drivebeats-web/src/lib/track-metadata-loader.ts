@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { waitForDriveAppDataRestore } from "@/lib/drive-appdata-client";
 import {
   MetadataReadError,
   metadataEnvironmentKey,
@@ -306,6 +307,28 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
     !(cached.status === "unresolved" && flight.blob)
   )
     return { metadata: cached, loadedNow: false };
+  // Existing local hits remain available during an offline/failed restore. Missing
+  // records must wait; falling through would reread already acknowledged audio.
+  if (!(await waitForDriveAppDataRestore(known.accountId, known.track))) {
+    return {
+      metadata: {
+        status: "deferred",
+        freshness: cached.freshness,
+        error: { code: "appdata_restore_required", retryable: true },
+      },
+      loadedNow: false,
+    };
+  }
+  assertCurrent(flight);
+  await useId3MetadataStore
+    .getState()
+    .loadRecord(known.track, metadataEnvironmentKey());
+  const restored = getTrackMetadataState(known);
+  if (
+    restored.freshness === "current" &&
+    ["ready", "no_target_tags", "unresolved"].includes(restored.status)
+  )
+    return { metadata: restored, loadedNow: false };
   setStatus(known, { status: "loading", freshness: cached.freshness });
   let outcome: MetadataOutcome;
   let descriptor = known.track;
@@ -402,6 +425,8 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
       if (!updateKnownTrackDescriptor(known, descriptor))
         throw new MetadataReadError("scope_changed", true);
       useId3MetadataStore.getState().observeDescriptor(descriptor);
+      await waitForDriveAppDataRestore(known.accountId, descriptor);
+      assertCurrent(flight);
       await useId3MetadataStore
         .getState()
         .loadRecord(descriptor, metadataEnvironmentKey());

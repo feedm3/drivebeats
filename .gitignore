@@ -28,6 +28,7 @@ out/
 
 # vercel
 .vercel
+.cache/
 
 # typescript
 *.tsbuildinfo

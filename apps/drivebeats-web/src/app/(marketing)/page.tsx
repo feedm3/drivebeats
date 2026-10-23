@@ -48,7 +48,7 @@ const steps = [
   {
     n: 3,
     title: "Play",
-    desc: "Find a track and press play. Your playlists and favorites sync across devices; import your Library on each one.",
+    desc: "Find a track and press play. Your playlists and favorites sync across devices; your imported Library choices and music tags follow you too.",
   },
 ];
 
@@ -87,7 +87,7 @@ const features = [
     icon: Lock,
     title: "Private by design",
     description:
-      "Read-only Drive access. Your imported Library, music tags, listening history, and offline downloads stay on this device. Only playlists and favorites sync.",
+      "Your music files stay read-only. Playlists, favorites, Library choices and music tags save to hidden Google Drive app data. Listening history and downloads stay on your device.",
   },
 ];
 
@@ -95,7 +95,7 @@ const showcase = [
   {
     title: "Favorites on every device",
     description:
-      "Heart a track on one device, find it waiting on every other. Playlists and favorites follow your account; your imported Library stays on each device.",
+      "Heart a track on one device, find it waiting on every other. Playlists and favorites follow your account; your imported Library choices and music tags follow you too.",
     image: {
       src: "/screenshots/2026-04-21-favorites.png",
       alt: "DriveBeats library view with a Favorites collection, folder tree sidebar, and the bottom player bar",
@@ -450,41 +450,49 @@ export default function LandingPage() {
             </LandingFaqItem>
             <LandingFaqItem question="Can you see or modify my files?">
               DriveBeats is built to read and play the files you choose. It does
-              not upload, edit, rename, move, or delete your Drive files. Access
-              is limited to the items you select with Google Picker, rather than
+              not upload, edit, rename, move, or delete your music files. It
+              writes only its own hidden app-data backup. Music access is
+              limited to the items you select with Google Picker, rather than
               your entire Drive.
             </LandingFaqItem>
             <LandingFaqItem question="Do my files get downloaded or stored on your servers?">
               DriveBeats does not keep audio files on its servers. Playback
               streams from Google Drive in your browser. To read music tags,
               small parts of a track pass through a DriveBeats server and are
-              held in memory only for that request. The tags and any offline
-              downloads stay in your browser on this device. Only playlist and
-              favorite metadata is synced so those collections can follow you
-              across devices.
+              held in memory only for that request. Music tags save to hidden
+              Google Drive app data so they can restore in another browser.
+              Offline downloads stay on this device.
             </LandingFaqItem>
             <LandingFaqItem question="Where is my DriveBeats data stored?">
-              Playlists and favorites sync to your DriveBeats account so they
-              can follow you across devices. Recently played tracks, imported
-              items, music tags, the Library Search catalog, player state, and
-              offline downloads stay local to this browser. Import your Library
-              on each device; music tags rebuild there automatically. DriveBeats
-              does not write any of this app data back to your Google Drive.
+              Playlists, favorites, imported Library choices and music tags save
+              in a hidden DriveBeats folder in your Google Drive. Required
+              app-folder access lets DriveBeats manage only this backup.
+              Recently played history, the Library Search catalog, player state
+              and downloaded audio stay on this device. Account identity,
+              encrypted Google connection and synchronization controls remain
+              server-side. Existing Neon collections move once after approval;
+              unmigrated collections are removed at the global cutoff shown in
+              the app, 30 days after production rollout.
             </LandingFaqItem>
             <LandingFaqItem question="Can I delete my synced data?">
               You can delete individual playlists or remove tracks from
               Favorites. To remove all your DriveBeats data, open Storage &amp;
-              data and choose Delete account. This deletes synced playlists and
-              favorites and clears this browser&rsquo;s local data. Your Google
-              Drive files are never changed. You can also use Remove all
-              downloads to clear this device&rsquo;s downloads and cached music
-              tags while keeping your synced playlists and favorites.
+              data and choose Delete account. This attempts hidden-backup
+              cleanup before removing your account and saved connection and
+              clearing this browser. An interrupted save may need support to
+              verify cleanup; your account and connection are retained
+              meanwhile. Your music files are never changed. You can also use
+              Remove all downloads to clear this device&rsquo;s downloads and
+              cached music tags while preserving your hidden Google Drive
+              backup.
             </LandingFaqItem>
             <LandingFaqItem question="What happens if I log out?">
               Logging out removes your local DriveBeats data from this browser,
               including imported items, music tags, the Library Search catalog,
               recently played tracks, offline downloads, and saved player state.
-              Your synced playlists and favorites stay in your account.
+              Your saved Google Drive backup and connection are preserved.
+              Unsaved changes are lost; the confirmation warns you before
+              clearing them.
             </LandingFaqItem>
             <LandingFaqItem question="Can I install DriveBeats as an app on my phone or computer?">
               Yes. DriveBeats is a Progressive Web App, so you can add it to

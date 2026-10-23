@@ -2,8 +2,10 @@
 import { generateKeyPairSync, sign } from "node:crypto";
 import { NextRequest, type NextResponse } from "next/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { assertAppDataIdentity } from "@/db/appdata-control";
+import { AppDataError } from "@/db/appdata-types";
 import { AUTH_SESSION_COOKIE, parseAuthSession } from "@/lib/auth-session";
-import { GOOGLE_DRIVE_SCOPE } from "@/lib/google";
+import { GOOGLE_APPDATA_SCOPE, GOOGLE_DRIVE_SCOPE } from "@/lib/google";
 import { GET as login } from "../login/route";
 import { POST as logout } from "../logout/route";
 import { POST as refresh } from "../refresh/route";
@@ -21,12 +23,19 @@ vi.mock("@/db/google-oauth-grants", () => ({
   saveGoogleOAuthGrant: database.save,
   deleteGoogleOAuthGrant: database.remove,
 }));
+vi.mock("@/db/appdata-control", () => ({
+  initializeAppDataAccount: vi.fn(async () => ({ generation: "generation-a" })),
+  assertAppDataIdentity: vi.fn(async () => ({
+    generation: "generation-a",
+    source: "drive",
+  })),
+}));
 vi.mock("@/db/users", () => ({ upsertUser: database.upsertUser }));
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", {
   modulusLength: 2048,
 });
-const scopes = `openid ${GOOGLE_DRIVE_SCOPE}`;
+const scopes = `openid ${GOOGLE_DRIVE_SCOPE} ${GOOGLE_APPDATA_SCOPE}`;
 let returnedRefreshToken: string | undefined;
 let refreshedError: string | undefined;
 let returnedScope: string;
@@ -347,4 +356,60 @@ it("identifies provider refresh failures without logging provider text or tokens
   } finally {
     log.mockRestore();
   }
+});
+
+it("keeps a signed partial-consent identity but withholds normal access tokens", async () => {
+  returnedScope = `openid ${GOOGLE_DRIVE_SCOPE}`;
+  const response = await complete(await start());
+  expect(response.headers.get("location")).toBe("https://drivebeats.test/app");
+  const session = parseAuthSession(
+    response.cookies.get(AUTH_SESSION_COOKIE)?.value,
+  );
+  expect(session?.accountGeneration).toBe("generation-a");
+  const denied = await refresh(
+    new NextRequest("https://drivebeats.test/api/auth/refresh", {
+      method: "POST",
+      headers: { cookie: cookiesFrom(response) },
+    }),
+  );
+  expect(denied.status).toBe(403);
+  expect(await denied.json()).toMatchObject({
+    code: "appdata_consent_required",
+  });
+  expect(denied.cookies.get(AUTH_SESSION_COOKIE)).toBeUndefined();
+});
+
+it("withholds playback access until the account migration is complete", async () => {
+  const response = await complete(await start());
+  vi.mocked(assertAppDataIdentity).mockResolvedValueOnce({
+    accountId: "account-a",
+    generation: "generation-a",
+    state: "active",
+    source: "migrating",
+    revision: 0,
+    migrationVersion: 0,
+  });
+  const blocked = await refresh(
+    new NextRequest("https://drivebeats.test/api/auth/refresh", {
+      method: "POST",
+      headers: { cookie: cookiesFrom(response) },
+    }),
+  );
+  expect(blocked.status).toBe(409);
+  expect(await blocked.json()).toMatchObject({ code: "appdata_not_ready" });
+});
+
+it("returns a retryable response for a transient control outage without clearing the signed session", async () => {
+  const response = await complete(await start());
+  vi.mocked(assertAppDataIdentity).mockRejectedValueOnce(
+    new AppDataError("appdata_control_unavailable"),
+  );
+  const unavailable = await refresh(
+    new NextRequest("https://drivebeats.test/api/auth/refresh", {
+      method: "POST",
+      headers: { cookie: cookiesFrom(response) },
+    }),
+  );
+  expect(unavailable.status).toBe(503);
+  expect(unavailable.cookies.get(AUTH_SESSION_COOKIE)).toBeUndefined();
 });

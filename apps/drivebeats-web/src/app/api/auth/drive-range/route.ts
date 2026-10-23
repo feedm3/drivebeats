@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
+import { assertAppDataIdentity } from "@/db/appdata-control";
 import { AUTH_SESSION_COOKIE, parseAuthSession } from "@/lib/auth-session";
 import {
   MAX_METADATA_RANGE_BYTES,
@@ -7,7 +8,7 @@ import {
   readBoundedRangeBody,
   readDriveMetadataRange,
 } from "@/lib/drive-metadata-range-service";
-import { hasGoogleDriveScope } from "@/lib/google";
+import { hasRequiredGoogleScopes } from "@/lib/google";
 
 const inputSchema = z
   .object({
@@ -46,8 +47,29 @@ export async function POST(request: NextRequest) {
     request.cookies.get(AUTH_SESSION_COOKIE)?.value,
   );
   const refreshToken = request.cookies.get("refresh_token")?.value;
-  if (!session || !hasGoogleDriveScope(session.grantedScopes) || !refreshToken)
+  if (
+    !session ||
+    !hasRequiredGoogleScopes(session.grantedScopes) ||
+    !refreshToken ||
+    !session.accountGeneration
+  )
     return rangeError("sign_in_required", 401);
+  try {
+    const account = await assertAppDataIdentity({
+      accountId: session.user.id,
+      generation: session.accountGeneration,
+    });
+    if (account.state !== "active" || account.source !== "drive")
+      return rangeError("appdata_not_ready", 409);
+  } catch (error) {
+    const code = error instanceof Error && "code" in error ? error.code : null;
+    if (
+      code === "appdata_stale_session" ||
+      code === "appdata_deletion_in_progress"
+    )
+      return rangeError("sign_in_required", 401);
+    return rangeError("auth_unavailable", 503);
+  }
   const controller = new AbortController();
   const signal = AbortSignal.any([request.signal, controller.signal]);
   const timer = setTimeout(() => controller.abort(), 12_000);

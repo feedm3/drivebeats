@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { runCloudLibrarySync } from "@/lib/cloud-library-sync-runner";
+import { restoreDriveAppData } from "@/lib/drive-appdata-client";
 import { useAuthStore } from "@/stores/auth-store";
 
 export function CloudLibrarySync() {
@@ -18,9 +19,9 @@ export function CloudLibrarySync() {
     // separately refuses to apply a payload once the session itself changed.
     const isCancelled = () => cancelled;
 
-    // The first sync after sign-in hydrates the stores and may bootstrap the
-    // cloud from local data, so it must never be dropped by the throttle.
+    // The gate restored portable data. Hydrate collections on this mount.
     void runCloudLibrarySync({ force: true, isCancelled });
+    let lastPortableRestoreAt = Date.now();
 
     // `visibilitychange` is the reliable resume signal in an installed PWA;
     // `focus` additionally covers desktop where the user clicks back into the
@@ -32,6 +33,12 @@ export function CloudLibrarySync() {
         return;
       }
       void runCloudLibrarySync({ isCancelled });
+      if (Date.now() - lastPortableRestoreAt < 60_000) return;
+      const accountId = useAuthStore.getState().user?.id;
+      if (accountId) {
+        lastPortableRestoreAt = Date.now();
+        void restoreDriveAppData(accountId).catch(() => undefined);
+      }
     };
 
     window.addEventListener("focus", onResume);

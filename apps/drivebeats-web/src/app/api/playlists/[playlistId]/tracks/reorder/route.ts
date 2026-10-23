@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import { withAppDataErrors } from "@/lib/appdata-response";
 import { reorderPlaylistTracksRecords } from "@/lib/cloud-library-service";
 import { parseReorderPlaylistTracksInput } from "@/lib/cloud-library-validation";
 import { getServerAuthSession } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
-export async function PUT(
+export const PUT = withAppDataErrors(async function PUT(
   request: Request,
   context: { params: Promise<{ playlistId: string }> },
 ) {
@@ -50,4 +51,4 @@ export async function PUT(
     { ok: true },
     { headers: { "Cache-Control": "no-store" } },
   );
-}
+});

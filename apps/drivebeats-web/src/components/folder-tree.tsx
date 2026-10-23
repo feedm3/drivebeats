@@ -141,10 +141,12 @@ export function FolderTree({
                     setFolderMenuOpen(false);
                     setManageFoldersOpen(true);
                   }}
-                  disabled={rootFolders.length === 0}
+                  disabled={
+                    rootFolders.length === 0 && importedRootFileCount === 0
+                  }
                 >
                   <Trash2 className="size-3.5" />
-                  Remove folders…
+                  Remove Library items…
                 </button>
               </PopoverContent>
             </Popover>

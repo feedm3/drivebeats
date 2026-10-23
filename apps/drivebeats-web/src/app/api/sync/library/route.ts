@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { withAppDataErrors } from "@/lib/appdata-response";
 import { getCloudLibrarySyncPayload } from "@/lib/cloud-library-service";
+import { jsonStreamResponse } from "@/lib/json-stream-response";
 import { getServerAuthSession } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export const GET = withAppDataErrors(async function GET() {
   const session = await getServerAuthSession();
   if (!session) {
     return NextResponse.json(
@@ -14,7 +16,5 @@ export async function GET() {
   }
 
   const payload = await getCloudLibrarySyncPayload(session.user);
-  return NextResponse.json(payload, {
-    headers: { "Cache-Control": "no-store" },
-  });
-}
+  return jsonStreamResponse(payload);
+});

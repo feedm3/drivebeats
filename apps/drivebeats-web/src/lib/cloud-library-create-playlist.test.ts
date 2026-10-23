@@ -1,100 +1,265 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createPlaylistWithTracksRecord } from "./cloud-library-service";
 import {
-  PLAYLIST_COUNT_LIMIT_CODE,
-  PlaylistLimitError,
-} from "./playlist-limits";
+  addPlaylistTracksRecords,
+  createPlaylistWithTracksRecord,
+  deletePlaylistRecord,
+  reorderPlaylistTracksRecords,
+} from "./cloud-library-service";
+import { applyCollectionCommand } from "./collection-commands";
+import { PlaylistLimitError } from "./playlist-limits";
 
 const mocks = vi.hoisted(() => ({
-  query: vi.fn(),
-  transaction: vi.fn(),
-  user: vi.fn(),
+  read: vi.fn(),
+  append: vi.fn(),
+  getOperation: vi.fn(),
+  op: "create-1",
 }));
-vi.mock("@/db/client", () => ({
-  getSql: () => ({ query: mocks.query, transaction: mocks.transaction }),
+vi.mock("next/headers", () => ({
+  headers: async () =>
+    new Headers({
+      "X-DriveBeats-Generation": "generation",
+      "X-DriveBeats-Operation": mocks.op,
+    }),
 }));
-vi.mock("@/db/users", () => ({ upsertUser: mocks.user }));
-
+vi.mock("@/lib/appdata-context", () => ({
+  getAppDataContext: async () => ({
+    identity: { accountId: "account", generation: "generation" },
+    service: {
+      readCollections: mocks.read,
+      append: mocks.append,
+      getOperation: mocks.getOperation,
+    },
+  }),
+}));
+const user = {
+  id: "account",
+  email: "a@example.com",
+  name: null,
+  picture: null,
+};
+const t = (id: string) => ({ fileId: id, fileName: `${id}.mp3` });
+let envelopes: {
+  operationId: string;
+  kind: string;
+  revision: number;
+  payload: unknown;
+}[];
 beforeEach(() => {
-  vi.resetAllMocks();
-  // Like Neon query objects, these statements remain lazy until the transaction.
-  mocks.query.mockImplementation((text, parameters) => ({ text, parameters }));
-  mocks.transaction.mockResolvedValue([[], []]);
+  vi.clearAllMocks();
+  mocks.op = "create-1";
+  envelopes = [
+    {
+      operationId: "migration",
+      kind: "migration",
+      revision: 1,
+      payload: { playlists: [], favorites: [] },
+    },
+  ];
+  mocks.getOperation.mockImplementation(async (_identity, id) => {
+    const op = envelopes.find((entry) => entry.operationId === id);
+    if (op?.kind !== "collections") return null;
+    const payload = op.payload as { commandHash: string; result: unknown };
+    return {
+      ...op,
+      status: "committed",
+      commandHash: payload.commandHash,
+      result: payload.result,
+    };
+  });
+  mocks.read.mockImplementation(async () => ({
+    envelopes: structuredClone(envelopes),
+    revision: envelopes.length,
+  }));
+  mocks.append.mockImplementation(async (_identity, input) => {
+    envelopes.push({ ...input, revision: envelopes.length + 1 });
+  });
 });
-
-describe("atomic Playlist creation", () => {
-  const user = {
-    id: "verified-account",
-    email: "account@example.com",
-    name: "Account",
-    picture: "",
-  };
-  it("submits the new Playlist and ordered unique tracks in a single transaction", async () => {
-    await expect(
-      createPlaylistWithTracksRecord(
-        user,
-        { id: "new-playlist", name: "Saved" },
-        [
-          { fileId: "second", fileName: "second.mp3" },
-          { fileId: "first", fileName: "first.mp3" },
-          { fileId: "second", fileName: "second.mp3" },
-        ],
-      ),
-    ).resolves.toEqual({ trackCount: 2 });
-    expect(mocks.user).toHaveBeenCalledWith(user);
-    expect(mocks.transaction).toHaveBeenCalledTimes(1);
-    const [statements] = mocks.transaction.mock.calls[0];
-    expect(statements).toHaveLength(2);
-    expect(statements[0].text).toContain("INSERT INTO playlists");
-    expect(statements[0].text).not.toContain("ON CONFLICT");
-    expect(statements[0].parameters).toEqual([
-      "new-playlist",
-      "verified-account",
-      "Saved",
-    ]);
-    expect(statements[1].text).toContain("INSERT INTO playlist_tracks");
-    expect(statements[1].parameters.slice(0, 4)).toEqual([
-      "new-playlist",
-      0,
-      "second",
-      "second.mp3",
-    ]);
-    expect(statements[1].parameters.slice(9, 13)).toEqual([
-      "new-playlist",
-      1,
-      "first",
-      "first.mp3",
-    ]);
-  });
-  it("does not issue separate writes or a second transaction when insertion fails", async () => {
-    const databaseFailure = Object.assign(new Error("limit"), {
-      detail: PLAYLIST_COUNT_LIMIT_CODE,
+describe("Drive collection command interface", () => {
+  it("returns durable forward progress after eight canceled predecessors", async () => {
+    // Reserve a real semantic hash, then model repeated abandoned reservations.
+    let hash: string | undefined;
+    mocks.append.mockImplementationOnce(async (_identity, input) => {
+      hash = input.payload.commandHash;
+      throw new Error("interrupted");
     });
-    mocks.transaction.mockRejectedValueOnce(databaseFailure);
-    await expect(
-      createPlaylistWithTracksRecord(
-        user,
-        { id: "new-playlist", name: "Saved" },
-        [{ fileId: "track", fileName: "track.mp3" }],
-      ),
-    ).rejects.toMatchObject({ code: PLAYLIST_COUNT_LIMIT_CODE });
-    expect(mocks.transaction).toHaveBeenCalledTimes(1);
-    expect(mocks.query).toHaveBeenCalledTimes(2);
-  });
-  it("rejects a track-limit violation before creating the user or Playlist", async () => {
-    const tracks = Array.from({ length: 501 }, (_, i) => ({
-      fileId: String(i),
-      fileName: `${i}.mp3`,
+    const create = () =>
+      createPlaylistWithTracksRecord(user, { id: "p", name: "Saved" }, []);
+    await expect(create()).rejects.toThrow("interrupted");
+    mocks.getOperation.mockImplementationOnce(async () => ({
+      status: "cancelled",
+      revision: 2,
+      commandHash: hash,
     }));
+    for (let i = 1; i < 8; i++)
+      mocks.getOperation.mockImplementationOnce(async () => ({
+        status: "cancelled",
+        revision: i + 2,
+        commandHash: hash,
+      }));
+    const failure = await create().catch((error) => error);
+    expect(failure).toMatchObject({
+      code: "appdata_operation_resume",
+      status: 409,
+      resumeOperationId: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    mocks.op = failure.resumeOperationId;
+    mocks.getOperation.mockResolvedValue(null);
+    expect(await create()).toEqual({ trackCount: 0 });
+    expect(mocks.append.mock.calls.at(-1)?.[1].operationId).toBe(
+      failure.resumeOperationId,
+    );
+  });
+  it("retries a cancelled unstarted reservation through the same durable successor", async () => {
+    let cancelledHash: string | undefined;
+    mocks.append.mockImplementationOnce(async (_identity, input) => {
+      cancelledHash = input.payload.commandHash;
+      throw new Error("lost before upload");
+    });
+    const create = () =>
+      createPlaylistWithTracksRecord(user, { id: "p", name: "Saved" }, [
+        t("a"),
+      ]);
+    await expect(create()).rejects.toThrow("lost");
+    const lookup = mocks.getOperation.getMockImplementation();
+    mocks.getOperation.mockImplementation(async (...args) =>
+      args[1] === "create-1"
+        ? { status: "cancelled", revision: 2, commandHash: cancelledHash }
+        : lookup?.(...args),
+    );
+    expect(await create()).toEqual({ trackCount: 1 });
+    expect(await create()).toEqual({ trackCount: 1 });
+    expect(mocks.append).toHaveBeenCalledTimes(2);
+    expect(mocks.append.mock.calls[1][1].operationId).not.toBe("create-1");
+  });
+  it("waits for a background tag upload and then applies the collection intent", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.append.mockRejectedValueOnce(
+        Object.assign(new Error("busy"), { code: "appdata_pending_write" }),
+      );
+      const saving = createPlaylistWithTracksRecord(
+        user,
+        { id: "p", name: "Saved" },
+        [t("a")],
+      );
+      await vi.advanceTimersByTimeAsync(250);
+      expect(await saving).toEqual({ trackCount: 1 });
+      expect(mocks.append).toHaveBeenCalledTimes(2);
+      expect(mocks.append.mock.calls[1][1].payload.playlists[0].tracks).toEqual(
+        [t("a")],
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("creates ordered unique tracks and retries a lost response exactly once", async () => {
+    const create = () =>
+      createPlaylistWithTracksRecord(user, { id: "p", name: "Saved" }, [
+        t("second"),
+        t("first"),
+        t("second"),
+      ]);
+    expect(await create()).toEqual({ trackCount: 2 });
+    expect(await create()).toEqual({ trackCount: 2 });
+    expect(mocks.append).toHaveBeenCalledTimes(1);
+    expect(
+      mocks.append.mock.calls[0][1].payload.playlists[0].tracks.map(
+        (track: { fileId: string }) => track.fileId,
+      ),
+    ).toEqual(["second", "first"]);
+  });
+  it("retries the originally reserved body after a lost server response", async () => {
+    let reserved: Record<string, unknown> | undefined;
+    mocks.append.mockImplementationOnce(async (_identity, input) => {
+      reserved = input;
+      throw new Error("connection lost");
+    });
+    const create = () =>
+      createPlaylistWithTracksRecord(user, { id: "p", name: "Saved" }, [
+        t("a"),
+      ]);
+    await expect(create()).rejects.toThrow("lost");
+    mocks.read.mockImplementation(async () => ({
+      envelopes: structuredClone(envelopes),
+      revision: 2,
+    }));
+    mocks.getOperation.mockResolvedValue({
+      operationId: "create-1",
+      revision: 2,
+      status: "uploading",
+      commandHash: (reserved as { payload: { commandHash: string } }).payload
+        .commandHash,
+    });
+    await create();
+    expect(mocks.append.mock.calls[1][1]).toEqual(reserved);
+  });
+  it("rejects identifier reuse for different user intent", async () => {
+    await createPlaylistWithTracksRecord(user, { id: "p", name: "Saved" }, []);
+    await expect(
+      createPlaylistWithTracksRecord(user, { id: "p", name: "Changed" }, []),
+    ).rejects.toThrow("already used");
+  });
+  it("enforces limits before writing a partial snapshot", async () => {
     await expect(
       createPlaylistWithTracksRecord(
         user,
-        { id: "new-playlist", name: "Saved" },
-        tracks,
+        { id: "p", name: "Saved" },
+        Array.from({ length: 501 }, (_, i) => t(String(i))),
       ),
     ).rejects.toBeInstanceOf(PlaylistLimitError);
-    expect(mocks.user).not.toHaveBeenCalled();
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.append).not.toHaveBeenCalled();
+  });
+  it("reapplies explicit add to the latest revision after a peer removes a track", async () => {
+    await createPlaylistWithTracksRecord(user, { id: "p", name: "Saved" }, [
+      t("a"),
+      t("b"),
+    ]);
+    mocks.op = "add-1";
+    const conflict = Object.assign(new Error("conflict"), {
+      code: "appdata_revision_conflict",
+    });
+    mocks.append.mockImplementationOnce(async () => {
+      envelopes.push({
+        operationId: "peer-remove",
+        kind: "collections",
+        revision: 3,
+        payload: {
+          playlists: [{ id: "p", name: "Saved", tracks: [t("b")] }],
+          favorites: [],
+        },
+      });
+      throw conflict;
+    });
+    expect(await addPlaylistTracksRecords(user, "p", [t("c")])).toMatchObject({
+      addedCount: 1,
+    });
+    const last = mocks.append.mock.calls.at(-1)?.[1];
+    expect(
+      last.payload.playlists[0].tracks.map(
+        (track: { fileId: string }) => track.fileId,
+      ),
+    ).toEqual(["b", "c"]);
+  });
+  it("rejects a stale reorder without resurrecting membership", async () => {
+    await createPlaylistWithTracksRecord(user, { id: "p", name: "Saved" }, [
+      t("b"),
+    ]);
+    mocks.op = "order-1";
+    await expect(
+      reorderPlaylistTracksRecords(user, "p", ["a", "b"]),
+    ).rejects.toThrow("changed");
+  });
+  it("keeps intentional deletion when another command is applied later", async () => {
+    await createPlaylistWithTracksRecord(user, { id: "p", name: "Saved" }, []);
+    mocks.op = "delete-1";
+    await deletePlaylistRecord(user, "p");
+    expect(
+      applyCollectionCommand(
+        { playlists: [], favorites: [] },
+        { type: "favorite", track: t("c"), enabled: true },
+      ).payload.playlists,
+    ).toEqual([]);
+    expect(mocks.append.mock.calls.at(-1)?.[1].payload.playlists).toEqual([]);
   });
 });

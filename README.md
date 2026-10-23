@@ -10,7 +10,7 @@ audio files.
 - Import folders or audio files from Google Drive with Google Picker
 - Browse imported folders in a focused library view
 - Stream MP3, FLAC, WAV, AAC, and OGG files directly from Google Drive
-- Sync playlists and favorites across devices
+- Restore playlists, favorites, imported Library choices and music tags across browsers using hidden Google Drive app data
 - Spotify-style player with shuffle, repeat, and seekable progress bar
 - Volume control and keyboard shortcuts
 - Light and dark mode
@@ -34,7 +34,7 @@ verified host requirements and remaining real-browser acceptance checks.
 - [Tailwind CSS](https://tailwindcss.com) v4
 - [shadcn/ui](https://ui.shadcn.com) components
 - [Zustand](https://zustand.docs.pmnd.rs) for state management
-- [Neon](https://neon.com) Postgres for synced playlists and favorites
+- [Neon](https://neon.com) Postgres for account, authentication and durable synchronization controls
 - Google Drive API (OAuth 2.0)
 
 ## Getting Started
@@ -127,7 +127,7 @@ DriveBeats currently supports MP3, FLAC, WAV, AAC, and OGG files from Google Dri
 
 ### Which Google Drive scope does the app use?
 
-DriveBeats uses `https://www.googleapis.com/auth/drive.file` together with Google Picker. Users explicitly choose the folders and files they want to share with the app.
+DriveBeats requires `https://www.googleapis.com/auth/drive.file` together with Google Picker, plus `https://www.googleapis.com/auth/drive.appdata` for its hidden backup. Users explicitly choose the folders and files they want to share with the app.
 
 ### Why would Google ask for permission again?
 
@@ -139,8 +139,7 @@ another device. Deleting cloud data removes the saved connection with the user
 record; removing DriveBeats in your Google Account permissions revokes access.
 
 Google may ask for approval again if access was revoked or expired, or if
-DriveBeats no longer has a usable saved token. Existing users may need one final
-approval when first using the saved-connection flow. Recovery retries consent
+DriveBeats no longer has a usable saved token. Existing users must approve the additional app-data scope before normal use. Recovery retries consent
 once, then displays an error rather than looping.
 
 Before deploying this flow, apply `db/migrations/0010_google_oauth_grants.sql`.
@@ -153,3 +152,28 @@ through site tools; no audio is stored in the database.
 ## License
 
 Licensed under the [MIT License](LICENSE).
+
+## Google Drive backup and migration
+
+Google sign-in requires both `drive.file` (selected music, strictly read-only)
+and `drive.appdata` (DriveBeats-owned hidden data). Normal UI, playback, APIs and
+WebMCP stay gated until approval and the once-only playlist/favorite migration
+complete. App data passes through authenticated server routes; audio is never
+stored in Neon or hidden app data. Device downloads, playback state, history and
+the derived Library Search catalog remain local. Pending saves are not portable
+until Google acknowledges them; saved unchanged tags restore before extraction.
+
+Account identity, encrypted Google grants and synchronization/deletion controls
+remain in Neon. Existing collections migrate once to Drive. The obsolete Neon
+music tables have one global cutoff 30 days after verified production rollout;
+accounts that miss it recreate playlists/favorites. No rollout date is set by
+local implementation. See `docs/research/drive-appdata-handover.md` for rollout gates.
+Logout and device clearing preserve remote data. Account deletion fences writers,
+deletes and verifies hidden app data, then removes credentials and local data.
+Revoked access requires reauthorization before cleanup can be attempted. An
+interrupted upload with an unknown outcome can block automatic account deletion;
+manual cleanup or provider/operator verification may be required. Account and
+encrypted connection records remain until cleanup is verified. Manual Google
+hidden-data deletion alone does not settle unknown saves or complete account
+deletion. See [the recovery runbook](docs/operations/recover-drive-backup.md)
+for the recovery boundary and required evidence.

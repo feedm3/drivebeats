@@ -1,4 +1,4 @@
-import { hasGoogleDriveScope } from "@/lib/google";
+import { hasRequiredGoogleScopes } from "@/lib/google";
 import { GOOGLE_APIS, refreshGoogleOAuthAccessToken } from "@/lib/google-api";
 
 export const MAX_METADATA_RANGE_BYTES = 1024 * 1024;
@@ -166,7 +166,7 @@ export async function readDriveMetadataRange(
     if (
       typeof token.access_token !== "string" ||
       !token.access_token ||
-      (typeof token.scope === "string" && !hasGoogleDriveScope(token.scope))
+      (typeof token.scope === "string" && !hasRequiredGoogleScopes(token.scope))
     )
       return rangeError("sign_in_required", 401);
     const userResponse = await fetch(USERINFO_URL, {

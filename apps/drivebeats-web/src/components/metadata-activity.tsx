@@ -8,11 +8,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { restoreDriveAppData } from "@/lib/drive-appdata-client";
 import { getMetadataUnresolvedDiagnostics } from "@/lib/metadata-diagnostics";
 import {
   getMetadataIndexStatus,
   useMetadataIndexStore,
 } from "@/lib/metadata-index-coordinator";
+import { useDriveAppDataStore } from "@/stores/drive-appdata-store";
 import { useLibrarySearchStore } from "@/stores/library-search-store";
 
 const REASON_COPY: Record<string, { title: string; explanation: string }> = {
@@ -51,10 +53,30 @@ export const MetadataActivity = memo(function MetadataActivity() {
       pauseReason: state.pauseReason,
     })),
   );
-  useLibrarySearchStore((state) => state.status);
+  useLibrarySearchStore(
+    useShallow((state) => ({
+      status: state.status,
+      buildProgress: state.buildProgress,
+    })),
+  );
   const status = getMetadataIndexStatus();
   const detailsId = useId();
   const [open, setOpen] = useState(false);
+  const [retryingRestore, setRetryingRestore] = useState(false);
+  const [restoreRetryFailed, setRestoreRetryFailed] = useState(false);
+  const backupAccountId = useDriveAppDataStore((state) => state.accountId);
+  const retryRestore = async () => {
+    if (!backupAccountId) return;
+    setRetryingRestore(true);
+    setRestoreRetryFailed(false);
+    try {
+      await restoreDriveAppData(backupAccountId);
+    } catch {
+      setRestoreRetryFailed(true);
+    } finally {
+      setRetryingRestore(false);
+    }
+  };
   const [expandedScope, setExpandedScope] = useState<number | null>(null);
   const [diagnostics, setDiagnostics] = useState<{
     scope: number;
@@ -93,9 +115,10 @@ export const MetadataActivity = memo(function MetadataActivity() {
   )
     return null;
   const animate =
-    status.indexingState === "running" ||
-    status.indexingState === "paused" ||
-    status.coveragePending;
+    status.pauseReason !== "appdata_restore_required" &&
+    (status.indexingState === "running" ||
+      status.indexingState === "paused" ||
+      status.coveragePending);
   return (
     <Popover open={open} onOpenChange={(nextOpen) => setOpen(nextOpen)}>
       <PopoverTrigger
@@ -123,11 +146,14 @@ export const MetadataActivity = memo(function MetadataActivity() {
         <div className="flex flex-col gap-3 text-base sm:text-sm">
           <div className="flex flex-col gap-1">
             <p className="text-balance font-semibold">Music metadata</p>
-            <p className="tabular-nums">
-              {status.total === null ||
-              (status.coveragePending && status.observedAt === null)
-                ? "Checking your Library…"
-                : `${status.checked} of ${status.total} checked`}
+            <p className="tabular-nums" aria-live="polite">
+              {status.total === null
+                ? status.catalogItemsDiscovered > 0
+                  ? `${status.catalogItemsDiscovered} Library items found…`
+                  : "Checking your Library…"
+                : status.coveragePending && status.observedAt === null
+                  ? "Checking your Library…"
+                  : `${status.checked} of ${status.total} checked`}
             </p>
           </div>
           {status.unresolved > 0 ? (
@@ -212,7 +238,30 @@ export const MetadataActivity = memo(function MetadataActivity() {
               </p>
             ) : null}
           </section>
-          {status.pauseReason ? (
+          {status.pauseReason === "appdata_restore_required" ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-muted-foreground">
+                Metadata checks are paused until your Google Drive backup is
+                restored. Cached tags and playback remain available.
+              </p>
+              <Button
+                variant="outline"
+                className="min-h-11 min-w-11"
+                disabled={retryingRestore || !backupAccountId}
+                onClick={() => void retryRestore()}
+              >
+                {retryingRestore
+                  ? "Retrying backup…"
+                  : "Retry Google Drive backup"}
+              </Button>
+              {restoreRetryFailed && (
+                <p role="alert" className="text-muted-foreground">
+                  Backup restore could not finish. Check your connection, or
+                  open Storage &amp; data to reconnect Google.
+                </p>
+              )}
+            </div>
+          ) : status.pauseReason ? (
             <p className="text-muted-foreground">
               {status.pauseReason === "metadata_auth_required" ||
               status.pauseReason === "drive_auth_required"

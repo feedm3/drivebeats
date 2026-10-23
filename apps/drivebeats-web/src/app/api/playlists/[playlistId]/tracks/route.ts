@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withAppDataErrors } from "@/lib/appdata-response";
 import { addPlaylistTracksRecords } from "@/lib/cloud-library-service";
 import { parseAddPlaylistTracksInput } from "@/lib/cloud-library-validation";
 import { getPlaylistLimitError } from "@/lib/playlist-limits";
@@ -6,7 +7,7 @@ import { getServerAuthSession } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
-export async function POST(
+export const POST = withAppDataErrors(async function POST(
   request: Request,
   context: { params: Promise<{ playlistId: string }> },
 ) {
@@ -52,4 +53,4 @@ export async function POST(
 
     throw error;
   }
-}
+});

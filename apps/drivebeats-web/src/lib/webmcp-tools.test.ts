@@ -396,7 +396,7 @@ describe("DriveBeats WebMCP actions", () => {
     }
   });
 
-  it("preserves and bootstraps never-uploaded local playlists before reading cloud collections", async () => {
+  it("does not resurrect stale local playlists when Drive collections are empty", async () => {
     localStorage.removeItem("drivebeats-cloud-bootstrap-v1");
     const localPlaylist = {
       id: "legacy-local",
@@ -411,14 +411,9 @@ describe("DriveBeats WebMCP actions", () => {
 
     expect(await run("drivebeats_list_collections")).toMatchObject({
       ok: true,
-      collections: expect.arrayContaining([
-        { id: "legacy-local", name: "Local music", trackCount: 0 },
-      ]),
     });
-    expect(bootstrapCloudLibrarySync).toHaveBeenCalledWith(
-      expect.objectContaining({ playlists: [localPlaylist] }),
-    );
-    expect(usePlaylistStore.getState().playlists).toEqual([localPlaylist]);
+    expect(bootstrapCloudLibrarySync).not.toHaveBeenCalled();
+    expect(usePlaylistStore.getState().playlists).toEqual([]);
   });
 
   it("reuses a verified cloud read for consecutive player controls", async () => {

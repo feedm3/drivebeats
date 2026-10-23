@@ -58,6 +58,10 @@ interface Id3MetadataState {
     result: MetadataOutcome,
     expectedGeneration?: number,
   ) => Promise<boolean>;
+  restoreRecord: (
+    record: MetadataRecord,
+    expectedFingerprint?: string,
+  ) => Promise<boolean>;
   setMetadata: (fileId: string, metadata: CachedId3Metadata) => void;
   requestMetadata: (
     fileId: string,
@@ -432,6 +436,49 @@ export const useId3MetadataStore = create<Id3MetadataState>((set, get) => ({
       } catch {
         /* Notifications are optional; persistence remains valid. */
       }
+    // The explicit restore lifecycle owns the backup listener. Local cache APIs
+    // never import/start a remote transport (including WebMCP cache_only).
+    if (typeof window !== "undefined")
+      window.dispatchEvent(
+        new CustomEvent("drivebeats-portable-metadata", { detail: record }),
+      );
+    return true;
+  },
+
+  restoreRecord: async (record, expectedFingerprint) => {
+    const { accountId, generation } = get();
+    if (!accountId || record.accountId !== accountId) return false;
+    if (
+      expectedFingerprint !== undefined &&
+      expectedFingerprint !== record.fingerprint
+    )
+      return false;
+    const existing = get().records[record.fileId];
+    if (
+      expectedFingerprint === undefined &&
+      existing &&
+      existing.parserVersion === record.parserVersion &&
+      existing.policyVersion === record.policyVersion &&
+      existing.schemaVersion === record.schemaVersion &&
+      (existing.status === "ready" || existing.status === "no_target_tags") &&
+      (existing.fingerprint ?? "") > (record.fingerprint ?? "")
+    )
+      return true;
+    const durable = await saveMetadataRecord(record, storageEpoch);
+    if (get().accountId !== accountId || get().generation !== generation)
+      return false;
+    set((state) => {
+      const records = boundRecords(
+        { ...state.records, [record.fileId]: record },
+        record.fileId,
+      );
+      const cache = { ...state.cache };
+      const projected = project(record);
+      if (projected) cache[record.fileId] = projected;
+      else delete cache[record.fileId];
+      for (const id of Object.keys(cache)) if (!records[id]) delete cache[id];
+      return { records, cache, durable: state.durable && durable };
+    });
     return true;
   },
 

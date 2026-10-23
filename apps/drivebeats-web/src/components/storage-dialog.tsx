@@ -21,7 +21,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { logoutAndRedirect } from "@/lib/clear-local-data";
-import { deleteAllCloudLibraryData } from "@/lib/cloud-library-api";
+import {
+  clearPendingCollectionSaves,
+  deleteAllCloudLibraryData,
+  resetGoogleDriveBackup,
+} from "@/lib/cloud-library-api";
+import { restoreDriveAppData } from "@/lib/drive-appdata-client";
 import {
   getMetadataCacheUsage,
   type MetadataCacheUsage,
@@ -29,20 +34,38 @@ import {
 import * as offlineDb from "@/lib/offline-db";
 import { offlineDownloadManager } from "@/lib/offline-download-manager";
 import { formatBytes } from "@/lib/utils";
+import { useDriveAppDataStore } from "@/stores/drive-appdata-store";
 import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { useLibrarySearchStore } from "@/stores/library-search-store";
 import { getFavoriteTracks, useLibraryStore } from "@/stores/library-store";
 import { useOfflineStore } from "@/stores/offline-store";
 import { usePlaylistStore } from "@/stores/playlist-store";
 
-type View = "main" | "confirm-downloads" | "confirm-account";
+const cutoffFormatter = new Intl.DateTimeFormat("en-GB", {
+  dateStyle: "long",
+  timeStyle: "short",
+  timeZone: "Europe/Berlin",
+});
+
+type View =
+  | "main"
+  | "confirm-downloads"
+  | "confirm-account"
+  | "confirm-backup"
+  | "backup-reset-complete";
 
 interface StorageDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  recoveryGeneration?: string;
 }
 
-export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
+export function StorageDialog({
+  open,
+  onOpenChange,
+  recoveryGeneration,
+}: StorageDialogProps) {
+  const backup = useDriveAppDataStore();
   const [view, setView] = useState<View>("main");
   const [trackCount, setTrackCount] = useState(0);
   const [totalBytes, setTotalBytes] = useState(0);
@@ -59,6 +82,7 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
   const metadataGeneration = useId3MetadataStore((state) => state.generation);
   const metadataHydrated = useId3MetadataStore((state) => state.hydrated);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [resettingBackup, setResettingBackup] = useState(false);
   const trackJobs = useOfflineStore((state) => state.trackJobs);
   const offlineCollections = useOfflineStore((state) => state.collections);
   const storagePersistence = useOfflineStore(
@@ -84,10 +108,14 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
+      if (!next && view === "backup-reset-complete") {
+        window.location.reload();
+        return;
+      }
       if (!next) setView("main");
       onOpenChange(next);
     },
-    [onOpenChange],
+    [onOpenChange, view],
   );
 
   const loadStats = useCallback(async () => {
@@ -187,14 +215,39 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
       await logoutAndRedirect();
     } catch (error) {
       console.error("Delete account failed:", error);
-      toast.error("Could not delete account. Please try again.");
+      toast.error(
+        "Account deletion is incomplete. Your account and encrypted connection are retained until cleanup is verified. An interrupted save may require support.",
+      );
       setDeletingAccount(false);
     }
   }, []);
 
+  const handleResetBackup = useCallback(async () => {
+    setResettingBackup(true);
+    try {
+      const reset = await resetGoogleDriveBackup(
+        recoveryGeneration ?? backup.generation ?? undefined,
+      );
+      await clearPendingCollectionSaves();
+      for (const key of Object.keys(window.localStorage)) {
+        if (key.startsWith("drivebeats-appdata-ready-v1:"))
+          window.localStorage.removeItem(key);
+      }
+      if (reset?.cleanupPending) {
+        setView("backup-reset-complete");
+        setResettingBackup(false);
+      } else window.location.reload();
+    } catch {
+      toast.error(
+        "Backup reset is incomplete. Reconnect Google access if needed, then retry. Your account is preserved.",
+      );
+      setResettingBackup(false);
+    }
+  }, [recoveryGeneration, backup.generation]);
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="w-[calc(100%_-_2rem)] [&_button]:min-h-11 [&_button]:min-w-11">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto w-[calc(100%_-_2rem)] [&_button]:min-h-11 [&_button]:min-w-11">
         {view === "main" && (
           <>
             <DialogTitle>Storage & data</DialogTitle>
@@ -299,9 +352,105 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
               <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
                 <Cloud className="size-3.5" />
               </span>
-              Cloud
+              Google Drive backup
             </h3>
-            <div className="mt-1 space-y-3 text-sm">
+            <div
+              className="mt-1 flex flex-col gap-3 text-sm"
+              aria-live="polite"
+            >
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Saved music tags</span>
+                <span>
+                  {backup.status === "idle" ? "Not checked" : backup.savedCount}
+                </span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">
+                  Pending backup items
+                </span>
+                <span>{backup.pendingCount}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">
+                  Approximate backup size
+                </span>
+                <span>
+                  {backup.status === "idle"
+                    ? "Not checked"
+                    : formatBytes(backup.approximateBytes)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">
+                  Last successful save
+                </span>
+                <span>
+                  {backup.lastSavedAt
+                    ? `${new Date(backup.lastSavedAt).toISOString().slice(0, 16).replace("T", " ")} UTC`
+                    : "Not yet saved on this device"}
+                </span>
+              </div>
+              {backup.status === "restoring" && (
+                <p role="status">
+                  Restoring saved Library choices and music tags…
+                </p>
+              )}
+              {backup.error && (
+                <p role="alert">
+                  {backup.error === "appdata_backup_capacity" ? (
+                    "The backup has reached its size limit. Your saved data is preserved. Reset the backup only if you want to start again; pending items are still on this device."
+                  ) : (
+                    <>
+                      Backup could not finish. Check your connection and
+                      available Google storage, then retry. If access was
+                      revoked, reconnect with Google.
+                    </>
+                  )}
+                </p>
+              )}
+              {backup.error && backup.accountId && (
+                <Button
+                  variant="outline"
+                  className="min-h-11"
+                  onClick={() =>
+                    backup.accountId &&
+                    void restoreDriveAppData(backup.accountId).catch(
+                      () => undefined,
+                    )
+                  }
+                >
+                  Retry Google Drive backup
+                </Button>
+              )}
+              {backup.error && (
+                <Button
+                  variant="outline"
+                  className="min-h-11"
+                  onClick={() =>
+                    window.location.assign("/api/auth/login?reconnect=1")
+                  }
+                >
+                  Reconnect Google access
+                </Button>
+              )}
+              {backup.migrationVersion > 0 && (
+                <p className="text-muted-foreground">
+                  Playlist and favorite migration complete.
+                </p>
+              )}
+              {backup.cutoff && (
+                <p className="text-muted-foreground">
+                  Legacy Neon playlists and favorites are permanently removed at{" "}
+                  {cutoffFormatter.format(new Date(backup.cutoff))}{" "}
+                  (Europe/Berlin). Collections that were not migrated by this
+                  global cutoff must be recreated.
+                </p>
+              )}
+              <p className="text-muted-foreground">
+                Saved data follows you across browsers. Pending backup items
+                include unsaved music tags and Library choice changes. They are
+                not yet backed up. Music files are never changed.
+              </p>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Synced playlists</span>
                 <span className="font-medium tabular-nums">
@@ -314,6 +463,13 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
                   {favoriteCount}
                 </span>
               </div>
+              <Button
+                variant="outline"
+                onClick={() => setView("confirm-backup")}
+                disabled={!recoveryGeneration && !backup.generation}
+              >
+                Reset Google Drive backup
+              </Button>
             </div>
 
             <div className="mt-4 flex items-center justify-between border-t pt-4">
@@ -333,6 +489,64 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
           </>
         )}
 
+        {view === "confirm-backup" && (
+          <>
+            <DialogTitle>Reset Google Drive backup?</DialogTitle>
+            <DialogDescription>
+              This clears your active saved playlists, favorites, imported
+              choices and music tags so you can start again. Older hidden data
+              may still need cleanup if an interrupted save has an unknown
+              outcome. Other browsers must reconnect before saving again. Your
+              account, saved Google connection, music files and device downloads
+              are kept.
+            </DialogDescription>
+            <p className="text-sm text-muted-foreground">
+              Old Neon collections will not be imported again. This cannot be
+              undone.
+            </p>
+            <div className="flex justify-between gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setView("main")}
+                disabled={resettingBackup}
+              >
+                Back
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleResetBackup}
+                disabled={resettingBackup}
+              >
+                {resettingBackup
+                  ? "Resetting backup…"
+                  : "Reset backup permanently"}
+              </Button>
+            </div>
+          </>
+        )}
+
+        {view === "backup-reset-complete" && (
+          <>
+            <DialogTitle>Backup reset complete</DialogTitle>
+            <DialogDescription>
+              Your new Library backup is ready to start empty. Some older hidden
+              data may remain in Google Drive while an interrupted save is
+              verified. Account deletion may need support to finish that
+              cleanup.
+            </DialogDescription>
+            <p className="text-sm text-muted-foreground">
+              Your account, Google connection, music files and device downloads
+              are preserved.
+            </p>
+            <Button
+              className="min-h-11"
+              onClick={() => window.location.reload()}
+            >
+              Continue to Library
+            </Button>
+          </>
+        )}
+
         {view === "confirm-downloads" && (
           <>
             <DialogTitle>Remove all downloads?</DialogTitle>
@@ -340,8 +554,9 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
               This removes all offline download settings and {trackCount}{" "}
               downloaded {trackCount === 1 ? "track" : "tracks"} (
               {formatBytes(totalBytes)}) from this device, plus cached music
-              metadata. Downloads can be saved again; metadata rebuilds
-              automatically.
+              metadata. Downloads can be saved again. Saved music tags restore
+              from Google Drive; unsaved tags may need to rebuild. Your remote
+              backup is preserved.
             </DialogDescription>
             <div className="mt-4 flex justify-between">
               <Button
@@ -382,13 +597,23 @@ export function StorageDialog({ open, onOpenChange }: StorageDialogProps) {
               This permanently deletes your DriveBeats data:
             </DialogDescription>
             <ul className="mt-1 list-inside list-disc space-y-1 text-sm text-muted-foreground">
-              <li>Synced playlists and favorites</li>
+              <li>
+                Hidden DriveBeats app data in Google Drive: playlists,
+                favorites, imported choices and music tags
+              </li>
+              <li>Your DriveBeats account and saved Google connection</li>
               <li>Downloaded tracks on this device</li>
               <li>Saved preferences and cached data</li>
             </ul>
             <p className="mt-3 text-sm text-muted-foreground">
-              You'll be logged out. To also revoke Drive access, remove
-              DriveBeats from your{" "}
+              Your music files stay untouched. You'll be logged out only after
+              hidden-data cleanup is verified. Reconnect if Google access is
+              missing so DriveBeats can attempt cleanup. An interrupted save
+              with an unknown outcome may require manual cleanup or support to
+              verify what Google accepted. Your account and encrypted connection
+              remain stored until cleanup is verified. Deleting hidden data in
+              Google Drive does not by itself complete account deletion. You can
+              also revoke access from your{" "}
               <a
                 href="https://myaccount.google.com/connections"
                 target="_blank"

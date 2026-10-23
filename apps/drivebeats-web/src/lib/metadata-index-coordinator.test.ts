@@ -4,6 +4,7 @@ const fixtures = vi.hoisted(() => {
   const authListeners = new Set<() => void>();
   const importsListeners = new Set<() => void>();
   const searchListeners = new Set<() => void>();
+  const metadataListeners = new Set<() => void>();
   return {
     auth: {
       authStatus: "authenticated",
@@ -14,6 +15,7 @@ const fixtures = vi.hoisted(() => {
     authListeners,
     importsListeners,
     searchListeners,
+    metadataListeners,
     search: {
       hydrated: true,
       invalidated: false,
@@ -37,6 +39,7 @@ const fixtures = vi.hoisted(() => {
     loadedCache: vi.fn(),
     retryAt: vi.fn(),
     coverage: vi.fn(),
+    descriptorRevision: 0,
     metadata: { records: {}, generation: 1, accountId: "account" },
   };
 });
@@ -70,7 +73,10 @@ vi.mock("@/stores/library-search-store", () => ({
 }));
 vi.mock("@/stores/id3-metadata-store", () => ({
   useId3MetadataStore: {
-    subscribe: () => () => {},
+    subscribe: (listener: () => void) => {
+      fixtures.metadataListeners.add(listener);
+      return () => fixtures.metadataListeners.delete(listener);
+    },
     getState: () => ({
       ...fixtures.metadata,
       setAccount: async () => {},
@@ -102,7 +108,7 @@ vi.mock("@/lib/persisted-metadata-coverage", () => ({
   buildPersistedMetadataCoverage: fixtures.coverage,
 }));
 vi.mock("@/lib/known-track-resolver", () => ({
-  getKnownTrackDescriptorRevision: () => 0,
+  getKnownTrackDescriptorRevision: () => fixtures.descriptorRevision,
   registerKnownFolder: vi.fn(),
   verifyKnownCollections: vi.fn(),
   resolveKnownTrack: fixtures.resolveKnown,
@@ -125,9 +131,11 @@ const track = (id: string) => ({
 });
 
 beforeEach(() => {
+  vi.resetModules();
   vi.useFakeTimers();
   vi.clearAllMocks();
   fixtures.metadata.generation = 1;
+  fixtures.descriptorRevision = 0;
   fixtures.auth.authStatus = "authenticated";
   fixtures.auth.isLoggingOut = false;
   fixtures.auth.accessToken = "original-token";
@@ -360,6 +368,93 @@ describe("automatic metadata coordinator", () => {
       coveragePending: true,
       metadataSearchComplete: false,
     });
+  });
+
+  it("publishes first checked counts when descriptors strengthen during the initial scan", async () => {
+    const coordinator = await module();
+    fixtures.search.catalog = {
+      userId: "account",
+      importsSignature: "imports",
+      fetchedAt: 301,
+      tracks: Array.from({ length: 2913 }, (_, i) => track(`checking-${i}`)),
+    };
+    let finish!: (value: unknown) => void;
+    fixtures.coverage.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const pending = coordinator.getMetadataIndexStatusAsync();
+    expect(coordinator.getMetadataIndexStatus().observedAt).toBeNull();
+    // A row's actual provider descriptor arrives while IndexedDB coverage yields.
+    fixtures.descriptorRevision++;
+    finish({
+      ready: 85,
+      checked: 85,
+      total: 2913,
+      remaining: 2828,
+      unresolved: 0,
+      metadataSearchComplete: false,
+    });
+    await pending;
+    expect(coordinator.getMetadataIndexStatus()).toMatchObject({
+      checked: 85,
+      total: 2913,
+      coveragePending: true,
+      metadataSearchComplete: false,
+      observedAt: expect.any(Number),
+    });
+  });
+
+  it("refreshes observed progress from accepted local records while extraction is paused", async () => {
+    const coordinator = await module();
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    fixtures.search.catalog = {
+      userId: "account",
+      importsSignature: "imports",
+      fetchedAt: 302,
+      tracks: [track("restored-a"), track("restored-b")],
+    };
+    const snapshot = (checked: number) => ({
+      ready: checked,
+      checked,
+      total: 2,
+      remaining: 2 - checked,
+      unresolved: 0,
+      metadataSearchComplete: checked === 2,
+    });
+    let finish!: (value: unknown) => void;
+    fixtures.coverage.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    stop = coordinator.startMetadataIndex();
+    await vi.advanceTimersByTimeAsync(250);
+    fixtures.metadata.records = { restored: {} };
+    fixtures.descriptorRevision++;
+    for (const listener of fixtures.metadataListeners) listener();
+    finish(snapshot(1));
+    await vi.advanceTimersByTimeAsync(1);
+    expect(coordinator.getMetadataIndexStatus()).toMatchObject({
+      checked: 1,
+      total: 2,
+      coveragePending: true,
+      observedAt: expect.any(Number),
+    });
+    fixtures.coverage.mockResolvedValue(snapshot(2));
+    await vi.advanceTimersByTimeAsync(250);
+    expect(coordinator.getMetadataIndexStatus()).toMatchObject({
+      checked: 2,
+      total: 2,
+      coveragePending: false,
+      metadataSearchComplete: true,
+    });
+    expect(fixtures.ensure).not.toHaveBeenCalled();
+    expect(fixtures.search.ensureReady).not.toHaveBeenCalled();
   });
 
   it("does not publish an aggregate whose account logs out during its IndexedDB scan", async () => {

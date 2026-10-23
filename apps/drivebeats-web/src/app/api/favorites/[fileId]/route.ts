@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import { withAppDataErrors } from "@/lib/appdata-response";
 import { setFavoriteTrackRecord } from "@/lib/cloud-library-service";
 import { parseFavoriteTrackInput } from "@/lib/cloud-library-validation";
 import { getServerAuthSession } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
-export async function PUT(
+export const PUT = withAppDataErrors(async function PUT(
   request: Request,
   context: { params: Promise<{ fileId: string }> },
 ) {
@@ -35,9 +36,9 @@ export async function PUT(
     { ok: true },
     { headers: { "Cache-Control": "no-store" } },
   );
-}
+});
 
-export async function DELETE(
+export const DELETE = withAppDataErrors(async function DELETE(
   request: Request,
   context: { params: Promise<{ fileId: string }> },
 ) {
@@ -67,4 +68,4 @@ export async function DELETE(
     { ok: true },
     { headers: { "Cache-Control": "no-store" } },
   );
-}
+});

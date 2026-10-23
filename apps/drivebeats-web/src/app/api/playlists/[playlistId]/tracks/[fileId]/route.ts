@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+import { withAppDataErrors } from "@/lib/appdata-response";
 import { removePlaylistTrackRecord } from "@/lib/cloud-library-service";
 import { getServerAuthSession } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
-export async function DELETE(
+export const DELETE = withAppDataErrors(async function DELETE(
   _request: Request,
   context: { params: Promise<{ playlistId: string; fileId: string }> },
 ) {
@@ -22,4 +23,4 @@ export async function DELETE(
     { ok: true },
     { headers: { "Cache-Control": "no-store" } },
   );
-}
+});

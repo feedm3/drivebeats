@@ -1,9 +1,15 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/auth/drive-range/route";
+import { AppDataError } from "@/db/appdata-types";
 import { serializeAuthSession } from "@/lib/auth-session";
-import { GOOGLE_DRIVE_SCOPE } from "@/lib/google";
+import { GOOGLE_APPDATA_SCOPE, GOOGLE_DRIVE_SCOPE } from "@/lib/google";
 
+const control = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock("@/db/appdata-control", () => ({
+  assertAppDataIdentity: control.read,
+}));
+const requiredScopes = [GOOGLE_DRIVE_SCOPE, GOOGLE_APPDATA_SCOPE];
 const file = {
   accountId: "account",
   fileId: "known_track",
@@ -29,7 +35,8 @@ function request(
       name: null,
       picture: null,
     },
-    grantedScopes: options.scopes ?? [GOOGLE_DRIVE_SCOPE],
+    accountGeneration: "generation-a",
+    grantedScopes: options.scopes ?? requiredScopes,
   });
   return new NextRequest("https://drivebeats.test/api/auth/drive-range", {
     method: "POST",
@@ -61,7 +68,7 @@ function providerSequence(media: Response = mediaResponse(), sub = "account") {
       new Response(
         JSON.stringify({
           access_token: "opaque-test-access",
-          scope: GOOGLE_DRIVE_SCOPE,
+          scope: requiredScopes.join(" "),
         }),
       ),
     )
@@ -69,6 +76,9 @@ function providerSequence(media: Response = mediaResponse(), sub = "account") {
     .mockResolvedValueOnce(media);
 }
 beforeEach(() => {
+  control.read
+    .mockReset()
+    .mockResolvedValue({ state: "active", source: "drive" });
   vi.stubEnv("AUTH_SESSION_SECRET", "unit-test-auth-secret");
   vi.stubEnv("GOOGLE_CLIENT_ID", "unit-test-client");
   vi.stubEnv("GOOGLE_CLIENT_SECRET", "unit-test-secret");
@@ -82,7 +92,24 @@ afterEach(() => {
 });
 
 describe("authenticated same-origin bounded metadata range", () => {
-  it.each([{ authenticated: false }, { scopes: [] }])(
+  it("treats control outages as retryable rather than expired authentication", async () => {
+    control.read.mockRejectedValueOnce(
+      Object.assign(new Error("control unavailable"), {
+        code: "appdata_control_unavailable",
+      }),
+    );
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: { code: "auth_unavailable" },
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+  it.each([
+    { authenticated: false },
+    { scopes: [] },
+    { scopes: [GOOGLE_DRIVE_SCOPE] },
+  ])(
     "rejects unavailable auth before any provider read: %o",
     async (options) => {
       expect((await POST(request(file, options))).status).toBe(401);
@@ -307,7 +334,7 @@ describe("authenticated same-origin bounded metadata range", () => {
           new Response(
             JSON.stringify({
               access_token: "opaque-test-access",
-              scope: GOOGLE_DRIVE_SCOPE,
+              scope: requiredScopes.join(" "),
             }),
           ),
         )
@@ -346,7 +373,7 @@ describe("authenticated same-origin bounded metadata range", () => {
         new Response(
           JSON.stringify({
             access_token: "opaque-test-access",
-            scope: GOOGLE_DRIVE_SCOPE,
+            scope: requiredScopes.join(" "),
           }),
         ),
       )
@@ -398,4 +425,29 @@ describe("authenticated same-origin bounded metadata range", () => {
     expect(await result.text()).not.toContain("private-provider-message");
     expect(mockFetch).toHaveBeenCalledTimes(3);
   });
+});
+
+it.each(["legacy", "migrating"])(
+  "rejects %s source before OAuth or audio reads",
+  async (source) => {
+    control.read.mockResolvedValueOnce({ state: "active", source });
+    expect((await POST(request())).status).toBe(409);
+    expect(mockFetch).not.toHaveBeenCalled();
+  },
+);
+it("rejects a deleting or stale incarnation before provider reads", async () => {
+  control.read.mockRejectedValueOnce(new AppDataError("appdata_stale_session"));
+  expect((await POST(request())).status).toBe(401);
+  expect(control.read).toHaveBeenCalledWith({
+    accountId: "account",
+    generation: "generation-a",
+  });
+  expect(mockFetch).not.toHaveBeenCalled();
+});
+it("checks renewed scope before reading metadata even with an approved signed session", async () => {
+  mockFetch.mockResolvedValueOnce(
+    Response.json({ access_token: "test", scope: GOOGLE_DRIVE_SCOPE }),
+  );
+  expect((await POST(request())).status).toBe(401);
+  expect(mockFetch).toHaveBeenCalledOnce();
 });

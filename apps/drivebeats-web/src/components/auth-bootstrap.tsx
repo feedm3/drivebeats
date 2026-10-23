@@ -9,6 +9,8 @@ interface AuthBootstrapProps {
 }
 
 export function AuthBootstrap({ initialUser }: AuthBootstrapProps) {
+  const offlineReady = useAuthStore((state) => state.appDataOfflineReady);
+  const ready = useAuthStore((state) => state.appDataReady);
   useEffect(() => {
     if (!initialUser) {
       return;
@@ -17,10 +19,15 @@ export function AuthBootstrap({ initialUser }: AuthBootstrapProps) {
     const authStore = useAuthStore.getState();
     authStore.hydrateServerSession(initialUser);
 
-    if (!authStore.isAuthenticated()) {
+    if (
+      ready &&
+      !offlineReady &&
+      navigator.onLine &&
+      !authStore.isAuthenticated()
+    ) {
       void authStore.refreshAccessToken().catch(() => undefined);
     }
-  }, [initialUser]);
+  }, [initialUser, ready, offlineReady]);
 
   return null;
 }

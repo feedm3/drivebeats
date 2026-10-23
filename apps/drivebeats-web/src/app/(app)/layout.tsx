@@ -15,11 +15,19 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerAuthSession();
+  const session = await getServerAuthSession({ allowIncomplete: true });
 
   if (!session) {
     redirect("/");
   }
 
-  return <AppShell initialUser={session.user ?? null}>{children}</AppShell>;
+  return (
+    <AppShell
+      initialUser={session.user ?? null}
+      initialAccountGeneration={session.accountGeneration}
+      initialGrantedScopes={session.grantedScopes}
+    >
+      {children}
+    </AppShell>
+  );
 }

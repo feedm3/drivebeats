@@ -10,6 +10,8 @@ export interface AuthUser {
 }
 
 export interface AuthSession {
+  // Legacy sessions have no generation and must reconnect before normal use.
+  accountGeneration?: string;
   grantedScopes: string[];
   user: AuthUser;
 }
@@ -93,7 +95,11 @@ export function parseAuthSession(value: string | undefined) {
       Buffer.from(payload, "base64url").toString("utf8"),
     ) as
       | Partial<AuthSession>
-      | (Partial<AuthUser> & { grantedScopes?: unknown; user?: unknown });
+      | (Partial<AuthUser> & {
+          grantedScopes?: unknown;
+          user?: unknown;
+          accountGeneration?: unknown;
+        });
 
     const user = parseAuthUserPayload(parsed.user ?? parsed);
     if (!user) {
@@ -110,6 +116,10 @@ export function parseAuthSession(value: string | undefined) {
     return {
       user,
       grantedScopes,
+      accountGeneration:
+        typeof parsed.accountGeneration === "string"
+          ? parsed.accountGeneration
+          : undefined,
     } satisfies AuthSession;
   } catch {
     return null;

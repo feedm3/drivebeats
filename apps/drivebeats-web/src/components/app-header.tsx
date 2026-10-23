@@ -4,22 +4,14 @@ import { ChevronDown, HardDrive, LogOut, UserRound } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
+import { LogoutConfirmationDialog } from "@/components/logout-confirmation-dialog";
 import { StorageDialog } from "@/components/storage-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { logoutAndRedirect } from "@/lib/clear-local-data";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -97,16 +89,10 @@ function AccountAvatar({
 export function AppHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [offlineStorageOpen, setOfflineStorageOpen] = useState(false);
   const user = useAuthStore((state) => state.user);
   const userLabel = user ? getUserLabel(user.name, user.email) : null;
   const userInitials = user ? getUserInitials(user.name, user.email) : "";
-
-  async function handleLogout() {
-    setIsLoggingOut(true);
-    await logoutAndRedirect();
-  }
 
   return (
     <header className="relative z-10 border-b bg-background/95 backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
@@ -212,29 +198,10 @@ export function AppHeader() {
           </div>
         </div>
       </div>
-      <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
-        <DialogContent>
-          <DialogTitle>Log out and clear this device</DialogTitle>
-          <DialogDescription>
-            Logging out will remove cached playlists, favorites, recently played
-            tracks, imported library, offline downloads, and saved player state
-            from this browser. Your synced cloud data will stay in your account.
-          </DialogDescription>
-          <div className="mt-4 flex justify-end gap-2">
-            <DialogClose render={<Button variant="outline" size="sm" />}>
-              Cancel
-            </DialogClose>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-            >
-              {isLoggingOut ? "Logging out..." : "Log out and clear device"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <LogoutConfirmationDialog
+        open={logoutOpen}
+        onOpenChange={setLogoutOpen}
+      />
       <StorageDialog
         open={offlineStorageOpen}
         onOpenChange={setOfflineStorageOpen}

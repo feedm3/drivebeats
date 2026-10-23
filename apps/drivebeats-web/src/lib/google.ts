@@ -9,7 +9,17 @@ import {
   refreshGoogleOAuthAccessToken,
 } from "@/lib/google-api";
 
-export const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+import { GOOGLE_APPDATA_SCOPE, GOOGLE_DRIVE_SCOPE } from "@/lib/google-scopes";
+
+export {
+  GOOGLE_APPDATA_SCOPE,
+  GOOGLE_DRIVE_SCOPE,
+  hasGoogleAppDataScope,
+  hasGoogleDriveScope,
+  hasRequiredGoogleScopes,
+  parseGrantedGoogleScopes,
+} from "@/lib/google-scopes";
+
 const GOOGLE_PROFILE_SCOPES = [
   "openid",
   "https://www.googleapis.com/auth/userinfo.email",
@@ -131,7 +141,11 @@ export function getGoogleAuthUrl({
     client_id: clientId,
     redirect_uri: `${appUrl}/api/auth/callback`,
     response_type: "code",
-    scope: [GOOGLE_DRIVE_SCOPE, ...GOOGLE_PROFILE_SCOPES].join(" "),
+    scope: [
+      GOOGLE_DRIVE_SCOPE,
+      GOOGLE_APPDATA_SCOPE,
+      ...GOOGLE_PROFILE_SCOPES,
+    ].join(" "),
     access_type: "offline",
     include_granted_scopes: "true",
     nonce,
@@ -146,24 +160,6 @@ export function getGoogleAuthUrl({
   }
 
   return `${getGoogleAuthUrlBase()}?${params.toString()}`;
-}
-
-function toGrantedScopeSet(scopes: string | string[] | undefined) {
-  const values = Array.isArray(scopes)
-    ? scopes
-    : typeof scopes === "string"
-      ? scopes.split(/\s+/)
-      : [];
-
-  return new Set(values.filter((scope) => scope.length > 0));
-}
-
-export function parseGrantedGoogleScopes(scopes: string | undefined) {
-  return [...toGrantedScopeSet(scopes)];
-}
-
-export function hasGoogleDriveScope(scopes: string | string[] | undefined) {
-  return toGrantedScopeSet(scopes).has(GOOGLE_DRIVE_SCOPE);
 }
 
 export async function exchangeCodeForTokens(code: string) {

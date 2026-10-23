@@ -44,6 +44,41 @@ vi.mock("@/db/favorite-tracks", () => ({
   deleteAllNonFavoriteTracks: mocks.cleanup,
 }));
 
+vi.mock("@/lib/appdata-context", () => ({
+  getAppDataContext: async () => ({
+    identity: { accountId: "account", generation: "generation" },
+    service: {
+      readCollections: async () => ({
+        envelopes: [
+          {
+            kind: "migration",
+            revision: 1,
+            payload: {
+              playlists: [
+                {
+                  id: "playlist",
+                  name: "Saved",
+                  tracks: [
+                    {
+                      fileId: "track",
+                      fileName: "track.mp3",
+                      mimeType: "audio/mpeg",
+                      size: "100",
+                      modifiedTime: "2026-10-22",
+                      parents: ["music"],
+                      parentFolderName: "Music",
+                    },
+                  ],
+                },
+              ],
+              favorites: [],
+            },
+          },
+        ],
+      }),
+    },
+  }),
+}));
 const user = { id: "account", email: "a@example.com", name: "A", picture: "" };
 beforeEach(() => vi.clearAllMocks());
 
@@ -74,8 +109,8 @@ describe("collection sync after extracted-tag retirement", () => {
     if (!parsed)
       throw new Error("Legacy client collection payload was rejected");
     await seedCloudLibraryData(user, parsed);
-    expect(mocks.user).toHaveBeenCalledWith(user);
-    expect(mocks.cleanup).toHaveBeenCalledWith(user.id);
+    expect(mocks.user).not.toHaveBeenCalled();
+    expect(mocks.cleanup).not.toHaveBeenCalled();
     expect(mocks.sql).not.toHaveBeenCalled();
   });
 });

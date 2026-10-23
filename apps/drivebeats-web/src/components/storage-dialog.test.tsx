@@ -11,6 +11,12 @@ import type { ReactElement, ReactNode } from "react";
 import { cloneElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StorageDialog } from "@/components/storage-dialog";
+import {
+  clearPendingCollectionSaves,
+  resetGoogleDriveBackup,
+} from "@/lib/cloud-library-api";
+import { restoreDriveAppData } from "@/lib/drive-appdata-client";
+import { useDriveAppDataStore } from "@/stores/drive-appdata-store";
 import type { StoragePersistenceStatus } from "@/stores/offline-store";
 import { useOfflineStore } from "@/stores/offline-store";
 
@@ -53,6 +59,8 @@ vi.mock("@/stores/id3-metadata-store", () => ({
   ),
 }));
 
+vi.mock("@/lib/drive-appdata-client", () => ({ restoreDriveAppData: vi.fn() }));
+
 vi.mock("@/lib/offline-db", () => offlineDb);
 
 vi.mock("@/stores/library-search-store", () => ({
@@ -63,6 +71,8 @@ vi.mock("@/stores/library-search-store", () => ({
 
 vi.mock("@/lib/cloud-library-api", () => ({
   deleteAllCloudLibraryData: vi.fn(),
+  resetGoogleDriveBackup: vi.fn(),
+  clearPendingCollectionSaves: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/clear-local-data", () => ({
@@ -146,6 +156,8 @@ describe("StorageDialog offline recovery", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    useDriveAppDataStore.setState(useDriveAppDataStore.getInitialState(), true);
+    vi.mocked(restoreDriveAppData).mockResolvedValue(undefined);
     metadata.accountId = "synthetic-account";
     metadata.generation = 1;
     metadata.hydrated = true;
@@ -157,6 +169,150 @@ describe("StorageDialog offline recovery", () => {
       configurable: true,
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
+  });
+
+  it("allows a reset retry before restore has supplied a generation", async () => {
+    useDriveAppDataStore.setState({ status: "idle", generation: null });
+    vi.mocked(resetGoogleDriveBackup).mockRejectedValueOnce(
+      new Error("cleanup still pending"),
+    );
+    render(
+      <StorageDialog
+        open
+        onOpenChange={vi.fn()}
+        recoveryGeneration="signed-generation"
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reset Google Drive backup" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Reset Google Drive backup?" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reset backup permanently" }),
+    );
+    await waitFor(() =>
+      expect(resetGoogleDriveBackup).toHaveBeenCalledWith("signed-generation"),
+    );
+  });
+
+  it("waits for the shared collection journal lock before clearing readiness after reset", async () => {
+    const readinessKey = "drivebeats-appdata-ready-v1:lock-fixture";
+    const journalKey = "drivebeats-collection-outbox-v1:lock-fixture:g:pending";
+    localStorage.setItem(readinessKey, "verified");
+    localStorage.setItem(journalKey, "pending command");
+    vi.mocked(resetGoogleDriveBackup).mockResolvedValueOnce({
+      reset: true,
+      generation: "new-generation",
+    });
+    let rejectCleanup!: (reason: Error) => void;
+    vi.mocked(clearPendingCollectionSaves).mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectCleanup = reject;
+      }),
+    );
+    render(
+      <StorageDialog
+        open
+        onOpenChange={vi.fn()}
+        recoveryGeneration="signed-generation"
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reset Google Drive backup" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reset backup permanently" }),
+    );
+    await waitFor(() =>
+      expect(clearPendingCollectionSaves).toHaveBeenCalledOnce(),
+    );
+    expect(localStorage.getItem(readinessKey)).toBe("verified");
+    expect(localStorage.getItem(journalKey)).toBe("pending command");
+    await act(async () =>
+      rejectCleanup(new Error("another tab owns the journal")),
+    );
+    expect(localStorage.getItem(journalKey)).toBe("pending command");
+    localStorage.removeItem(readinessKey);
+    localStorage.removeItem(journalKey);
+  });
+
+  it("reports a completed reset with older cleanup pending as success before continuing", async () => {
+    vi.mocked(resetGoogleDriveBackup).mockResolvedValueOnce({
+      reset: true,
+      generation: "new-generation",
+      cleanupPending: true,
+    });
+    vi.mocked(clearPendingCollectionSaves).mockResolvedValueOnce(undefined);
+    render(
+      <StorageDialog
+        open
+        onOpenChange={vi.fn()}
+        recoveryGeneration="signed-generation"
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reset Google Drive backup" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reset backup permanently" }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Backup reset complete" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Some older hidden data may remain/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Continue to Library" }),
+    ).toBeEnabled();
+    expect(resetGoogleDriveBackup).toHaveBeenCalledOnce();
+    expect(clearPendingCollectionSaves).toHaveBeenCalledOnce();
+  });
+
+  it.each(["Google access was revoked", "Backup save failed"])(
+    "keeps recovery reachable after restore succeeded but a later save failed: %s",
+    async (error) => {
+      useDriveAppDataStore.setState({
+        accountId: "synthetic-account",
+        status: "ready",
+        error,
+      });
+      renderDialog();
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Backup could not finish",
+      );
+      const retry = screen.getByRole("button", {
+        name: "Retry Google Drive backup",
+      });
+      expect(retry).toBeEnabled();
+      expect(
+        screen.getByRole("button", { name: "Reconnect Google access" }),
+      ).toBeEnabled();
+      fireEvent.click(retry);
+      await waitFor(() =>
+        expect(restoreDriveAppData).toHaveBeenCalledWith("synthetic-account"),
+      );
+    },
+  );
+
+  it("describes the combined pending count as tags and Library choices", () => {
+    useDriveAppDataStore.setState({
+      status: "ready",
+      pendingCount: 7,
+      savedCount: 13,
+    });
+    renderDialog();
+    expect(
+      screen.getByText("Pending backup items").parentElement,
+    ).toHaveTextContent("7");
+    expect(
+      screen.getByText(
+        /Pending backup items include unsaved music tags and Library choice changes/,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Pending music tags")).not.toBeInTheDocument();
   });
 
   it.each([
@@ -269,7 +425,7 @@ describe("StorageDialog offline recovery", () => {
       screen.getByRole("button", { name: "Remove all downloads" }),
     );
     expect(
-      screen.getByText(/metadata rebuilds automatically/),
+      screen.getByText(/Saved music tags restore from Google Drive/),
     ).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "Remove all downloads" }),
@@ -286,7 +442,9 @@ describe("StorageDialog offline recovery", () => {
     expect(screen.getByText("Checking…")).toBeInTheDocument();
     metadata.hydrated = true;
     rendered.rerender(<StorageDialog open onOpenChange={vi.fn()} />);
-    await screen.findByText("0 B");
+    await waitFor(() =>
+      expect(screen.queryByText("Checking…")).not.toBeInTheDocument(),
+    );
     expect(metadata.usage).toHaveBeenCalledOnce();
   });
 
@@ -321,5 +479,32 @@ describe("StorageDialog offline recovery", () => {
     expect(screen.queryByText(/99 tracks/)).not.toBeInTheDocument();
     rendered.rerender(<StorageDialog open={false} onOpenChange={vi.fn()} />);
     expect((metadata.usage.mock.calls[1][1] as AbortSignal).aborted).toBe(true);
+  });
+});
+
+describe("portable backup reset confirmation", () => {
+  it("requires an explicit irreversible confirmation and preserves download wording", async () => {
+    useDriveAppDataStore.setState({
+      accountId: "synthetic-account",
+      generation: "incarnation",
+      status: "ready",
+    });
+    render(<StorageDialog open onOpenChange={() => {}} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reset Google Drive backup" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Reset Google Drive backup?" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Your account, saved Google connection, music files and device downloads are kept/,
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Reset backup permanently" }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(manager.removeAllDownloads).not.toHaveBeenCalled();
   });
 });

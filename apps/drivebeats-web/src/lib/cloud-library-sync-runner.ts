@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  bootstrapCloudLibrarySync,
-  createCloudLibrarySnapshot,
-  fetchCloudLibrarySync,
-  isCloudLibraryEmpty,
-} from "@/lib/cloud-library-api";
+import { fetchCloudLibrarySync } from "@/lib/cloud-library-api";
 import type { CloudLibrarySyncPayload } from "@/lib/cloud-library-shared";
 import { verifyKnownCollections } from "@/lib/known-track-resolver";
 import {
@@ -175,26 +170,8 @@ async function fetchApplicableCloudLibrary(
       await waitForPendingLocalMutations();
       if (getSessionKey() !== sessionKey) return null;
 
-      const localPlaylists = usePlaylistStore.getState().playlists;
-      const localFavorites = getFavoriteTracks(
-        useLibraryStore.getState().tracks,
-      );
-      let nextPayload = await fetchCloudLibrarySync();
+      const nextPayload = await fetchCloudLibrarySync();
       if (getSessionKey() !== sessionKey) return null;
-
-      if (
-        typeof window !== "undefined" &&
-        !window.localStorage.getItem(CLOUD_BOOTSTRAP_KEY) &&
-        isCloudLibraryEmpty(nextPayload) &&
-        (localPlaylists.length > 0 || localFavorites.length > 0)
-      ) {
-        await bootstrapCloudLibrarySync(
-          createCloudLibrarySnapshot(localPlaylists, localFavorites),
-        );
-        if (getSessionKey() !== sessionKey) return null;
-        nextPayload = await fetchCloudLibrarySync();
-        if (getSessionKey() !== sessionKey) return null;
-      }
 
       payload = nextPayload;
 

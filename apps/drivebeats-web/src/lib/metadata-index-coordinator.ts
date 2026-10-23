@@ -33,6 +33,7 @@ import {
   useMetadataLoaderStore,
 } from "@/lib/track-metadata-loader";
 import { useAuthStore } from "@/stores/auth-store";
+import { useDriveAppDataStore } from "@/stores/drive-appdata-store";
 import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
 import {
@@ -170,14 +171,22 @@ function coverageScope() {
   };
 }
 type CoverageScope = ReturnType<typeof coverageScope>;
-function sameCoverageBaseScope(a: CoverageScope, b: CoverageScope) {
+// A descriptor refresh invalidates freshness and diagnostics, but it does not
+// change which Library the observed counts describe. Preserve those counts
+// while the next revision scans rather than discarding every first snapshot.
+function sameCoverageDisplayScope(a: CoverageScope, b: CoverageScope) {
   return (
     a.accountId === b.accountId &&
     a.catalog === b.catalog &&
     a.signature === b.signature &&
     a.generation === b.generation &&
-    a.descriptorRevision === b.descriptorRevision &&
     a.complete === b.complete
+  );
+}
+function sameCoverageBaseScope(a: CoverageScope, b: CoverageScope) {
+  return (
+    sameCoverageDisplayScope(a, b) &&
+    a.descriptorRevision === b.descriptorRevision
   );
 }
 function sameCoverageScope(a: CoverageScope, b: CoverageScope) {
@@ -245,7 +254,8 @@ export function getMetadataIndexStatus() {
   // Counts remain the last observed snapshot while tags warm within the same
   // account/catalog/version scope; completion still requires a fresh aggregate.
   const displayAggregate =
-    coverageAggregate && sameCoverageBaseScope(coverageAggregate.scope, scope)
+    coverageAggregate &&
+    sameCoverageDisplayScope(coverageAggregate.scope, scope)
       ? coverageAggregate
       : null;
   const coverage =
@@ -310,7 +320,7 @@ export async function getMetadataIndexStatusAsync(signal?: AbortSignal) {
           // Publish a useful snapshot even if another track finished while this
           // scan yielded. It remains pending until an exact revision catches up;
           // account/catalog/version changes still discard the entire snapshot.
-          if (!sameCoverageBaseScope(scope, coverageScope())) return;
+          if (!sameCoverageDisplayScope(scope, coverageScope())) return;
           coverageAggregate = { scope, coverage, observedAt: Date.now() };
           useMetadataIndexStore.setState((state) => ({
             revision: state.revision + 1,
@@ -408,6 +418,7 @@ export function startMetadataIndex() {
     useMetadataLoaderStore.subscribe(refreshCoverageSoon);
   refreshCoverageSoon();
   const unsubscribe = useAuthStore.subscribe(poke);
+  const unsubscribeAppData = useDriveAppDataStore.subscribe(poke);
   const unsubscribeImports = useImportedDriveStore.subscribe(poke);
   const unsubscribeSearch = useLibrarySearchStore.subscribe(poke);
   const onStorage = (event: StorageEvent) => {
@@ -433,6 +444,10 @@ export function startMetadataIndex() {
   void (async () => {
     while (!lifecycle.signal.aborted) {
       const accountId = currentAccount();
+      const appData = useDriveAppDataStore.getState();
+      const restorePending =
+        appData.accountId === accountId &&
+        (appData.status === "restoring" || appData.status === "error");
       if (retryAccount !== accountId) {
         retryAccount = accountId;
         retryAt = 0;
@@ -442,7 +457,8 @@ export function startMetadataIndex() {
         document.visibilityState === "hidden" ||
         !navigator.onLine ||
         !useImportedDriveStore.persist.hasHydrated() ||
-        automaticNetworkPauseReason()
+        automaticNetworkPauseReason() ||
+        restorePending
       ) {
         useMetadataIndexStore.setState({
           running: false,
@@ -454,7 +470,9 @@ export function startMetadataIndex() {
                 ? "hidden"
                 : !useImportedDriveStore.persist.hasHydrated()
                   ? "hydrating"
-                  : automaticNetworkPauseReason(),
+                  : restorePending
+                    ? "appdata_restore_required"
+                    : automaticNetworkPauseReason(),
           retryAt: 0,
         });
         await sleep(2000, lifecycle.signal);
@@ -831,6 +849,7 @@ export function startMetadataIndex() {
     }
   })().finally(() => {
     unsubscribe();
+    unsubscribeAppData();
     unsubscribeImports();
     unsubscribeSearch();
     unsubscribeMetadata();

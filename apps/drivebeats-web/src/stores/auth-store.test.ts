@@ -57,7 +57,7 @@ describe("refreshAccessToken failure handling", () => {
     expect(state.user).toBeNull();
   });
 
-  it("clears the session when the server answers 403", async () => {
+  it("preserves the identity and gates app use when consent is required", async () => {
     const useAuthStore = await loadAuthStore();
     useAuthStore.getState().setTokens("stale-token", Date.now() - 1_000);
     useAuthStore.setState({ user: testUser });
@@ -67,7 +67,11 @@ describe("refreshAccessToken failure handling", () => {
     await expect(useAuthStore.getState().refreshAccessToken()).resolves.toBe(
       false,
     );
-    expect(useAuthStore.getState().authStatus).toBe("unauthenticated");
+    expect(useAuthStore.getState().authStatus).toBe("authenticated");
+    expect(useAuthStore.getState().user).toEqual(testUser);
+    expect(useAuthStore.getState().appDataConsentRequired).toBe(true);
+    expect(useAuthStore.getState().appDataReady).toBe(false);
+    expect(useAuthStore.getState().accessToken).toBeNull();
   });
 
   it("keeps the session when the request throws (offline device)", async () => {
@@ -327,4 +331,44 @@ describe("getValidAccessToken", () => {
     ).resolves.toBeNull();
     expect(useAuthStore.getState().authStatus).toBe("unauthenticated");
   });
+});
+
+it("does not restore credentials from a refresh completing after local logout", async () => {
+  const useAuthStore = await loadAuthStore();
+  useAuthStore.getState().hydrateServerSession(testUser);
+  let finish!: (response: Response) => void;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    ),
+  );
+  const pending = useAuthStore.getState().refreshAccessToken();
+  useAuthStore.getState().clearTokens();
+  finish(
+    jsonResponse(200, {
+      access_token: "old-token",
+      expires_at: Date.now() + 60_000,
+      user: testUser,
+    }),
+  );
+  await expect(pending).resolves.toBe(false);
+  expect(useAuthStore.getState().user).toBeNull();
+  expect(useAuthStore.getState().accessToken).toBeNull();
+});
+
+it("drops account-bound access and readiness when the signed-in account changes", async () => {
+  const useAuthStore = await loadAuthStore();
+  useAuthStore.getState().hydrateServerSession(testUser);
+  useAuthStore.getState().setTokens("account-a-token", Date.now() + 3_600_000);
+  useAuthStore.getState().setAppDataReady(true);
+  useAuthStore
+    .getState()
+    .hydrateServerSession({ ...testUser, id: "account-b" });
+  expect(useAuthStore.getState().accessToken).toBeNull();
+  expect(useAuthStore.getState().appDataReady).toBe(false);
+  expect(useAuthStore.getState().user?.id).toBe("account-b");
 });

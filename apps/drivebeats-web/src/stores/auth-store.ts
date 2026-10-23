@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { clearVerifiedAppDataReadiness } from "@/lib/appdata-readiness";
 import type { AuthUser } from "@/lib/auth-session";
 
 const REFRESH_FAILURE_COOLDOWN_MS = 5_000;
@@ -8,15 +9,16 @@ const REFRESH_REQUEST_TIMEOUT_MS = 15_000;
 
 /**
  * `/api/auth/refresh` answers with these statuses only when the session itself
- * is no longer usable: missing/invalid auth session cookie, missing Drive
- * scope, or a refresh token Google rejected. Every other failure (5xx, 429,
+ * is no longer usable: missing/invalid auth session cookie or a refresh token Google rejected.
+ * Missing app-data scope preserves identity for the required consent screen. Every other failure (5xx, 429,
  * a thrown fetch, a malformed payload) is transient and must not sign the user
  * out of an installed PWA.
  */
-const INVALID_SESSION_STATUSES = new Set([401, 403]);
+const INVALID_SESSION_STATUSES = new Set([401]);
 
 let refreshAccessTokenPromise: Promise<boolean> | null = null;
 let lastRefreshFailureAt = 0;
+let authEpoch = 0;
 let logoutPromise: Promise<void> | null = null;
 
 /**
@@ -70,6 +72,10 @@ interface AuthState {
   user: AuthUser | null;
   authStatus: AuthStatus;
   isLoggingOut: boolean;
+  appDataConsentRequired: boolean;
+  appDataReady: boolean;
+  appDataOfflineReady: boolean;
+  setAppDataReady: (ready: boolean, offline?: boolean) => void;
   hydrateServerSession: (user: AuthUser | null) => void;
   setTokens: (accessToken: string, expiresAt: number) => void;
   setLoggingOut: (isLoggingOut: boolean) => void;
@@ -88,6 +94,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   authStatus: "unknown",
   isLoggingOut: false,
+  appDataConsentRequired: false,
+  appDataReady: false,
+  appDataOfflineReady: false,
+  setAppDataReady: (appDataReady, appDataOfflineReady = false) =>
+    set({ appDataReady, appDataOfflineReady }),
 
   hydrateServerSession: (user) => {
     if (!user) {
@@ -95,6 +106,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     set((state) => {
+      const accountChanged = state.user?.id !== user.id;
+      if (accountChanged) authEpoch++;
       if (
         state.authStatus === "authenticated" &&
         state.user?.id === user.id &&
@@ -109,6 +122,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         user,
         authStatus: "authenticated",
         isLoggingOut: false,
+        ...(accountChanged
+          ? {
+              accessToken: null,
+              expiresAt: null,
+              appDataReady: false,
+              appDataOfflineReady: false,
+              appDataConsentRequired: false,
+            }
+          : {}),
       };
     });
   },
@@ -124,15 +146,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   setLoggingOut: (isLoggingOut) => {
+    if (isLoggingOut) authEpoch++;
     set({ isLoggingOut });
   },
 
   clearTokens: () => {
+    const accountId = get().user?.id;
+    if (accountId) clearVerifiedAppDataReadiness(accountId);
+    authEpoch++;
     set({
       accessToken: null,
       expiresAt: null,
       user: null,
       authStatus: "unauthenticated",
+      appDataReady: false,
+      appDataOfflineReady: false,
     });
   },
 
@@ -151,6 +179,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   refreshAccessToken: async () => {
+    if (get().isLoggingOut) return false;
     if (refreshAccessTokenPromise) {
       return refreshAccessTokenPromise;
     }
@@ -159,11 +188,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return false;
     }
 
+    const epoch = authEpoch;
     refreshAccessTokenPromise = (async () => {
       try {
         const { response: res, data: rawData } =
           await fetchRefreshWithTimeout();
+        if (epoch !== authEpoch || get().isLoggingOut) return false;
 
+        if (res.status === 403) {
+          const accountId = get().user?.id;
+          if (accountId) clearVerifiedAppDataReadiness(accountId);
+          lastRefreshFailureAt = Date.now();
+          set({
+            accessToken: null,
+            expiresAt: null,
+            appDataConsentRequired: true,
+            appDataReady: false,
+            appDataOfflineReady: false,
+          });
+          return false;
+        }
         // Only an authoritative rejection ends the session.
         if (INVALID_SESSION_STATUSES.has(res.status)) {
           lastRefreshFailureAt = Date.now();
@@ -194,6 +238,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         lastRefreshFailureAt = 0;
         set({
+          appDataConsentRequired: false,
           accessToken: data.access_token,
           expiresAt: data.expires_at,
           user: data.user ?? null,

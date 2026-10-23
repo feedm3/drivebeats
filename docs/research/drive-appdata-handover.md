@@ -2,7 +2,9 @@
 
 Status: implementation and review corrections complete locally on 23 October 2026;
 manual Google-account deletion/reset tests were waived by the user on 23 October
-2026 due to effort. Production rollout still requires authorization.
+2026 due to effort. Production rollout and the 30-day window are authorized and
+recorded; cleanup follow-up `retire-legacy-drivebeats-collections` is active.
+The cutoff is 22 November 2026 at 10:18:44.025 Europe/Berlin.
 Current evidence: [implementation record](drive-appdata-implementation-evidence.md).
 The following opening description is historical; the implementation assignment
 explicitly supersedes the former documents-only scope.
@@ -97,7 +99,7 @@ All tasks initially pending; T13 is deliberately deferred until its due time.
 | T09 | Cutoff-safe retirement preparation | T06, T07 | Prepared SQL/runbook; local engine pre/post cutoff tests pass |
 | T10 | Integration and end-to-end verification | T03–T09 | 921 tests, lint/build pass; real two-session evidence; manual deletion/reset waived; other runtime coverage limits recorded |
 | T11 | Independent subagent + Claude Code reviews, fixes | T10 | Two Claude runs successful; confirmed fixes tested and independently rechecked; final Claude coverage limits explicit |
-| T12 | Authorized rollout and Codex cleanup scheduling | T11 | a0e99b1 deployed; production 0011–0013, verified migration/reload/playback and CI pass; explicit cutoff approval and cleanup schedule pending |
+| T12 | Authorized rollout and Codex cleanup scheduling | T11 | Done; production 0011–0013 and verified migration/reload/playback; serving a0d852c; immutable cutoff 2026-11-22 10:18:44.025 Europe/Berlin; active retire-legacy-drivebeats-collections follow-up |
 | T13 | Due-date table retirement and verification | T12 + 30 days | Deferred |
 
 T03/T04/T05 may run in parallel with disjoint ownership. T06 may overlap cache/root

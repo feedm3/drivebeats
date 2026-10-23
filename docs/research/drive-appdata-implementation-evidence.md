@@ -93,11 +93,31 @@ test generation. Localhost work was retained, but was not promoted into
 production. This environment transition is distinct from multiple production
 devices restoring the same generation.
 
-The 30-day rollout row remains unset. Automatic approval review rejected its
-creation because starting the immutable cleanup cutoff was outside the explicit
-migration/push approval. A separate approval was requested; no new collection
-cleanup automation was created. The existing 29 October `track_metadata`
+Automatic approval review initially rejected starting the immutable cleanup
+cutoff because it was outside the explicit migration/push approval. The user
+subsequently explicitly approved starting the window and scheduling cleanup.
+The production singleton now records `implemented_at=2026-10-23T09:18:44.025Z`
+and `cleanup_due_at=2026-11-22T09:18:44.025Z`, exactly 720 hours later. These are
+23 October at 11:18:44.025 CEST and 22 November at 10:18:44.025 CET in
+Europe/Berlin. Creation uses conflict-do-nothing so retries do not move the dates.
+
+Created and read back active chat automation
+`retire-legacy-drivebeats-collections` in executing chat
+`01a16777-7c35-7a52-8782-e04a092cd4dc`, returning after 720 hours. Its durable
+prompt records the exact target, verified serving revision `a0d852c`, start and
+cutoff, bounded preflight and allowlist, preservation requirements, permission
+gates, offline handling and notifications only for completion/failure/action.
+It deletes itself only after verified completion and switches to hourly retries
+after a failed due-date attempt. The separate 29 October `track_metadata`
 retirement automation is unchanged.
+
+Dry-run preflight confirmed the deadline is future and `legacy_retired=false`;
+all three legacy tables remain, with 94 playlists, 991 playlist entries and 221
+favorites at the preflight. No retirement SQL ran. The deployed Storage modal
+addition in `a0d852c` was verified live and passed all 921 local tests, lint/build
+and React Doctor; it links to Google Drive settings with accurate hidden-data
+guidance. Current production alias resolved to that revision before starting
+the window.
 
 ## Authorized isolated database
 

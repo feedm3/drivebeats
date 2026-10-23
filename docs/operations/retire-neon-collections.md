@@ -1,10 +1,32 @@
 # Retire legacy Neon collections after verified rollout
 
 Status: production migrations 0011–0013 and release `a0e99b1` deployed and smoke
-verified on 23 October 2026; no production rollout timestamp, cutoff or automation
-exists for this feature. Explicit permission to start the fixed window is pending.
-This is separate from the 29 October track_metadata retirement. See
+verified on 23 October 2026. The user subsequently approved starting the 30-day
+window and scheduling cleanup. Latest verified serving revision is `a0d852c`.
+This is separate from the unchanged 29 October track_metadata retirement. See
 [production evidence](../research/drive-appdata-implementation-evidence.md#authorized-production-rollout).
+
+## Recorded production window
+
+- Target: Neon project `old-night-81938469`, production branch
+  `br-rapid-mud-agwwmwmp`, database `neondb`.
+- Immutable start: `2026-10-23T09:18:44.025Z` — 23 October 2026,
+  11:18:44.025 Europe/Berlin (CEST).
+- Immutable cutoff: `2026-11-22T09:18:44.025Z` — 22 November 2026,
+  10:18:44.025 Europe/Berlin (CET), exactly 720 hours after the start.
+- Active chat follow-up: `retire-legacy-drivebeats-collections`, returning to
+  this executing chat after 720 hours. The database cutoff, not scheduler timing,
+  controls eligibility. A failed due-date attempt changes its own cadence to
+  hourly for bounded retries; unchanged non-actionable states stay quiet.
+- Preflight dry run: target and serving revision confirmed; one verified
+  migration, zero unresolved uploads, cutoff still in the future and all three
+  legacy tables retained. No retirement SQL has run; `legacy_retired` is false.
+
+The saved automation prompt carries these exact instants and target, requires
+the due-date preflight below and available execution authorization, preserves
+account/auth/control/audit and Drive data, and deletes only its own schedule
+after verified completion. Local execution requires the host and desktop app
+to be running. An offline delay never changes the cutoff.
 
 ## Release gates
 
@@ -22,7 +44,7 @@ legacy-write triggers prevent a second authority after migration begins.
 
 Record the serving revision and real verification. Insert one singleton
 `appdata_rollout` row with the verified `implemented_at` and `cleanup_due_at =
-implemented_at + interval '30 days'` after authorization. Preserve the immutable
+implemented_at + interval '720 hours'` after authorization. Preserve the immutable
 start and deadline on retries. Display the exact instant in Europe/Berlin.
 Never infer a rollout date from a local commit or build. Confirm backups/PITR and
 required database permissions without exporting credentials.

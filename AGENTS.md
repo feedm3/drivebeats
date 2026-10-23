@@ -1,106 +1,78 @@
-# Repository Guidelines
+# DriveBeats agent guide
 
-## Local commands
+This repository is public. Keep secrets and real user data out of tracked files;
+use synthetic examples.
 
-Use `pnpm` for local work because the repository tracks `pnpm-lock.yaml`.
+## Local work
 
-Run install, dev/start, and validation commands from the repository root.
-The only application is `apps/drivebeats-web`, including components, application
-logic, and domain types in its `src` directory. App environment files belong in
-`apps/drivebeats-web/.env*`; `mise.local.toml` and Vercel linkage stay at root.
+Use `pnpm` from the repository root for installation, development and validation.
+Read `package.json` for scripts. `pnpm format` only formats; use
+`pnpm exec biome check --write <changed-files>` for safe lint fixes and imports.
 
-Read `package.json` for available scripts. `pnpm format` applies formatting only;
-use `pnpm exec biome check --write <changed-files>` to apply safe lint fixes and
-organize imports as well.
+The app lives in `apps/drivebeats-web`. Keep app environment files there;
+`mise.local.toml` and Vercel linkage belong at the repository root.
 
-## Vercel access
+## Read when relevant
 
-Before inspecting or changing Vercel resources, read
-[docs/vercel-access.md](docs/vercel-access.md).
+- **Domain language:** before naming domain concepts or changing reader-facing
+  terminology, read [GLOSSARY.md](GLOSSARY.md). Resolve conflicts with its canonical
+  terms before introducing new language.
+- **Next.js:** before writing app code, read
+  [the app guide](apps/drivebeats-web/AGENTS.md) and the relevant installed Next.js
+  guides it requires.
+- **Data and sync:** before changing authentication/consent, persistence,
+  restore/sync, imports, metadata extraction, Library Search, WebMCP data access,
+  logout or account deletion, read [the data and sync contract](docs/data-and-sync.md).
+- **Vercel:** before inspecting or changing resources, read
+  [Vercel access](docs/vercel-access.md). Work only on `drivebeats`. Read-only
+  inspection is authorized; ask before remote changes or local secret exports.
+- **Retirement:** before retiring legacy Neon collections, read
+  [the collection runbook](docs/operations/retire-neon-collections.md). Before
+  retiring `track_metadata`, read
+  [the separate metadata runbook](docs/operations/retire-cloud-track-metadata.md).
+- **Backup recovery:** before resolving interrupted uploads, unknown save outcomes
+  or manually settling account deletion, read
+  [the recovery runbook](docs/operations/recover-drive-backup.md).
 
-Work only on `drivebeats`. Read-only inspection is authorized.
-Ask before changing remote Vercel state or exporting secrets locally.
+## Code and migrations
 
-## Coding Style & Naming Conventions
+Export React components in PascalCase; use kebab-case filenames and `*-store.ts`
+for stores. Follow Next.js file conventions such as `page.tsx` and `route.ts`.
 
-Keep React components in PascalCase exports, but name files in
-kebab-case such as `playlist-track-item.tsx`. Follow Next.js file conventions exactly: `page.tsx`, `layout.tsx`,
-`route.ts`, `manifest.ts`, and similar. Store modules should keep the `*-store.ts` suffix.
+Within `apps/drivebeats-web/src`:
 
-## Database & Service Conventions
+- Share the Neon client through `db/client.ts`.
+- Put table queries in `db`, one module per table, focused on that table.
+- Put multi-table workflows in `lib/*service.ts`.
+- Keep route handlers thin: validate, load auth, call a service, return a response.
 
-Keep database access easy to audit.
+Add forward SQL migrations in root `db/migrations`; preserve applied migrations.
+Renaming a table, index or constraint requires an explicit migration for existing
+databases. Align database constraints with API validation limits where possible.
 
-- Put the shared Neon client in `apps/drivebeats-web/src/db/client.ts`.
-- Put table access in `apps/drivebeats-web/src/db`, with one file per table such as `playlists.ts`, `playlist-tracks.ts`, and
-  `favorite-tracks.ts`.
-- Keep those database modules focused on queries against their own table.
-- Put multi-table workflows in `apps/drivebeats-web/src/lib/*service.ts`.
-- Keep route handlers thin: validate the request, load auth, call a service, return the response.
+## Data boundaries
 
-## Migrations
+Google Drive music files and folders are strictly read-only: read metadata, list
+content and stream user-selected audio. Never write audio, change music files,
+folders or permissions, or expose arbitrary Drive write targets. The sole write
+exception is versioned DriveBeats-owned data in `appDataFolder`, through the
+authenticated server coordinator using `drive.appdata`.
 
-- Add new SQL migrations in repository-root `db/migrations`.
-- Do not rewrite old applied migrations for existing environments. Add a new forward migration instead.
-- If you rename a table, index, or constraint, add an explicit migration for existing databases.
-- Keep database constraints aligned with API validation limits where possible.
+## Verification
 
-## Sync Boundaries
+Before delivering code changes, run `pnpm test`, `pnpm lint` and `pnpm build` from
+the repository root, then verify the affected flow in the browser. Report results,
+manual scenarios and checks that remain unverified. Colocate tests as `*.test.ts`
+or `*.test.tsx`; test observable behavior rather than restating the implementation.
 
-- Playlists, favorites, Imported Folder/Standalone Track choices and completed, content-version-scoped tags sync through DriveBeats-owned hidden Google app data. Required app-folder consent and verified one-time migration gate normal use.
-- Neon retains account/authentication and durable coordination records. Legacy collections are a migration source only until the global rollout cutoff; see `docs/operations/retire-neon-collections.md` before retirement work.
-- `recently played`, descendant catalogs, player state, and offline downloads remain device-local. Restore saved tags before missing-tag extraction; WebMCP `cache_only` stays network-free.
-- Do not store the full imported folder tree in the database.
-- Only store metadata needed for synced features. Never store audio blobs in Neon.
-- The Library Search catalog stays account-scoped and device-local; publish only complete catalog generations.
+For authentication or playback changes, document the relevant Google sign-in,
+Drive import and player-control checks.
 
-## Testing Guidelines
+For sync changes, also complete
+[sync verification](docs/data-and-sync.md#sync-verification).
 
-Before delivering code changes, run `pnpm test`, `pnpm lint`, and `pnpm build`,
-then manually verify the affected flow in the browser. Report the results and any
-checks that could not be completed.
-For authentication or playback changes, document the manual checks you performed, for example Google sign-in, Drive
-import, and player controls. Colocate tests as `*.test.ts` or `*.test.tsx` near the feature they cover.
+## Mobile UI
 
-For sync-related changes, also verify:
-
-- playlist and favorite changes appear after switching devices or refreshing another session
-- logout clears local device data but does not delete synced cloud data
-- account deletion fences and drains writers, deletes and verifies all app-owned hidden data before removing credentials; use disposable accounts for destructive verification
-
-## Google Drive Access Policy
-
-Music files and folders in Google Drive remain strictly read-only: only read metadata, list content and stream user-selected audio. The sole write exception is versioned DriveBeats data inside `appDataFolder`, through the authenticated server coordinator with `drive.appdata`. Never write audio, change music files/folders or their permissions, or expose arbitrary Drive write targets. Preserve existing applied migrations.
-
-## Mobile-First Design
-
-Design for mobile first; all UI must be usable on small screens before scaling up.
-
-- Interactive elements (buttons, links, toggles) must have a minimum touch target of 44×44 CSS pixels (Apple HIG / WCAG
-  recommendation).
-- Leave adequate spacing between tap targets so adjacent elements are not accidentally triggered.
-- Avoid hover-only interactions; every action must be reachable via tap.
-- Test layouts at 320px–428px viewport widths before wider breakpoints.
-
-## Installed Next.js guides
-
-Resolve Next.js from `apps/drivebeats-web` (for example, run
-`pnpm --filter @drivebeats/web exec node -p 'require.resolve("next/package.json")'`).
-Read guides in `dist/docs/` beside that resolved manifest; the workspace root
-need not have a `node_modules/next` entry. This resolves the generated rule's
-documentation paths below to the app's installed version.
-
-<!-- BEGIN:nextjs-agent-rules -->
-
-# This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
-
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->
-
-## Domain language
-
-Before naming domain concepts or changing reader-facing terminology, read
-[GLOSSARY.md](GLOSSARY.md), the canonical domain glossary.
+Design and test at 320–428 CSS pixels before wider breakpoints. Give interactive
+elements at least 44×44 CSS-pixel touch targets with adequate spacing. Every action
+must work by tap, including actions also exposed on hover.

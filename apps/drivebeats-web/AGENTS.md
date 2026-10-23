@@ -1,3 +1,17 @@
+# Web app guide
+
+## Installed Next.js guides
+
+Resolve `next/package.json` from this app, for example from the repository root:
+
+```sh
+pnpm --filter @drivebeats/web exec node -p 'require.resolve("next/package.json")'
+```
+
+Read the relevant guides in `dist/docs/` beside that resolved manifest. The
+repository root may have no `node_modules/next`. Keep the generated block below;
+`next dev` maintains it in this app directory.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know

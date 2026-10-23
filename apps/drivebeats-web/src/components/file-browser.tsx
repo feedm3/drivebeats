@@ -1,10 +1,19 @@
 "use client";
 
-import { Ellipsis, FolderPlus, Loader2, Plus, RotateCw } from "lucide-react";
+import {
+  Ellipsis,
+  FolderPlus,
+  Loader2,
+  Plus,
+  RotateCw,
+  Search,
+  X,
+} from "lucide-react";
 import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -73,6 +82,17 @@ export function FileBrowser({
   }>({ query: "", scope: "library" });
   const searchQuery = search.query;
   const searchScope = search.scope;
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchId = useId();
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
+  const isSearchOpen = searchOpen || searchQuery.length > 0;
+  const onSearchOpenChange = useCallback((open: boolean) => {
+    setSearchOpen(open);
+    if (!open) {
+      setSearch((current) => ({ ...current, query: "" }));
+      searchButtonRef.current?.focus();
+    }
+  }, []);
   const isOnline = useOnlineStatus();
   const libraryCatalog = useLibrarySearchStore((state) => state.catalog);
   const librarySearchStatus = useLibrarySearchStore((state) => state.status);
@@ -107,6 +127,7 @@ export function FileBrowser({
   }, [currentFolderId, folderStack]);
 
   useEffect(() => {
+    setSearchOpen(false);
     setSearch((current) => {
       const scope =
         folderStack.at(-1)?.id === ROOT_FOLDER_ID ? "library" : current.scope;
@@ -332,6 +353,25 @@ export function FileBrowser({
             apart centre-to-centre once their hit areas expand. */}
         <div className="ml-auto flex shrink-0 items-center gap-2 pointer-coarse:gap-3">
           <MetadataActivity />
+          <IconTooltip label={isSearchOpen ? "Close search" : "Search"}>
+            <Button
+              ref={searchButtonRef}
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground"
+              aria-label={isSearchOpen ? "Close search" : "Search"}
+              aria-expanded={isSearchOpen}
+              aria-controls={searchId}
+              onClick={() => onSearchOpenChange(!isSearchOpen)}
+            >
+              {isSearchOpen ? (
+                <X aria-hidden="true" />
+              ) : (
+                <Search aria-hidden="true" />
+              )}
+            </Button>
+          </IconTooltip>
           <IconTooltip
             label={refreshing ? `Refreshing ${searchScope}` : refreshLabel}
           >
@@ -402,6 +442,9 @@ export function FileBrowser({
         </div>
       </div>
       <FolderSearch
+        id={searchId}
+        open={isSearchOpen}
+        onOpenChange={onSearchOpenChange}
         canSearchCurrentFolder={!isLibraryRoot}
         disabled={!isOnline}
         disabledReason={

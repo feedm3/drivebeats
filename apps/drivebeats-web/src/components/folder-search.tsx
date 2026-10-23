@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, Info, Search, X } from "lucide-react";
-import { useCallback, useEffect, useId, useRef } from "react";
+import { useCallback, useEffect, useEffectEvent, useId, useRef } from "react";
 import { SearchInput } from "@/components/search-input";
 import { SearchScopeSelect } from "@/components/search-scope-select";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,9 @@ import {
 export type FileSearchScope = "library" | "folder";
 
 interface FolderSearchProps {
+  id: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   canSearchCurrentFolder: boolean;
   disabled: boolean;
   disabledReason?: string;
@@ -35,6 +38,9 @@ function isEditableTarget(target: EventTarget | null) {
 }
 
 export function FolderSearch({
+  id,
+  open,
+  onOpenChange,
   canSearchCurrentFolder,
   disabled,
   disabledReason,
@@ -51,31 +57,42 @@ export function FolderSearch({
     scope === "library" ? "Search Library" : "Search Current Folder";
 
   const focusSearch = useCallback(() => {
-    inputRef.current?.focus();
-    inputRef.current?.select();
+    const input = inputRef.current;
+    if (!input || input.disabled) return;
+    input.focus();
+    input.select();
   }, []);
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.key !== "/" ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        isEditableTarget(event.target)
-      ) {
-        return;
-      }
-      event.preventDefault();
-      focusSearch();
-    };
+    if (open) focusSearch();
+  }, [focusSearch, open]);
+
+  const onSearchShortcut = useEffectEvent((event: KeyboardEvent) => {
+    if (
+      event.defaultPrevented ||
+      event.key !== "/" ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.altKey ||
+      isEditableTarget(event.target)
+    ) {
+      return;
+    }
+    event.preventDefault();
+    if (open) focusSearch();
+    else onOpenChange(true);
+  });
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => onSearchShortcut(event);
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [focusSearch]);
+  }, []);
+
+  if (!open) return <div id={id} hidden />;
 
   return (
-    <div className="mt-2 sm:mt-3">
+    <div id={id} className="mt-2 sm:mt-3">
       <div className="flex w-full flex-col overflow-hidden rounded-xl border border-border/70 bg-background/80 shadow-xs backdrop-blur-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/20 sm:min-h-11 sm:flex-row sm:items-center">
         <label htmlFor="file-search-scope" className="sr-only">
           Search scope
@@ -117,7 +134,8 @@ export function FolderSearch({
                 event.preventDefault();
                 onChange("");
               } else {
-                inputRef.current?.blur();
+                event.preventDefault();
+                onOpenChange(false);
               }
             }}
             placeholder={
@@ -125,7 +143,7 @@ export function FolderSearch({
                 ? "Search all imported tracks…"
                 : "Search this folder…"
             }
-            className="h-11 min-w-0 flex-1 bg-transparent px-3 text-base text-foreground outline-none placeholder:text-muted-foreground/80 disabled:cursor-not-allowed sm:text-sm"
+            className="h-11 min-w-0 flex-1 bg-transparent px-3 text-base text-foreground outline-none placeholder:text-muted-foreground/80 disabled:cursor-not-allowed sm:text-sm [&::-webkit-search-cancel-button]:hidden"
           />
           <div className="flex shrink-0 items-center gap-1 pr-1 pointer-coarse:gap-3">
             {hasQuery && !disabled ? (

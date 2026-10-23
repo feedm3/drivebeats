@@ -173,6 +173,67 @@ describe("FileBrowser player navigation", () => {
     fetchFolderContents.mockReset();
   });
 
+  it("reveals search on demand and restores the unfiltered Library when closed", async () => {
+    render(
+      <FileBrowser
+        externalFolderStack={rootStack}
+        onFolderNavigate={vi.fn()}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Search" });
+    const controlledId = trigger.getAttribute("aria-controls");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    expect(document.getElementById(controlledId ?? "")).not.toBeVisible();
+
+    fireEvent.click(trigger);
+    const input = screen.getByRole("searchbox");
+    expect(input).toHaveFocus();
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    fireEvent.change(input, { target: { value: "friends" } });
+    await waitFor(() =>
+      expect(screen.getByTestId("file-list")).toHaveTextContent("Friends.mp3"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Close search" }));
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    await waitFor(() =>
+      expect(screen.getByTestId("file-list")).toHaveTextContent("Music"),
+    );
+    expect(screen.getByTestId("file-list")).toHaveAttribute(
+      "data-search-query",
+      "",
+    );
+
+    fireEvent.click(trigger);
+    expect(screen.getByRole("searchbox")).toHaveValue("");
+  });
+
+  it("opens with slash, clears with Escape, then closes and restores focus", () => {
+    render(
+      <FileBrowser
+        externalFolderStack={rootStack}
+        onFolderNavigate={vi.fn()}
+      />,
+    );
+
+    fireEvent.keyDown(document, { key: "/" });
+    const input = screen.getByRole("searchbox");
+    expect(input).toHaveFocus();
+    fireEvent.change(input, { target: { value: "friends" } });
+    fireEvent.keyDown(input, { key: "/" });
+    expect(input).toHaveValue("friends");
+
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(input).toHaveValue("");
+    expect(input).toHaveFocus();
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Search" })).toHaveFocus();
+  });
+
   it("cancels an obsolete folder read when navigating to another folder or Library", async () => {
     fetchFolderContents.mockImplementation(async () => {});
     const { rerender } = render(
@@ -234,6 +295,7 @@ describe("FileBrowser player navigation", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
     fireEvent.change(screen.getByRole("searchbox"), {
       target: { value: "friends" },
     });
@@ -256,7 +318,7 @@ describe("FileBrowser player navigation", () => {
       expect(screen.getByTestId("file-list")).toHaveTextContent(
         "Another track.mp3",
       );
-      expect(screen.getByRole("searchbox")).toHaveValue("");
+      expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
     });
   });
 
@@ -282,6 +344,7 @@ describe("FileBrowser player navigation", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
     fireEvent.change(screen.getByRole("searchbox"), {
       target: { value: "friends" },
     });
@@ -301,7 +364,7 @@ describe("FileBrowser player navigation", () => {
       expect(screen.getByTestId("file-list")).toHaveTextContent(
         "Another track.mp3",
       );
-      expect(screen.getByRole("searchbox")).toHaveValue("");
+      expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
     });
   });
 
@@ -327,6 +390,7 @@ describe("FileBrowser player navigation", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
     fireEvent.change(screen.getByRole("searchbox"), {
       target: { value: "friends" },
     });
@@ -339,11 +403,12 @@ describe("FileBrowser player navigation", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("searchbox")).toHaveValue("");
+      expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
       expect(screen.getByTestId("file-list")).toHaveTextContent(
         "Another track.mp3",
       );
     });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
     fireEvent.change(screen.getByRole("searchbox"), {
       target: { value: "friends" },
     });
@@ -363,11 +428,13 @@ describe("FileBrowser player navigation", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("searchbox")).toHaveValue("");
-      expect(
-        screen.getByRole("combobox", { name: "Search scope" }),
-      ).toHaveValue("library");
+      expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
     });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    expect(screen.getByRole("searchbox")).toHaveValue("");
+    expect(screen.getByRole("combobox", { name: "Search scope" })).toHaveValue(
+      "library",
+    );
   });
   it("clears a Library query when the same folder is explicitly selected again", async () => {
     const onFolderNavigate = vi.fn();
@@ -377,6 +444,7 @@ describe("FileBrowser player navigation", () => {
         onFolderNavigate={onFolderNavigate}
       />,
     );
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
     fireEvent.change(screen.getByRole("searchbox"), {
       target: { value: "friends" },
     });
@@ -390,7 +458,7 @@ describe("FileBrowser player navigation", () => {
       />,
     );
     await waitFor(() => {
-      expect(screen.getByRole("searchbox")).toHaveValue("");
+      expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
       expect(screen.getByTestId("file-list")).toHaveTextContent("Music");
       expect(screen.getByTestId("file-list")).not.toHaveTextContent(
         "Friends.mp3",

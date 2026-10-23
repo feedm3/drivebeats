@@ -2,6 +2,7 @@
 
 import {
   ChevronRight,
+  Ellipsis,
   Folder,
   Heart,
   History,
@@ -121,43 +122,32 @@ function SidebarSkeleton() {
 
 function BrowserToolbarSkeleton() {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex items-center gap-2" aria-hidden="true">
       <div className="flex min-h-8 items-center gap-2 text-sm">
         <span className="font-semibold text-foreground">Library</span>
       </div>
-      <div className="flex items-center gap-2">
-        <div className="hidden min-w-0 flex-1 items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-1.5 shadow-xs backdrop-blur-sm sm:flex sm:max-w-xs">
-          <Search className="size-4 shrink-0 text-muted-foreground" />
-          <Skeleton className="h-3.5 w-20 rounded-full" />
+      <div className="ml-auto flex shrink-0 items-center gap-2 text-muted-foreground pointer-coarse:gap-3">
+        <div className="inline-flex size-8 items-center justify-center">
+          <Search className="size-4" />
         </div>
-        <div className="flex items-center sm:hidden">
-          <Search className="size-3.5 text-muted-foreground" />
-        </div>
-        <button
-          type="button"
-          className="inline-flex size-8 items-center justify-center text-muted-foreground"
-          aria-label="Refresh folder"
-          tabIndex={-1}
-        >
+        <div className="hidden size-8 items-center justify-center md:inline-flex">
           <RotateCw className="size-4" />
-        </button>
+        </div>
+        <div className="inline-flex size-8 items-center justify-center md:hidden">
+          <Ellipsis className="size-4" />
+        </div>
       </div>
     </div>
   );
 }
 
-function BrowserSkeleton({ mobile = false }: { mobile?: boolean }) {
+function BrowserSkeleton() {
   const playerBarPadding = usePlayerBarPadding();
 
   return (
-    <div
-      className={cn(
-        "mx-auto flex h-full flex-col overflow-hidden px-4 pt-7",
-        mobile && "pt-6",
-      )}
-    >
+    <div className="mx-auto flex h-full flex-col overflow-hidden px-4 pt-4 sm:pt-7">
       <BrowserToolbarSkeleton />
-      <Separator className="my-3" />
+      <Separator className="my-2 sm:my-3" />
       <div className="min-h-0 flex-1">
         <div className={cn(playerBarPadding)}>
           <FileListSkeleton />
@@ -191,7 +181,7 @@ export function AppLoadingShell() {
           </div>
         </div>
         <div className="min-h-0 flex-1">
-          <BrowserSkeleton mobile />
+          <BrowserSkeleton />
         </div>
       </div>
     </div>

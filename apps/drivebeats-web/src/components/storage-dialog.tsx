@@ -448,27 +448,18 @@ export function StorageDialog({
                 </p>
               )}
               <p className="text-muted-foreground">
-                Saved data follows you across browsers. Pending backup items
-                include unsaved music tags and Library choice changes. They are
-                not yet backed up. Music files are never changed.
-              </p>
-              <p className="text-muted-foreground">
-                Google keeps this backup in a hidden app folder. Its files
-                cannot be browsed in Drive. In Drive settings, choose Manage
-                apps and find DriveBeats. Use the same Google account as
-                DriveBeats.
-              </p>
-              <Button asChild variant="outline" className="min-h-11">
                 <a
                   href="https://drive.google.com/drive/settings"
                   target="_blank"
                   rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center gap-1 text-primary underline underline-offset-4"
                 >
-                  Google Drive settings
-                  <ExternalLink data-icon="inline-end" aria-hidden="true" />
+                  Google Drive
+                  <ExternalLink className="size-3.5" aria-hidden="true" />
                   <span className="sr-only"> (opens in a new tab)</span>
-                </a>
-              </Button>
+                </a>{" "}
+                → “Manage apps”
+              </p>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Synced playlists</span>
                 <span className="font-medium tabular-nums">

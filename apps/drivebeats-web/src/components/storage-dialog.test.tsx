@@ -297,24 +297,6 @@ describe("StorageDialog offline recovery", () => {
     },
   );
 
-  it("describes the combined pending count as tags and Library choices", () => {
-    useDriveAppDataStore.setState({
-      status: "ready",
-      pendingCount: 7,
-      savedCount: 13,
-    });
-    renderDialog();
-    expect(
-      screen.getByText("Pending backup items").parentElement,
-    ).toHaveTextContent("7");
-    expect(
-      screen.getByText(
-        /Pending backup items include unsaved music tags and Library choice changes/,
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Pending music tags")).not.toBeInTheDocument();
-  });
-
   it.each([
     ["granted", false],
     ["not-granted", true],

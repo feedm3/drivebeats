@@ -670,17 +670,17 @@ export function queueImportedRootOperations(
       const payload: Command = {
         operationId,
         generation: state.generation,
-        baseRevision: revision,
+        baseRevision: state.status === "ready" ? revision : undefined,
         kind: "roots",
         payload: { operations: batch },
       };
-      if (state.status === "restoring") freshRestoreRoots.add(operationId);
+      if (state.status !== "ready") freshRestoreRoots.add(operationId);
       await savePortableOutbox({
         id: operationId,
         accountId: state.accountId,
         generation: state.generation,
         kind: "outbox",
-        readyToSeal: state.status !== "restoring",
+        readyToSeal: state.status === "ready",
         bytes: bytes(payload),
         payload,
       });
@@ -716,6 +716,7 @@ async function applyRemote(
   remoteVariants.clear();
   const records = new Map<string, MetadataRecord>();
   const roots = new Map<string, DriveFile>();
+  const rootRevisions = new Map<string, number>();
   let approximateBytes = 0;
   for (const envelope of [...data.envelopes].sort(
     (a, b) =>
@@ -764,12 +765,15 @@ async function applyRemote(
         )
           throw new Error("invalid_backup");
         const key = `${operation.rootKind}:${operation.id}`;
-        if (operation.type === "remove") {
-          roots.delete(key);
+        if (operation.type === "remove")
           removedRoots.set(
             key,
             Math.max(removedRoots.get(key) ?? 0, sourceRevision),
           );
+        if (sourceRevision < (rootRevisions.get(key) ?? 0)) continue;
+        rootRevisions.set(key, sourceRevision);
+        if (operation.type === "remove") {
+          roots.delete(key);
         } else if (
           operation.type === "add" &&
           operation.descriptor?.id === operation.id &&
@@ -810,6 +814,7 @@ async function applyRemote(
     ).operations.filter(
       (operation) =>
         freshRestoreRoots.has(entry.id) ||
+        command.baseRevision === undefined ||
         operation.type !== "add" ||
         (removedRoots.get(`${operation.rootKind}:${operation.id}`) ?? -1) <=
           (command.baseRevision ?? -1),
@@ -916,6 +921,15 @@ export function restoreDriveAppData(
   accountId: string,
   generation?: string,
 ): Promise<void> {
+  const state = useDriveAppDataStore.getState();
+  if (
+    state.accountId === accountId &&
+    generation &&
+    state.generation !== generation
+  )
+    return deferDriveAppDataRestore(accountId, generation, "revalidating").then(
+      () => restoreDriveAppData(accountId, generation),
+    );
   if (restoreFlight && useDriveAppDataStore.getState().accountId === accountId)
     return restoreFlight;
   if (restoreRetryTimer) clearTimeout(restoreRetryTimer);

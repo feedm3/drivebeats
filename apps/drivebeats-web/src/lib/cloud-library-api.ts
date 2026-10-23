@@ -14,6 +14,31 @@ import type { Playlist, PlaylistTrack } from "@/types";
 const CLOUD_API_TIMEOUT_MS = 30_000;
 const COLLECTION_JOURNAL_LOCK = "drivebeats-collection-journal-v1";
 
+function orderedCollectionSaves(prefix: string) {
+  const entries = Object.keys(window.localStorage)
+    .filter((key) => key.startsWith(prefix))
+    .map((key) => {
+      const saved = JSON.parse(window.localStorage.getItem(key) ?? "null");
+      const sequence = saved?.sequence ?? 0;
+      if (!Number.isSafeInteger(sequence) || sequence < 0)
+        throw new Error("Pending collection change needs recovery");
+      return { key, sequence };
+    });
+  // Old journals did not record order. A single old intent can safely precede
+  // new ones, but guessing between several would risk silently undoing edits.
+  if (entries.filter((entry) => entry.sequence === 0).length > 1)
+    throw new Error(
+      "Older pending collection changes need recovery before syncing",
+    );
+  return entries.sort(
+    (a, b) => a.sequence - b.sequence || a.key.localeCompare(b.key),
+  );
+}
+
+function collectionSendLock(accountId: string, generation: string) {
+  return `drivebeats-collection-send-v1:${accountId}:${generation}`;
+}
+
 async function writeCollectionJournal<T>(action: () => T) {
   if (typeof navigator.locks?.request !== "function")
     throw new Error("Update your browser to safely save collection changes.");
@@ -137,63 +162,83 @@ async function request(
           body: init?.body,
           operationId,
           generation: identity.generation,
+          sequence:
+            orderedCollectionSaves(
+              `drivebeats-collection-outbox-v1:${identity.accountId}:${identity.generation}:`,
+            ).reduce((last, entry) => Math.max(last, entry.sequence), 0) + 1,
         }),
       );
     });
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(
-    () => controller.abort(),
-    CLOUD_API_TIMEOUT_MS,
-  );
+  const send = async () => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(
+      () => controller.abort(),
+      CLOUD_API_TIMEOUT_MS,
+    );
 
-  let response: Response;
-  try {
-    response = await fetch(input, {
-      cache: "no-store",
-      ...init,
-      headers: {
-        "Content-Type": "application/json",
-        ...(identity.generation
-          ? { "X-DriveBeats-Generation": identity.generation }
-          : {}),
-        ...(init?.headers ?? {}),
-        ...(operationId ? { "X-DriveBeats-Operation": operationId } : {}),
-      },
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (controller.signal.aborted) {
-      throw new Error("Request timed out");
+    let response: Response;
+    try {
+      response = await fetch(input, {
+        cache: "no-store",
+        ...init,
+        headers: {
+          "Content-Type": "application/json",
+          ...(identity.generation
+            ? { "X-DriveBeats-Generation": identity.generation }
+            : {}),
+          ...(init?.headers ?? {}),
+          ...(operationId ? { "X-DriveBeats-Operation": operationId } : {}),
+        },
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new Error("Request timed out");
+      }
+
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
     }
 
-    throw error;
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
+    if (!response.ok) {
+      // Definitively rejected operations never entered the durable server queue.
+      if (outboxKey && [400, 401, 403, 404, 422].includes(response.status))
+        await removeCollectionSave(outboxKey);
+      const { message, code, resumeOperationId } = await readError(response);
+      if (
+        outboxKey &&
+        operationId &&
+        identity.generation &&
+        response.status === 409
+      )
+        await advanceCollectionSave(
+          outboxKey,
+          operationId,
+          identity.generation,
+          resumeOperationId,
+        );
+      throw new CloudApiError(message, code);
+    }
 
-  if (!response.ok) {
-    // Definitively rejected operations never entered the durable server queue.
-    if (outboxKey && [400, 401, 403, 404, 422].includes(response.status))
-      await removeCollectionSave(outboxKey);
-    const { message, code, resumeOperationId } = await readError(response);
-    if (
-      outboxKey &&
-      operationId &&
-      identity.generation &&
-      response.status === 409
-    )
-      await advanceCollectionSave(
-        outboxKey,
-        operationId,
-        identity.generation,
-        resumeOperationId,
-      );
-    throw new CloudApiError(message, code);
-  }
+    if (outboxKey) await removeCollectionSave(outboxKey);
 
-  if (outboxKey) await removeCollectionSave(outboxKey);
-
-  return response;
+    return response;
+  };
+  const { accountId, generation } = identity;
+  if (!outboxKey || !accountId || !generation) return send();
+  return navigator.locks.request(
+    collectionSendLock(accountId, generation),
+    async () => {
+      await replayCollectionSaves(accountId, generation, outboxKey);
+      if (
+        useDriveAppDataStore.getState().accountId !== identity.accountId ||
+        useDriveAppDataStore.getState().generation !== identity.generation
+      )
+        throw new Error("Account changed before the collection save");
+      return send();
+    },
+  );
 }
 
 export async function fetchCloudLibrarySync() {
@@ -208,61 +253,74 @@ async function resumeCollectionSaves() {
   if (replayFlight) return replayFlight;
   const { accountId, generation } = useDriveAppDataStore.getState();
   if (!accountId || !generation) return;
-  const prefix = `drivebeats-collection-outbox-v1:${accountId}:${generation}:`;
-  const flight = (async () => {
-    const keys = Object.keys(window.localStorage).filter((key) =>
-      key.startsWith(prefix),
-    );
-    for (const key of keys) {
-      if (
-        useDriveAppDataStore.getState().generation !== generation ||
-        useDriveAppDataStore.getState().accountId !== accountId
-      )
-        return;
-      const saved = JSON.parse(window.localStorage.getItem(key) ?? "null");
-      if (!saved) continue;
-      if (
-        typeof saved.input !== "string" ||
-        !/^\/api\/(playlists|favorites)(\/|$)/.test(saved.input) ||
-        !["POST", "PUT", "PATCH", "DELETE"].includes(saved.method) ||
-        saved.generation !== generation
-      )
-        throw new Error("Pending collection change needs recovery");
-      const response = await fetch(saved.input, {
-        method: saved.method,
-        body: saved.body,
-        headers: {
-          "Content-Type": "application/json",
-          "X-DriveBeats-Generation": generation,
-          "X-DriveBeats-Operation": saved.operationId,
-        },
-        signal: AbortSignal.timeout(CLOUD_API_TIMEOUT_MS),
-      });
-      if (!response.ok) {
-        const error = await readError(response);
-        if (response.status === 409)
-          await advanceCollectionSave(
-            key,
-            saved.operationId,
-            generation,
-            error.resumeOperationId,
-          );
-        if (
-          [400, 401, 403, 404, 422].includes(response.status) ||
-          (response.status === 409 && error.code?.startsWith("PLAYLIST_"))
-        ) {
-          await removeCollectionSave(key);
-          continue;
-        }
-        throw new CloudApiError(error.message, error.code);
-      }
-      await removeCollectionSave(key);
-    }
-  })().finally(() => {
-    if (replayFlight === flight) replayFlight = null;
-  });
+  const flight = navigator.locks
+    .request(collectionSendLock(accountId, generation), () =>
+      replayCollectionSaves(accountId, generation),
+    )
+    .finally(() => {
+      if (replayFlight === flight) replayFlight = null;
+    });
   replayFlight = flight;
   return flight;
+}
+
+/** The sender lock spans retries and new sends, so acknowledged newer intents
+ * cannot overtake an older request whose provider outcome is still unknown. */
+async function replayCollectionSaves(
+  accountId: string,
+  generation: string,
+  beforeKey?: string,
+) {
+  const prefix = `drivebeats-collection-outbox-v1:${accountId}:${generation}:`;
+  const entries = await writeCollectionJournal(() =>
+    orderedCollectionSaves(prefix),
+  );
+  for (const { key } of entries) {
+    if (key === beforeKey) break;
+    if (
+      useDriveAppDataStore.getState().generation !== generation ||
+      useDriveAppDataStore.getState().accountId !== accountId
+    )
+      return;
+    const saved = JSON.parse(window.localStorage.getItem(key) ?? "null");
+    if (!saved) continue;
+    if (
+      typeof saved.input !== "string" ||
+      !/^\/api\/(playlists|favorites)(\/|$)/.test(saved.input) ||
+      !["POST", "PUT", "PATCH", "DELETE"].includes(saved.method) ||
+      saved.generation !== generation
+    )
+      throw new Error("Pending collection change needs recovery");
+    const response = await fetch(saved.input, {
+      method: saved.method,
+      body: saved.body,
+      headers: {
+        "Content-Type": "application/json",
+        "X-DriveBeats-Generation": generation,
+        "X-DriveBeats-Operation": saved.operationId,
+      },
+      signal: AbortSignal.timeout(CLOUD_API_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      const error = await readError(response);
+      if (response.status === 409)
+        await advanceCollectionSave(
+          key,
+          saved.operationId,
+          generation,
+          error.resumeOperationId,
+        );
+      if (
+        [400, 401, 403, 404, 422].includes(response.status) ||
+        (response.status === 409 && error.code?.startsWith("PLAYLIST_"))
+      ) {
+        await removeCollectionSave(key);
+        continue;
+      }
+      throw new CloudApiError(error.message, error.code);
+    }
+    await removeCollectionSave(key);
+  }
 }
 
 export async function bootstrapCloudLibrarySync(data: CloudLibrarySyncPayload) {

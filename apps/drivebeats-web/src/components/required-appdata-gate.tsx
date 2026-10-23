@@ -2,7 +2,8 @@
 
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { AppLoadingShell } from "@/components/app-loading-shell";
 import { LogoutConfirmationDialog } from "@/components/logout-confirmation-dialog";
 import { StorageDialog } from "@/components/storage-dialog";
@@ -25,6 +26,7 @@ import {
 } from "@/lib/drive-appdata-client";
 import { hasRequiredGoogleScopes } from "@/lib/google-scopes";
 import { useAuthStore } from "@/stores/auth-store";
+import { useDriveAppDataStore } from "@/stores/drive-appdata-store";
 import { usePlayerStore } from "@/stores/player-store";
 
 const cutoffFormatter = new Intl.DateTimeFormat("en-GB", {
@@ -61,6 +63,9 @@ export function RequiredAppDataGate({
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [storageOpen, setStorageOpen] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const retryAttempts = useRef(0);
+  const checking = useRef(false);
+  const lastVerifiedAt = useRef(0);
   const [checkingLocalReadiness, setCheckingLocalReadiness] = useState(
     initialUser !== null,
   );
@@ -69,14 +74,23 @@ export function RequiredAppDataGate({
   useEffect(() => {
     if (!initialUser) return;
     let disposed = false;
+    checking.current = true;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    const recheckLater = () => {
+      if (!navigator.onLine || disposed) return;
+      retryTimer = setTimeout(
+        () => setAttempt((value) => value + 1),
+        Math.min(2000 * 2 ** retryAttempts.current++, 30_000),
+      );
+    };
     const controller = new AbortController();
     const withinDeadline = async <T,>(
       operation: Promise<T>,
       milliseconds: number,
     ): Promise<T> => {
-      let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => {
+        deadlineTimer = setTimeout(() => {
           controller.abort();
           reject(
             new DOMException("Backup preparation timed out", "TimeoutError"),
@@ -86,7 +100,7 @@ export function RequiredAppDataGate({
       try {
         return await Promise.race([operation, timeout]);
       } finally {
-        clearTimeout(timer);
+        clearTimeout(deadlineTimer);
       }
     };
     const canResume =
@@ -186,14 +200,40 @@ export function RequiredAppDataGate({
           return;
         }
         if (!response.ok || result.ready !== true) {
+          if (resumed) {
+            if ([400, 413, 422].includes(response.status)) {
+              useDriveAppDataStore.setState({
+                status: "error",
+                error: "backup_needs_attention",
+              });
+              toast.error("Your Google Drive backup needs attention.", {
+                id: `backup-attention:${initialUser.id}`,
+                description:
+                  "Open Storage & data to recover it. You can keep listening.",
+                duration: Number.POSITIVE_INFINITY,
+                action: {
+                  label: "Storage & data",
+                  onClick: () => setStorageOpen(true),
+                },
+              });
+            } else recheckLater();
+            return;
+          }
           blockPlayback();
           throw new Error(
             "Your Google Drive backup could not be prepared. Check your connection and retry.",
           );
         }
+        retryAttempts.current = 0;
+        lastVerifiedAt.current = Date.now();
+        toast.dismiss(`backup-attention:${initialUser.id}`);
         const returning =
           resumed && result.generation === initialAccountGeneration;
-        if (resumed && !returning) {
+        const replacing =
+          !!initialAccountGeneration &&
+          typeof result.generation === "string" &&
+          result.generation !== initialAccountGeneration;
+        if (replacing) {
           clearVerifiedAppDataReadiness(initialUser.id);
           blockPlayback();
         }
@@ -218,9 +258,11 @@ export function RequiredAppDataGate({
         const restoring = restoreDriveAppData(
           initialUser.id,
           typeof result.generation === "string" ? result.generation : undefined,
-        ).catch(() => undefined);
+        );
         if (returning) useAuthStore.getState().setAppDataReady(true);
-        await withinDeadline(restoring, 60_000).catch(() => undefined);
+        await withinDeadline(restoring, 60_000).catch((error) => {
+          if (replacing) throw error;
+        });
         // The UI deadline releases playback after verified bootstrap. The
         // existing restore keeps running; its store still defers extraction.
         if (!disposed) useAuthStore.getState().setAppDataReady(true);
@@ -232,8 +274,10 @@ export function RequiredAppDataGate({
           !disposed &&
           !receivedResponse &&
           (await resumeVerified("offline").catch(() => false))
-        )
+        ) {
+          recheckLater();
           return;
+        }
         if (!disposed) {
           setCheckingLocalReadiness(false);
           setStatus("error");
@@ -244,9 +288,14 @@ export function RequiredAppDataGate({
           );
         }
       }
-    })();
+    })().finally(() => {
+      if (!disposed) checking.current = false;
+    });
     return () => {
       disposed = true;
+      checking.current = false;
+      clearTimeout(retryTimer);
+      clearTimeout(deadlineTimer);
       controller.abort();
     };
   }, [initialUser, initialAccountGeneration, initialGrantedScopes, attempt]);
@@ -264,7 +313,17 @@ export function RequiredAppDataGate({
   }, [ready, status, initialUser]);
 
   useEffect(() => {
-    const revalidate = () => setAttempt((value) => value + 1);
+    const revalidate = () => {
+      const auth = useAuthStore.getState();
+      if (
+        checking.current ||
+        (auth.appDataReady &&
+          !auth.appDataOfflineReady &&
+          Date.now() - lastVerifiedAt.current < 60_000)
+      )
+        return;
+      setAttempt((value) => value + 1);
+    };
     window.addEventListener("online", revalidate);
     return () => window.removeEventListener("online", revalidate);
   }, []);
@@ -280,6 +339,11 @@ export function RequiredAppDataGate({
     return (
       <>
         {children}
+        <StorageDialog
+          open={storageOpen}
+          onOpenChange={setStorageOpen}
+          recoveryGeneration={initialAccountGeneration}
+        />
         <Dialog open={legacyUnavailable} onOpenChange={setLegacyUnavailable}>
           <DialogContent className="w-[calc(100%_-_2rem)]">
             <DialogTitle>Start fresh with your collections</DialogTitle>

@@ -20,6 +20,8 @@ import { usePlayerStore } from "@/stores/player-store";
 
 const restore = vi.hoisted(() => vi.fn());
 const deferRestore = vi.hoisted(() => vi.fn());
+const backupToast = vi.hoisted(() => ({ error: vi.fn(), dismiss: vi.fn() }));
+vi.mock("sonner", () => ({ toast: backupToast }));
 const requiredScopes = [GOOGLE_DRIVE_SCOPE, GOOGLE_APPDATA_SCOPE];
 vi.mock("@/lib/drive-appdata-client", () => ({
   restoreDriveAppData: restore,
@@ -50,6 +52,8 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   restore.mockReset().mockResolvedValue(undefined);
   deferRestore.mockReset().mockResolvedValue(undefined);
+  backupToast.error.mockClear();
+  backupToast.dismiss.mockClear();
 });
 afterEach(() => {
   cleanup();
@@ -213,20 +217,12 @@ it("keeps a verified returning Library visible while bootstrap and tag restore a
   );
   expect(screen.getByText("Returning Library")).toBeInTheDocument();
   expect(useAuthStore.getState().appDataOfflineReady).toBe(false);
-  fetchMock.mockReturnValue(
-    new Promise((resolve) => {
-      finishBootstrap = resolve;
-    }),
-  );
   fireEvent.online(window);
   expect(screen.getByText("Returning Library")).toBeInTheDocument();
   await act(async () => {});
-  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(fetchMock).toHaveBeenCalledOnce();
   expect(screen.getByText("Returning Library")).toBeInTheDocument();
   await act(async () => finishRestore());
-  await act(async () =>
-    finishBootstrap(Response.json({ ready: true, generation: "generation-a" })),
-  );
 });
 
 it.each(["absent", "other-account", "other-generation", "missing-consent"])(
@@ -386,6 +382,92 @@ it("invalidates offline readiness on an authoritative consent rejection", async 
   expect(pause).toHaveBeenCalledOnce();
 });
 
+it("keeps returning playback available through a temporary bootstrap failure and retries", async () => {
+  vi.useFakeTimers();
+  saveVerifiedAppDataReadiness(user.id, "generation-a", 1);
+  const pause = vi
+    .spyOn(usePlayerStore.getState(), "pause")
+    .mockImplementation(() => {});
+  fetchMock
+    .mockResolvedValueOnce(
+      Response.json({ code: "appdata_provider_unavailable" }, { status: 503 }),
+    )
+    .mockResolvedValueOnce(
+      Response.json({ ready: true, generation: "generation-a" }),
+    );
+  render(
+    <RequiredAppDataGate
+      initialUser={user}
+      initialAccountGeneration="generation-a"
+      initialGrantedScopes={requiredScopes}
+    >
+      <p>Returning Library</p>
+    </RequiredAppDataGate>,
+  );
+  await act(async () => {});
+  expect(screen.getByText("Returning Library")).toBeInTheDocument();
+  expect(pause).not.toHaveBeenCalled();
+  expect(fetchMock).toHaveBeenCalledOnce();
+  await act(() => vi.advanceTimersByTimeAsync(2000));
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(restore).toHaveBeenCalledOnce();
+  expect(screen.getByText("Returning Library")).toBeInTheDocument();
+});
+
+it("reports a permanently invalid backup without pausing cached playback or silently retrying", async () => {
+  vi.useFakeTimers();
+  saveVerifiedAppDataReadiness(user.id, "generation-a", 1);
+  fetchMock.mockResolvedValue(
+    Response.json({ code: "appdata_invalid_saved_file" }, { status: 400 }),
+  );
+  const pause = vi
+    .spyOn(usePlayerStore.getState(), "pause")
+    .mockImplementation(() => {});
+  render(
+    <RequiredAppDataGate
+      initialUser={user}
+      initialAccountGeneration="generation-a"
+      initialGrantedScopes={requiredScopes}
+    >
+      <p>Returning Library</p>
+    </RequiredAppDataGate>,
+  );
+  await act(async () => {});
+  expect(screen.getByText("Returning Library")).toBeInTheDocument();
+  expect(backupToast.error).toHaveBeenCalledOnce();
+  const options = backupToast.error.mock.calls[0][1];
+  expect(options.action.label).toBe("Storage & data");
+  await act(async () => options.action.onClick());
+  expect(storage.mock.calls.at(-1)?.[0]).toMatchObject({
+    open: true,
+    recoveryGeneration: "generation-a",
+  });
+  await act(() => vi.advanceTimersByTimeAsync(60_000));
+  expect(fetchMock).toHaveBeenCalledOnce();
+  expect(pause).not.toHaveBeenCalled();
+});
+
+it("keeps a replacement-generation Library gated if its restore fails", async () => {
+  saveVerifiedAppDataReadiness(user.id, "generation-a", 1);
+  fetchMock.mockResolvedValue(
+    Response.json({ ready: true, generation: "generation-b" }),
+  );
+  restore.mockRejectedValue(new Error("network unavailable"));
+  render(
+    <RequiredAppDataGate
+      initialUser={user}
+      initialAccountGeneration="generation-a"
+      initialGrantedScopes={requiredScopes}
+    >
+      <p>Old Library</p>
+    </RequiredAppDataGate>,
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Backup needs attention" }),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("Old Library")).not.toBeInTheDocument();
+});
+
 it("offers sign-in in a clean cached shell without mounting the player or bootstrapping", () => {
   useAuthStore.setState({
     user: null,
@@ -513,4 +595,40 @@ it("ends the checking phase with a retry even if a suspended request ignores abo
   );
   expect(screen.getByRole("button", { name: "Retry backup" })).toBeEnabled();
   expect(screen.queryByRole("status")).not.toBeInTheDocument();
+});
+
+it("clears the deadline and elapsed timers when a suspended bootstrap unmounts", () => {
+  vi.useFakeTimers();
+  fetchMock.mockReturnValue(new Promise(() => {}));
+  const view = render(
+    <RequiredAppDataGate initialUser={user}>
+      <p>Library</p>
+    </RequiredAppDataGate>,
+  );
+  expect(vi.getTimerCount()).toBeGreaterThan(0);
+  view.unmount();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it("does not retry a transient bootstrap failure after the returning Library unmounts", async () => {
+  vi.useFakeTimers();
+  saveVerifiedAppDataReadiness(user.id, "generation-a", 1);
+  fetchMock.mockResolvedValue(
+    Response.json({ code: "appdata_provider_unavailable" }, { status: 503 }),
+  );
+  const view = render(
+    <RequiredAppDataGate
+      initialUser={user}
+      initialAccountGeneration="generation-a"
+      initialGrantedScopes={requiredScopes}
+    >
+      <p>Library</p>
+    </RequiredAppDataGate>,
+  );
+  await act(async () => {});
+  expect(screen.getByText("Library")).toBeInTheDocument();
+  view.unmount();
+  await act(() => vi.advanceTimersByTimeAsync(30_000));
+  expect(fetchMock).toHaveBeenCalledOnce();
+  expect(vi.getTimerCount()).toBe(0);
 });

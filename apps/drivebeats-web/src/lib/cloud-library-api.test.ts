@@ -4,6 +4,7 @@ import {
   clearPendingCollectionSaves,
   createCloudPlaylist,
   fetchCloudLibrarySync,
+  renameCloudPlaylist,
   resetGoogleDriveBackup,
 } from "./cloud-library-api";
 
@@ -13,12 +14,15 @@ const response = (status = 200, body: unknown = { ok: true }) =>
     headers: { "Content-Type": "application/json" },
   });
 beforeEach(() => {
-  let lockTail: Promise<unknown> = Promise.resolve();
+  const lockTails = new Map<string, Promise<unknown>>();
   vi.stubGlobal("navigator", {
     locks: {
-      request: (_name: string, action: () => unknown) => {
-        const next = lockTail.then(action);
-        lockTail = next.catch(() => undefined);
+      request: (name: string, action: () => unknown) => {
+        const next = (lockTails.get(name) ?? Promise.resolve()).then(action);
+        lockTails.set(
+          name,
+          next.catch(() => undefined),
+        );
         return next;
       },
     },
@@ -34,6 +38,87 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("collection retry journal", () => {
+  it("serializes concurrent sends behind the older request's acknowledgment", async () => {
+    let finishFirst!: (value: Response) => void;
+    const fetcher = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            finishFirst = resolve;
+          }),
+      )
+      .mockResolvedValue(response());
+    vi.stubGlobal("fetch", fetcher);
+    const first = renameCloudPlaylist("p", "First");
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
+    const last = renameCloudPlaylist("p", "Last");
+    await vi.waitFor(() => expect(Object.keys(localStorage)).toHaveLength(2));
+    expect(fetcher).toHaveBeenCalledOnce();
+    finishFirst(response());
+    await Promise.all([first, last]);
+    expect(
+      fetcher.mock.calls.map(([, init]) => JSON.parse(init.body).name),
+    ).toEqual(["First", "Last"]);
+  });
+
+  it("preserves ambiguous legacy intents for recovery instead of guessing their order", async () => {
+    for (const id of ["old-a", "old-b"])
+      localStorage.setItem(
+        `drivebeats-collection-outbox-v1:account:incarnation:${id}`,
+        JSON.stringify({
+          input: "/api/playlists/p",
+          method: "PATCH",
+          body: JSON.stringify({ name: id }),
+          operationId: id,
+          generation: "incarnation",
+        }),
+      );
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    await expect(fetchCloudLibrarySync()).rejects.toThrow("need recovery");
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(Object.keys(localStorage)).toHaveLength(2);
+  });
+  it("replays rename intent in creation order even when storage enumerates it backwards", async () => {
+    const fetcher = vi.fn().mockRejectedValue(new TypeError("offline"));
+    vi.stubGlobal("fetch", fetcher);
+    await expect(renameCloudPlaylist("p", "First")).rejects.toThrow("offline");
+    await expect(renameCloudPlaylist("p", "Last")).rejects.toThrow("offline");
+    const entries = Object.keys(localStorage).map((key) => [
+      key,
+      localStorage.getItem(key) as string,
+    ]);
+    localStorage.clear();
+    for (const [key, value] of entries.reverse())
+      localStorage.setItem(key, value);
+    const names: string[] = [];
+    fetcher.mockImplementation(async (_url, init) => {
+      if (init?.method === "PATCH") names.push(JSON.parse(init.body).name);
+      return response(200, { playlists: [], favorites: [] });
+    });
+    await fetchCloudLibrarySync();
+    expect(names).toEqual(["First", "Last"]);
+  });
+
+  it("does not let a newer successful edit overtake an older unresolved intent", async () => {
+    let online = false;
+    const applied: string[] = [];
+    const fetcher = vi.fn(async (_url, init) => {
+      const name = init?.body && JSON.parse(init.body).name;
+      if (!online && name === "First") throw new TypeError("offline");
+      if (name) applied.push(name);
+      return response(200, { playlists: [], favorites: [] });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    await expect(renameCloudPlaylist("p", "First")).rejects.toThrow("offline");
+    await expect(renameCloudPlaylist("p", "Last")).rejects.toThrow("offline");
+    expect(applied).toEqual([]);
+    online = true;
+    await fetchCloudLibrarySync();
+    expect(applied).toEqual(["First", "Last"]);
+  });
+
   it("does not recreate a cleared journal when a late response advances its receipt", async () => {
     let finish: (response: Response) => void = () => {};
     const fetcher = vi

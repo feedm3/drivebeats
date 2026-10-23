@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   local: [] as MetadataRecord[],
   scanBarrier: null as Promise<void> | null,
   roots: [] as { id: string; name: string; mimeType: string }[],
+  importedGeneration: null as string | null,
   fetch: vi.fn(),
   audio: vi.fn(),
   descriptor: vi.fn(),
@@ -174,6 +175,7 @@ vi.mock("@/stores/id3-metadata-store", () => {
     accountId: "a",
     generation: 1,
     setAccount: async () => {},
+    resetCachedMetadata: async () => mocks.records.clear(),
     observeDescriptor: () => {},
     getRecord: record,
     loadRecord: async (track: {
@@ -194,7 +196,10 @@ vi.mock("@/stores/imported-drive-store", () => ({
     getState: () => ({
       rootFolders: [],
       rootFiles: [],
-      bindAccount: vi.fn(),
+      accountGeneration: mocks.importedGeneration,
+      bindAccount: (_account: string, generation: string) => {
+        mocks.importedGeneration = generation;
+      },
       hydrateRemoteRoots: (roots: typeof mocks.roots) => {
         mocks.roots = roots;
       },
@@ -277,6 +282,7 @@ beforeEach(() => {
   mocks.local = [];
   mocks.scanBarrier = null;
   mocks.roots = [];
+  mocks.importedGeneration = null;
   Object.assign(mocks.auth, {
     user: { id: "a" },
     appDataReady: true,
@@ -305,6 +311,179 @@ afterEach(async () => {
 });
 
 describe("portable metadata and imported choices", () => {
+  it.each(["add", "remove"] as const)(
+    "keeps the newer %s when an older root event is checkpointed later",
+    async (type) => {
+      const descriptor = {
+        id: "folder",
+        name: "Music",
+        mimeType: "application/vnd.google-apps.folder",
+      };
+      mocks.fetch.mockResolvedValueOnce(
+        respond({
+          ...remote([
+            envelope(
+              "roots",
+              {
+                operations: [
+                  {
+                    type,
+                    rootKind: "folder",
+                    id: "folder",
+                    ...(type === "add" ? { descriptor } : {}),
+                  },
+                ],
+              },
+              12,
+            ),
+            envelope(
+              "roots",
+              {
+                operations: [
+                  {
+                    type: type === "add" ? "remove" : "add",
+                    rootKind: "folder",
+                    id: "folder",
+                    descriptor,
+                    sourceRevision: 10,
+                  },
+                ],
+              },
+              80,
+            ),
+          ]),
+          revision: 80,
+        }),
+      );
+      const { client } = await load();
+      await client.restoreDriveAppData("a", "generation-a");
+      expect(mocks.roots.map((root) => root.id)).toEqual(
+        type === "add" ? ["folder"] : [],
+      );
+    },
+  );
+
+  it.each([false, true])(
+    "retains a deliberate offline re-import before first restore (restart=%s)",
+    async (restart) => {
+      const { client } = await load();
+      await client.deferDriveAppDataRestore("a", "generation-a");
+      await client.queueImportedRootOperations([
+        {
+          type: "add",
+          rootKind: "folder",
+          id: "folder",
+          descriptor: {
+            id: "folder",
+            name: "Music",
+            mimeType: "application/vnd.google-apps.folder",
+          },
+        },
+      ]);
+      if (restart) await client.stopDriveAppData();
+      mocks.fetch.mockResolvedValueOnce(
+        respond(
+          remote([
+            envelope("roots", {
+              operations: [
+                { type: "remove", rootKind: "folder", id: "folder" },
+              ],
+            }),
+          ]),
+        ),
+      );
+      await client.restoreDriveAppData("a", "generation-a");
+      expect(mocks.roots.map((root) => root.id)).toEqual(["folder"]);
+      expect(
+        [...mocks.entries.values()].filter((entry) => entry.kind === "outbox"),
+      ).toHaveLength(1);
+    },
+  );
+
+  it("replaces the same account's old-generation cache before restoring a reset backup", async () => {
+    const { client, state } = await load();
+    await client.restoreDriveAppData("a", "generation-a");
+    await client.queueImportedRootOperations([
+      { type: "remove", rootKind: "folder", id: "old-folder" },
+    ]);
+    mocks.fetch.mockResolvedValueOnce(
+      respond({ ...remote(), generation: "generation-b" }),
+    );
+    await client.restoreDriveAppData("a", "generation-b");
+    expect(state.getState()).toMatchObject({
+      status: "ready",
+      generation: "generation-b",
+    });
+    expect(
+      [...mocks.entries.values()].some(
+        (entry) => entry.generation === "generation-a",
+      ),
+    ).toBe(false);
+  });
+
+  it("does not let an old restore overwrite a replacement generation that finished first", async () => {
+    let finishOld!: (value: Response) => void;
+    let finishNew!: (value: Response) => void;
+    mocks.fetch
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            finishOld = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            finishNew = resolve;
+          }),
+      );
+    const { client, state } = await load();
+    const old = client
+      .restoreDriveAppData("a", "generation-a")
+      .catch((error) => error.message);
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledOnce());
+    const replacement = client.restoreDriveAppData("a", "generation-b");
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
+    finishNew(respond({ ...remote(), generation: "generation-b" }));
+    await replacement;
+    finishOld(respond(remote()));
+    expect(await old).toBe("scope_changed");
+    expect(state.getState()).toMatchObject({
+      status: "ready",
+      generation: "generation-b",
+    });
+  });
+
+  it("retains new-generation imports when its initial restore fails and later retries", async () => {
+    const { client } = await load();
+    await client.restoreDriveAppData("a", "generation-a");
+    mocks.fetch.mockRejectedValueOnce(new Error("network unavailable"));
+    await expect(
+      client.restoreDriveAppData("a", "generation-b"),
+    ).rejects.toThrow("network unavailable");
+    expect(mocks.importedGeneration).toBe("generation-b");
+    await client.queueImportedRootOperations([
+      {
+        type: "add",
+        rootKind: "folder",
+        id: "new-folder",
+        descriptor: {
+          id: "new-folder",
+          name: "New",
+          mimeType: "application/vnd.google-apps.folder",
+        },
+      },
+    ]);
+    mocks.fetch.mockResolvedValueOnce(
+      respond({ ...remote(), generation: "generation-b" }),
+    );
+    await client.restoreDriveAppData("a", "generation-b");
+    expect(mocks.roots.map((root) => root.id)).toEqual(["new-folder"]);
+    expect(
+      [...mocks.entries.values()].filter((entry) => entry.kind === "outbox"),
+    ).toHaveLength(1);
+  });
+
   it("defers missing-tag extraction without HTTP while a returning account revalidates", async () => {
     const { client, state } = await load();
     await client.deferDriveAppDataRestore("a", "generation-a", "revalidating");

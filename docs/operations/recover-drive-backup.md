@@ -86,3 +86,17 @@ The [collection retirement runbook](retire-neon-collections.md) fences and cance
 unverified legacy exports at the global cutoff. Verified Drive copies survive.
 An old unknown request keeps its account deletion fence, but does not extend
 the legacy table retention window or block other accounts' normal saves.
+
+## Older collection retry journals
+
+New collection intents carry a monotonic sequence and replay under an
+account/generation sender lock. A single older intent without a sequence can
+precede them. Several older intents have no recoverable ordering information;
+the client preserves them and stops with a recovery error rather than guessing.
+Preserve that browser's journal, confirm the intended final playlists/favorites
+with the user, and recover the exact intents in the agreed order. Do not clear
+the queue or guess ordering from UUIDs, storage enumeration or browser clocks.
+
+During deployment, refresh older open DriveBeats tabs before making collection
+edits. An older bundle does not use the sender lock or write sequence numbers;
+its concurrent/offline edits cannot gain those guarantees until it reloads.

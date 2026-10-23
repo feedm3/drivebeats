@@ -115,10 +115,10 @@ export const MetadataActivity = memo(function MetadataActivity() {
   )
     return null;
   const animate =
-    status.pauseReason !== "appdata_restore_required" &&
-    (status.indexingState === "running" ||
-      status.indexingState === "paused" ||
-      status.coveragePending);
+    status.total === null ||
+    status.indexingState === "running" ||
+    status.indexingState === "paused" ||
+    status.coveragePending;
   return (
     <Popover open={open} onOpenChange={(nextOpen) => setOpen(nextOpen)}>
       <PopoverTrigger
@@ -133,7 +133,9 @@ export const MetadataActivity = memo(function MetadataActivity() {
       >
         <span
           className={
-            animate ? "animate-spin motion-reduce:animate-none" : undefined
+            animate
+              ? "inline-flex animate-spin motion-reduce:animate-none"
+              : "inline-flex"
           }
         >
           <Loader2 aria-hidden="true" />

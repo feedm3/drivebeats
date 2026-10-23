@@ -513,7 +513,7 @@ it("offers a touch-sized restore retry with a clear paused state and an actionab
       rejectRestore = reject;
     }),
   );
-  const view = render(<MetadataActivity />);
+  render(<MetadataActivity />);
   fireEvent.click(
     screen.getByRole("button", { name: "Music metadata progress" }),
   );
@@ -522,7 +522,6 @@ it("offers a touch-sized restore retry with a clear paused state and an actionab
       /Metadata checks are paused until your Google Drive backup is restored/,
     ),
   ).toBeInTheDocument();
-  expect(view.container.querySelector(".animate-spin")).toBeNull();
   const retry = screen.getByRole("button", {
     name: "Retry Google Drive backup",
   });

@@ -101,3 +101,31 @@ are outside Git and were not reverified by Claude. Live destructive account
 deletion/reset remain explicitly waived by the user; this report does not claim
 they work. The existing audited uncertain-upload deletion fence remains intact.
 No applied migration or scheduled cleanup was changed by these corrections.
+
+## Test cleanup and spinner follow-up
+
+The isolated verification environment was retired on 23 October 2026 with user
+approval. Its coordinator was fenced, all upload attempts settled, and the local
+test session was signed out to clear its device cache before stopping the test
+server. Cleanup verified every remaining test file against that environment's
+journal, envelope identity and body hash, excluded all production file references,
+then deleted 42 test-only hidden app-data files. A fresh listing found no remaining
+test files. Production collection, root and tag backups remained readable. The
+isolated Neon branch was deleted and its absence verified. Temporary review,
+fixture and verification artifacts were removed; production retirement schedules
+were preserved.
+
+The metadata indicator now animates throughout the initial Library check,
+including when backup restore pauses extraction. Reduced-motion preferences still
+disable rotation. The obsolete test assertion requiring a static restore spinner
+was removed; retry and failure behavior remain covered. All 946 tests,
+lint/typecheck and production build passed. A browser fixture using the actual
+component and built CSS reproduced the paused-restore state, verified changing
+rotation transforms, the reduced-motion override, a 44px trigger and a 320px layout
+without horizontal overflow. React Doctor reported no issues in the two changed
+React files.
+
+Completed tags already persist in account-scoped IndexedDB with parser and file
+version checks. Localhost and production use separate browser origins. A local
+completion flag must not bypass restore or freshness checks after account,
+Library or content changes.

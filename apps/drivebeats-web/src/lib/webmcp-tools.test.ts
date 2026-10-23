@@ -6,11 +6,13 @@ import {
   fetchCloudLibrarySync,
 } from "@/lib/cloud-library-api";
 import { resetCloudLibrarySyncState } from "@/lib/cloud-library-sync-runner";
+import * as appDataClient from "@/lib/drive-appdata-client";
 import type { LibrarySearchTrack } from "@/lib/library-search-catalog";
 import * as metadataCacheDb from "@/lib/metadata-cache-db";
 import * as metadataLoader from "@/lib/track-metadata-loader";
 import { createDriveBeatsTools } from "@/lib/webmcp-tools";
 import { useAuthStore } from "@/stores/auth-store";
+import { useDriveAppDataStore } from "@/stores/drive-appdata-store";
 import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
 import { useLibrarySearchStore } from "@/stores/library-search-store";
@@ -69,6 +71,15 @@ function audio() {
 beforeEach(async () => {
   vi.restoreAllMocks();
   resetCloudLibrarySyncState();
+  useDriveAppDataStore.setState({
+    accountId: null,
+    generation: null,
+    status: "idle",
+    error: null,
+    pendingCount: 0,
+    savedCount: 0,
+    lastSavedAt: null,
+  });
   localStorage.setItem("drivebeats-cloud-bootstrap-v1", "1");
   Object.defineProperty(navigator, "onLine", {
     value: true,
@@ -120,6 +131,131 @@ beforeEach(async () => {
 });
 
 describe("DriveBeats WebMCP actions", () => {
+  it("reads the visible queue with duplicate occurrences and rejects changed pagination without network work", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    usePlayerStore.setState({
+      playbackAccountId: "account-a",
+      queuedAccountId: "account-a",
+      playbackCursor: 1,
+      playbackSequence: [
+        { entryId: "played", track, sourceIndex: 0, folderStack: [] },
+        { entryId: "current", track, sourceIndex: 1, folderStack: [] },
+        { entryId: "again", track, sourceIndex: null, folderStack: [] },
+      ],
+      repeat: "one",
+      shuffle: true,
+    });
+    const first = await run("drivebeats_get_queue", { limit: 2 });
+    expect(first).toMatchObject({
+      ok: true,
+      total: 3,
+      currentIndex: 1,
+      repeat: "one",
+      shuffle: true,
+      nextOffset: 2,
+      entries: [
+        { entryId: "played", status: "played", removable: false },
+        { entryId: "current", status: "current", removable: false },
+      ],
+    });
+    expect(
+      await run("drivebeats_get_queue", {
+        offset: 2,
+        revision: first.revision,
+      }),
+    ).toMatchObject({
+      ok: true,
+      nextOffset: null,
+      entries: [
+        {
+          entryId: "again",
+          status: "upcoming",
+          removable: true,
+          track: { id: "imported" },
+        },
+      ],
+    });
+    usePlayerStore.setState({ playbackCursor: 2 });
+    expect(
+      await run("drivebeats_get_queue", {
+        offset: 2,
+        revision: first.revision,
+      }),
+    ).toMatchObject({ ok: false, error: { code: "queue_changed" } });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchCloudLibrarySync).not.toHaveBeenCalled();
+    expect(useLibrarySearchStore.getState().ensureReady).not.toHaveBeenCalled();
+  });
+  it("does not expose a restored foreign queue", async () => {
+    usePlayerStore.setState({
+      playbackAccountId: "other",
+      playbackSequence: [
+        {
+          entryId: "private",
+          track: { ...track, id: "foreign", name: "Private.mp3" },
+          sourceIndex: 0,
+          folderStack: [],
+        },
+      ],
+    });
+    const result = await run("drivebeats_get_queue");
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "queue_unverified" },
+    });
+    expect(JSON.stringify(result)).not.toContain("Private.mp3");
+  });
+  it("separates backup checkpoints from saved metadata and hides raw backup failures", async () => {
+    vi.spyOn(appDataClient, "getDriveAppDataLogoutState").mockResolvedValue({
+      pendingCount: 0,
+      checkpointPending: true,
+      incomplete: true,
+    });
+    useDriveAppDataStore.setState({
+      accountId: "account-a",
+      generation: "generation",
+      status: "ready",
+      savedCount: 12,
+      lastSavedAt: 123,
+    });
+    expect(await run("drivebeats_status")).toMatchObject({
+      backup: {
+        status: "pending",
+        complete: false,
+        pendingCount: 0,
+        checkpointPending: true,
+        savedMetadataCount: 12,
+        lastSavedAt: 123,
+      },
+    });
+    vi.mocked(appDataClient.getDriveAppDataLogoutState).mockResolvedValue({
+      pendingCount: 0,
+      checkpointPending: false,
+      incomplete: false,
+    });
+    expect(await run("drivebeats_status")).toMatchObject({
+      backup: { status: "saved", complete: true },
+    });
+    useDriveAppDataStore.setState({
+      error: "https://private.test/?token=secret",
+    });
+    const failed = await run("drivebeats_status");
+    expect(failed).toMatchObject({
+      backup: {
+        status: "error",
+        complete: false,
+        error: { code: "backup_unavailable" },
+      },
+    });
+    expect(JSON.stringify(failed)).not.toContain("token=secret");
+    useDriveAppDataStore.setState({ accountId: "other" });
+    expect(await run("drivebeats_status")).toMatchObject({
+      backup: { status: "unknown", complete: false },
+    });
+    expect((await run("drivebeats_status")).backup).not.toHaveProperty(
+      "savedMetadataCount",
+    );
+  });
   it("queues a batch in requested order without interrupting playback or saving a Playlist", async () => {
     const second = { ...track, id: "second", name: "Second.mp3" };
     const catalog = useLibrarySearchStore.getState().catalog;
@@ -1251,6 +1387,140 @@ describe("shared local metadata tools", () => {
       ],
     });
     expect(fetchCloudLibrarySync).not.toHaveBeenCalled();
+  });
+  it("browses compact pages without losing recording labels or changing format on continuation", async () => {
+    const second = await seed();
+    const catalog = useLibrarySearchStore.getState().catalog;
+    if (!catalog) throw new Error("Expected seeded catalog");
+    useLibrarySearchStore.setState({
+      catalog: {
+        ...catalog,
+        tracks: catalog.tracks.map((item) =>
+          item.id === "imported"
+            ? { ...item, name: "Artist - Original (Club Remix).mp3" }
+            : item,
+        ),
+      },
+    });
+    const detailed = await run("drivebeats_search_library", { limit: 1 });
+    const first = await run("drivebeats_search_library", {
+      format: "compact",
+      limit: 1,
+    });
+    expect(first).toMatchObject({
+      ok: true,
+      total: 2,
+      search: { format: "compact", query: "", complete: true },
+      tracks: [
+        {
+          id: "imported",
+          fileName: "Artist - Original (Club Remix).mp3",
+          title: "Original",
+          artist: "Needle artist",
+          album: "Blue",
+          titleSource: "audio_tags",
+        },
+      ],
+    });
+    expect(JSON.stringify(first.tracks).length).toBeLessThan(
+      JSON.stringify(detailed.tracks).length,
+    );
+    expect(
+      await run("drivebeats_search_library", { cursor: first.nextCursor }),
+    ).toMatchObject({
+      ok: true,
+      tracks: [{ id: second.id, artist: null, album: null }],
+      search: { format: "compact" },
+      nextCursor: null,
+    });
+    expect(
+      await run("drivebeats_search_library", {
+        cursor: first.nextCursor,
+        filters: { artist: "different" },
+      }),
+    ).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+  });
+  it("does not label stale cached artists or albums as current compact identity", async () => {
+    await seed();
+    const catalog = useLibrarySearchStore.getState().catalog;
+    if (!catalog) throw new Error("Expected seeded catalog");
+    useLibrarySearchStore.setState({
+      catalog: {
+        ...catalog,
+        tracks: catalog.tracks.map((item) => ({
+          ...item,
+          modifiedTime: "2026-10-23T00:00:00Z",
+        })),
+      },
+    });
+    const result = await run("drivebeats_search_library", {
+      format: "compact",
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      tracks: [
+        {
+          id: "imported",
+          artist: null,
+          album: null,
+          titleSource: "filename",
+          artistSource: null,
+          metadataFreshness: "stale",
+        },
+        { id: "second" },
+      ],
+    });
+  });
+  it("combines tag and collection filters and excludes missing tags without a false complete metadata claim", async () => {
+    await seed();
+    vi.mocked(fetchCloudLibrarySync).mockResolvedValue({
+      playlists: [
+        {
+          id: "p",
+          name: "Set",
+          tracks: [
+            createPlaylistTrack(versioned),
+            createPlaylistTrack({ ...versioned, id: "second" }),
+          ],
+        },
+        {
+          id: "exclude",
+          name: "Skip",
+          tracks: [createPlaylistTrack({ ...versioned, id: "second" })],
+        },
+      ],
+      favorites: [createPlaylistTrack(versioned)],
+    });
+    const result = await run("drivebeats_search_library", {
+      format: "compact",
+      filters: {
+        artist: "NEEDLE",
+        album: "blu",
+        favorite: true,
+        collectionId: "p",
+        excludeCollectionId: "exclude",
+      },
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      total: 1,
+      tracks: [{ id: "imported" }],
+      search: {
+        filters: { favorite: true },
+        metadataCoverage: expect.any(Object),
+      },
+    });
+    expect(
+      await run("drivebeats_search_library", { filters: { favorite: false } }),
+    ).toMatchObject({ ok: true, total: 1, tracks: [{ id: "second" }] });
+    expect(
+      await run("drivebeats_search_library", { filters: { album: "missing" } }),
+    ).toMatchObject({ ok: true, total: 0 });
+    expect(
+      await run("drivebeats_search_library", {
+        filters: { collectionId: "unknown" },
+      }),
+    ).toMatchObject({ ok: false, error: { code: "collection_not_found" } });
   });
   it("keeps cursor tag values and results stable during cache warming", async () => {
     const second = await seed();

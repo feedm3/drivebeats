@@ -60,3 +60,69 @@ The same eight tools remain. The application returns recovery information alongs
 - Play's schema expresses mutually exclusive saved-collection and ordered-track inputs. Runtime validation remains authoritative.
 
 Agent acceptance scenarios: request music before initial page interaction; interrupt an audio download; issue overlapping searches on an uncached Library; revoke access to one selected track; lose a Playlist-creation response; ask what is playing and how much time remains. Check that the agent gives the recovery supplied by the application, retains a prepared queue, reports actual playback and does not repeat an uncertain creation. Failure-injection tests cover application behavior; these scenarios also need evaluation with the real host agent.
+
+## Practical discovery and observation (23 October 2026)
+
+The current interface has eleven tools. Existing calls remain compatible; the
+only new tool is `drivebeats_get_queue`. Playlist and playback mutations retain
+their existing behavior.
+
+- `drivebeats_search_library({ format: "compact" })` browses the entire imported
+  Library. An omitted/empty query is intentional discovery. Compact rows retain
+  the ID, original filename (including recording/remix labels), display title,
+  artist, album, field provenance and metadata status/freshness. Unknown fields
+  are `null`; a folder name is not an artist, and stale tags are not current
+  identity. The default detailed response retains folder and matching context.
+- Optional `filters` combine with the text query using AND: `artist` and `album`
+  are case-insensitive substrings of current cached tags; `favorite` includes or
+  excludes Favorites; `collectionId` includes and `excludeCollectionId` excludes
+  membership in a saved collection. These are filters within the imported
+  Library, not a way to search unimported saved tracks. Unknown tags do not match
+  tag filters. Collection filters verify saved collections through ordinary sync;
+  tag-only discovery does not need that extra read.
+- Follow `nextCursor` with cursor alone (or the same query/limit). Format, filters,
+  membership and track data remain frozen in that search. To change them, start
+  a new search. `expiresAt` renews after successful reads: five minutes idle,
+  thirty minutes absolute. The four-snapshot, 50,000-row and 16 MiB limits remain.
+  Account/import changes invalidate results. `search.complete: false` means a
+  restricted result, even if `nextCursor` is null. Metadata coverage is separate
+  from catalog/result completeness.
+- `drivebeats_get_queue` reads the same finite sequence shown by the Queue UI,
+  including played/current/upcoming occurrences, distinct `entryId`s, current
+  index, shuffle and repeat. It neither starts playback nor refreshes the Library.
+  Pass the returned `revision` with later offset pages; a change returns
+  `queue_changed`, requiring a fresh read. Restored entries need current-account
+  ownership or catalog verification. Repeat-one and repeat-all behavior is
+  described rather than pretending the finite list predicts infinite playback.
+- `drivebeats_status.backup` separates this device's pending operations/checkpoints,
+  confirmed saved metadata count and last save from metadata extraction coverage.
+  A clean backup does not mean every track has tags or every device is up to date.
+  Errors use a safe message and page recovery, never raw provider error text.
+
+### Native agent workflow verification
+
+Verified against the updated local app in the existing signed-in built-in browser
+using native Site tools, after the user completed its Google consent screen.
+These were agent-operated workflows in the implementation session, not blind
+independent-agent evaluations. No Playlist/Favorite mutations or playback changes
+were required for these read-only improvements. No private track IDs or library
+exports are retained here.
+
+| Request / intent | Observed outcome |
+| --- | --- |
+| Explore available music before choosing a listening selection | Empty-query compact browsing read 2,913 tracks through 30 pages, 2,913 unique IDs, no missing continuation; retained remix labels and explicit unknown metadata. |
+| Find Favorites not already in an existing Playlist | Combined favorite/exclude-collection filter returned 13 tracks; independently compared their IDs with both full collection reads. |
+| Narrow an artist to an album | Case-insensitive artist + album filters returned 18 matching tracks. |
+| What plays next? | Queue pages reported a 19-entry sequence with played/current/upcoming states; the next three tracks matched the visible Queue UI. Reading did not start audio. |
+| Is everything backed up? | Status reported a complete catalog, incomplete/running metadata checking, and seven pending backup records separately, with a confirmed last-save timestamp. These are a point-in-time observation. |
+
+For the same first 100 tracks, serialized detailed response length was 52,401
+characters versus 30,724 compact (41% less). Call count remains 30 for a full
+2,913-track scan; compact mode reduces response volume, not page count. This is
+one live comparison, not a latency benchmark or a guarantee about agent behavior.
+
+Regression checks cover stable compact continuation, composed filters, stale
+identity, active/idle/absolute cursor expiry, duplicate queue occurrences,
+revision changes, account isolation and incomplete backup checkpoints. Re-run
+these natural-language workflows after changes; a correct tool contract alone
+does not establish that every agent will persist or choose suitable music.

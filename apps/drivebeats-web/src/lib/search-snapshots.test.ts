@@ -40,16 +40,23 @@ describe("search snapshots", () => {
       snapshots.continue(cursor, "a", "imports:v1", "other"),
     ).toThrow("search_changed");
   });
-  it("expires by absolute time, even after page reads", () => {
-    let time = 1;
+  it("renews active scans but expires idle scans and caps their total lifetime", () => {
+    let time = 0;
     const snapshots = createSearchSnapshots<{ id: string; title: string }>(
       () => time,
     );
     const cursor = snapshots.start(input).nextCursor ?? "";
-    time = 119_000;
-    snapshots.continue(cursor, "a", "imports:v1");
-    time = 120_001;
+    for (time = 4 * 60_000; time < 30 * 60_000; time += 4 * 60_000) {
+      const page = snapshots.continue(cursor, "a", "imports:v1");
+      expect(page.observedAt).toBe(0);
+      expect(page.expiresAt).toBe(Math.min(time + 5 * 60_000, 30 * 60_000));
+    }
     expect(() => snapshots.continue(cursor, "a", "imports:v1")).toThrow(
+      "search_snapshot_expired",
+    );
+    const idle = snapshots.start(input).nextCursor ?? "";
+    time += 5 * 60_000;
+    expect(() => snapshots.continue(idle, "a", "imports:v1")).toThrow(
       "search_snapshot_expired",
     );
   });

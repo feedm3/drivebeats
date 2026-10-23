@@ -10,7 +10,9 @@ export class SearchSnapshotError extends Error {
   }
 }
 
-interface Snapshot<T> {
+interface Snapshot<T, Context> {
+  context?: Context;
+  accessedAt: number;
   account: string;
   scope: string;
   query: string;
@@ -22,8 +24,8 @@ interface Snapshot<T> {
   metadataRevision: number;
 }
 
-export function createSearchSnapshots<T>(now = Date.now) {
-  const snapshots = new Map<string, Snapshot<T>>();
+export function createSearchSnapshots<T, Context = undefined>(now = Date.now) {
+  const snapshots = new Map<string, Snapshot<T, Context>>();
   const cursors = new Map<string, { key: string; position: number }>();
   const pageCursors = new Map<string, string>();
   function remove(key: string) {
@@ -35,9 +37,14 @@ export function createSearchSnapshots<T>(now = Date.now) {
   }
   function prune() {
     for (const [key, value] of snapshots)
-      if (now() - value.observedAt >= 120_000) remove(key);
+      if (
+        now() - value.accessedAt >= 5 * 60_000 ||
+        now() - value.observedAt >= 30 * 60_000
+      )
+        remove(key);
   }
-  function page(key: string, snapshot: Snapshot<T>, position: number) {
+  function page(key: string, snapshot: Snapshot<T, Context>, position: number) {
+    snapshot.accessedAt = now();
     const next = position + snapshot.limit;
     let nextCursor: string | null = null;
     if (next < snapshot.rows.length) {
@@ -49,6 +56,12 @@ export function createSearchSnapshots<T>(now = Date.now) {
     return {
       tracks: structuredClone(snapshot.rows.slice(position, next)),
       total: snapshot.rows.length,
+      query: snapshot.query,
+      context: structuredClone(snapshot.context),
+      expiresAt: Math.min(
+        snapshot.accessedAt + 5 * 60_000,
+        snapshot.observedAt + 30 * 60_000,
+      ),
       observedAt: snapshot.observedAt,
       catalogRevision: snapshot.catalogRevision,
       metadataRevision: snapshot.metadataRevision,
@@ -57,7 +70,10 @@ export function createSearchSnapshots<T>(now = Date.now) {
     };
   }
   return {
-    start(input: Omit<Snapshot<T>, "observedAt" | "bytes">, offset = 0) {
+    start(
+      input: Omit<Snapshot<T, Context>, "observedAt" | "accessedAt" | "bytes">,
+      offset = 0,
+    ) {
       prune();
       let bytes = 2;
       if (input.rows.length <= 50_000)
@@ -74,6 +90,7 @@ export function createSearchSnapshots<T>(now = Date.now) {
               rows: input.rows.slice(offset, offset + input.limit),
               bytes: 0,
               observedAt: now(),
+              accessedAt: now(),
             },
             0,
           ),
@@ -102,7 +119,14 @@ export function createSearchSnapshots<T>(now = Date.now) {
         retained -= oldest[1].bytes;
       }
       const key = crypto.randomUUID();
-      const snapshot = { ...input, rows, bytes, observedAt: now() };
+      const snapshot = {
+        ...input,
+        context: structuredClone(input.context),
+        rows,
+        bytes,
+        observedAt: now(),
+        accessedAt: now(),
+      };
       snapshots.set(key, snapshot);
       return page(key, snapshot, offset);
     },

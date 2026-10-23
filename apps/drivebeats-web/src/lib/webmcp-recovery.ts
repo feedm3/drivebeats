@@ -61,6 +61,21 @@ export function webMcpRecovery(
         automaticRetry: false,
         verificationTool: "drivebeats_status",
       };
+    case "queue_changed":
+      return {
+        action: "read_queue",
+        message:
+          "Read drivebeats_get_queue again from offset zero before continuing.",
+        automaticRetry: false,
+        verificationTool: "drivebeats_get_queue",
+      };
+    case "queue_unverified":
+      return {
+        action: "open_library",
+        message:
+          "Open or play your Library on the page to verify the saved queue for this account.",
+        automaticRetry: false,
+      };
     case "search_snapshot_expired":
     case "search_changed":
     case "snapshot_limit":

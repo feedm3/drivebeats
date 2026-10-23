@@ -12,6 +12,7 @@ import {
   hasPendingLocalMutations,
   runCloudLibrarySync,
 } from "@/lib/cloud-library-sync-runner";
+import { getDriveAppDataLogoutState } from "@/lib/drive-appdata-client";
 import { createDriveRequestBudget } from "@/lib/drive-request-scheduler";
 import {
   assertKnownTrack,
@@ -25,6 +26,7 @@ import {
   getMetadataIndexStatus,
   getMetadataIndexStatusAsync,
 } from "@/lib/metadata-index-coordinator";
+import { getPlaybackQueueTracks } from "@/lib/playback-queue";
 import {
   createSearchSnapshots,
   SearchSnapshotError,
@@ -38,6 +40,7 @@ import {
 import { webMcpRecovery } from "@/lib/webmcp-recovery";
 import type { WebMcpTool } from "@/lib/webmcp-registration";
 import { useAuthStore } from "@/stores/auth-store";
+import { useDriveAppDataStore } from "@/stores/drive-appdata-store";
 import { useImportedDriveStore } from "@/stores/imported-drive-store";
 import {
   getLibrarySearchImportsSignature,
@@ -120,16 +123,137 @@ function publicTrack(track: DriveFile, snapshotMetadata?: MetadataView) {
     },
   };
 }
+function compactTrack(track: ReturnType<typeof publicTrack>) {
+  const tags =
+    track.metadata.freshness === "current" && "tags" in track.metadata
+      ? track.metadata.tags
+      : undefined;
+  return {
+    id: track.id,
+    fileName: track.fileName,
+    title: track.display.title,
+    artist:
+      tags?.artist ??
+      (track.display.subtitleSource === "filename"
+        ? (track.display.subtitle ?? null)
+        : null),
+    album: tags?.album ?? null,
+    titleSource: track.display.titleSource,
+    artistSource: tags?.artist
+      ? "audio_tags"
+      : track.display.subtitleSource === "filename" && track.display.subtitle
+        ? "filename"
+        : null,
+    metadataStatus: track.metadata.status,
+    metadataFreshness: track.metadata.freshness,
+  };
+}
+const searchFilters = z.strictObject({
+  artist: z
+    .string()
+    .trim()
+    .min(1)
+    .max(500)
+    .optional()
+    .describe(
+      "Case-insensitive substring of current cached artist tags; unknown artists do not match.",
+    ),
+  album: z
+    .string()
+    .trim()
+    .min(1)
+    .max(500)
+    .optional()
+    .describe(
+      "Case-insensitive substring of current cached album tags; unknown albums do not match.",
+    ),
+  favorite: z
+    .boolean()
+    .optional()
+    .describe(
+      "Include only Favorites when true; exclude Favorites when false.",
+    ),
+  collectionId: id
+    .optional()
+    .describe("Include only Library tracks in this saved collection."),
+  excludeCollectionId: id
+    .optional()
+    .describe("Exclude Library tracks already in this saved collection."),
+});
+type SearchContext = {
+  format: "detailed" | "compact";
+  filters?: z.infer<typeof searchFilters>;
+};
 const searchSnapshots = createSearchSnapshots<
-  ReturnType<typeof publicTrack> & {
-    folderPath: string;
-    contextLabel: string;
-    matchedFields: string[];
-  }
+  | (ReturnType<typeof publicTrack> & {
+      folderPath: string;
+      contextLabel: string;
+      matchedFields: string[];
+    })
+  | ReturnType<typeof compactTrack>,
+  SearchContext
 >();
+let queueRevision = 0;
+usePlayerStore.subscribe((state, previous) => {
+  if (
+    state.playbackSequence !== previous.playbackSequence ||
+    state.playbackCursor !== previous.playbackCursor ||
+    state.shuffle !== previous.shuffle ||
+    state.repeat !== previous.repeat ||
+    state.playbackAccountId !== previous.playbackAccountId ||
+    state.queuedAccountId !== previous.queuedAccountId
+  )
+    queueRevision++;
+});
+async function backupStatus(userId: string) {
+  const pending = await getDriveAppDataLogoutState();
+  const state = useDriveAppDataStore.getState();
+  if (state.accountId !== userId) return { status: "unknown", complete: false };
+  const complete =
+    state.status === "ready" &&
+    Boolean(state.generation) &&
+    !state.error &&
+    !pending.incomplete &&
+    !hasPendingLocalMutations();
+  const status = state.error
+    ? "error"
+    : state.status === "ready"
+      ? complete
+        ? "saved"
+        : "pending"
+      : state.status;
+  return {
+    status,
+    complete,
+    pendingCount: pending.pendingCount,
+    checkpointPending: pending.checkpointPending,
+    collectionMutationPending: hasPendingLocalMutations(),
+    savedMetadataCount: state.savedCount,
+    lastSavedAt: state.lastSavedAt,
+    scope:
+      "This device's known changes; not a check of every device or of unextracted metadata.",
+    ...(state.error
+      ? {
+          error: {
+            code: "backup_unavailable",
+            message:
+              "Drive backup needs attention. Check backup status on the page.",
+          },
+          recovery: {
+            action: "inspect_backup",
+            message:
+              "Check the page's Google Drive backup status and connection before retrying.",
+            automaticRetry: false,
+          },
+        }
+      : {}),
+  };
+}
 useAuthStore.subscribe((state, previous) => {
-  if (state.user?.id !== previous.user?.id || state.isLoggingOut)
+  if (state.user?.id !== previous.user?.id || state.isLoggingOut) {
     searchSnapshots.clear();
+    queueRevision++;
+  }
 });
 function ownedCatalog() {
   const search = useLibrarySearchStore.getState();
@@ -611,7 +735,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
   return [
     tool(
       "drivebeats_status",
-      "Read a snapshot of the current page's sign-in, Library and collection readiness, and live player status: open/playing/paused/loading/awaiting user, current track, position, duration, remaining seconds and observed audio permission. This checks state without starting a Library refresh. Sign in and import music through the page.",
+      "Read sign-in, Library catalog completeness, metadata checking coverage, Drive backup progress, collection readiness, and live player status: open/playing/paused/loading/awaiting user, current track, position, duration, remaining seconds and observed audio permission. This checks state without starting a Library refresh. Sign in and import music through the page.",
       z.object({}),
       true,
       async () => {
@@ -623,6 +747,8 @@ export function createDriveBeatsTools(): WebMcpTool[] {
         const coverage = signedIn
           ? await getMetadataIndexStatusAsync()
           : undefined;
+        const backup =
+          signedIn && auth.user ? await backupStatus(auth.user.id) : undefined;
         const stillSignedIn =
           signedIn &&
           useAuthStore.getState().user?.id === auth.user?.id &&
@@ -631,7 +757,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
         return {
           signedIn: stillSignedIn,
           ...(stillSignedIn
-            ? { playback: playback(), ...readiness(coverage) }
+            ? { playback: playback(), ...readiness(coverage), backup }
             : {
                 message:
                   "Sign in to Google in the open DriveBeats page, then open your Library.",
@@ -642,15 +768,25 @@ export function createDriveBeatsTools(): WebMcpTool[] {
     ),
     tool(
       "drivebeats_search_library",
-      "Search filenames and current cached title, artist and album across the complete imported Library without reading audio. Metadata coverage may be partial. Cold catalog builds are shared and return library_indexing after a bounded wait; check status before retrying. Use nextCursor for stable continuation during background loading; offset calls are independent searches. Results exclude unimported Drive content.",
+      "Browse or search the imported Library to discover music, curate Playlists, or select what to play. Omit query or use an empty string to browse all tracks. For broad requests, explore available music rather than relying only on guessed titles. Use format compact for discovery; detailed includes folder context. Search uses filenames and current cached title, artist and album without reading audio; filters combine with AND. Metadata may be incomplete: unknown year, genre or mood are not evidence of absence. Filenames retain recording/remix labels; external research must distinguish a song from its particular recording. Follow nextCursor until null for a complete scan, checking search.complete for restrictions. Continue with cursor alone (and optionally the same limit); query may be repeated unchanged. Filters and format are retained. Active scans renew a five-minute idle timeout, capped at thirty minutes. Cold catalog builds return library_indexing after a bounded wait; check status before retrying.",
       z.object({
-        query: z.string().max(500).optional(),
+        query: z
+          .string()
+          .max(500)
+          .optional()
+          .describe("Free-text search; omit to browse the Library."),
+        format: z.enum(["detailed", "compact"]).optional(),
+        filters: searchFilters.optional(),
         offset: z.number().int().min(0).default(0),
         limit: z.number().int().min(1).max(100).optional(),
         cursor: z.string().min(1).max(512).optional(),
       }),
       true,
-      async ({ query, offset, limit, cursor }, userId, signal) => {
+      async (
+        { query, offset, limit, cursor, format, filters },
+        userId,
+        signal,
+      ) => {
         const current = ownedCatalog();
         const scope = () =>
           `${getLibrarySearchImportsSignature()}:${ownedCatalog()?.fetchedAt ?? "unavailable"}:${getKnownTrackDescriptorRevision()}`;
@@ -658,6 +794,11 @@ export function createDriveBeatsTools(): WebMcpTool[] {
           | ReturnType<typeof searchSnapshots.start>
           | ReturnType<typeof searchSnapshots.continue>;
         if (cursor) {
+          if (format !== undefined || filters !== undefined || offset !== 0)
+            throw new ToolError(
+              "invalid_input",
+              "Continue with cursor alone and optionally the same query or limit. Filters and format are retained.",
+            );
           if (!current) throw new SearchSnapshotError("search_changed");
           result = searchSnapshots.continue(
             cursor,
@@ -672,11 +813,51 @@ export function createDriveBeatsTools(): WebMcpTool[] {
           const capturedScope = scope();
           if (!capturedCatalog || capturedCatalog.tracks !== catalogTracks)
             throw new SearchSnapshotError("search_changed");
-          const matches = await searchCachedLibraryTracks(
+          let matches = await searchCachedLibraryTracks(
             catalogTracks,
             query ?? "",
             { signal },
           );
+          if (filters) {
+            let include: Set<string> | undefined;
+            let exclude: Set<string> | undefined;
+            let favorites: Set<string> | undefined;
+            if (
+              filters.collectionId ||
+              filters.excludeCollectionId ||
+              filters.favorite !== undefined
+            ) {
+              const saved = await collections(userId, signal);
+              const ids = (collectionId: string) => {
+                const selected = saved.find((item) => item.id === collectionId);
+                if (!selected)
+                  throw new ToolError(
+                    "collection_not_found",
+                    "Choose a collection ID from drivebeats_list_collections.",
+                  );
+                return new Set(selected.tracks.map((track) => track.fileId));
+              };
+              if (filters.collectionId) include = ids(filters.collectionId);
+              if (filters.excludeCollectionId)
+                exclude = ids(filters.excludeCollectionId);
+              if (filters.favorite !== undefined)
+                favorites = ids(FAVORITES_COLLECTION_ID);
+            }
+            const contains = (
+              value: string | undefined,
+              filter: string | undefined,
+            ) =>
+              !filter ||
+              Boolean(value?.toLowerCase().includes(filter.toLowerCase()));
+            matches = matches.filter(
+              ({ track, tags }) =>
+                contains(tags?.artist, filters.artist) &&
+                contains(tags?.album, filters.album) &&
+                (!include || include.has(track.id)) &&
+                !exclude?.has(track.id) &&
+                (!favorites || favorites.has(track.id) === filters.favorite),
+            );
+          }
           assertAccount(userId, signal);
           if (ownedCatalog() !== capturedCatalog || scope() !== capturedScope)
             throw new SearchSnapshotError("search_changed");
@@ -690,12 +871,13 @@ export function createDriveBeatsTools(): WebMcpTool[] {
               account: userId,
               scope: scope(),
               query: query ?? "",
+              context: { format: format ?? "detailed", filters },
               limit: pageLimit,
               catalogRevision: ownedCatalog()?.fetchedAt ?? 0,
               metadataRevision: Date.now(),
               rows: snapshotMatches.map(
-                ({ track, tags, checkedAt, matchedFields }) => ({
-                  ...publicTrack(
+                ({ track, tags, checkedAt, matchedFields }) => {
+                  const value = publicTrack(
                     track,
                     tags
                       ? {
@@ -705,14 +887,19 @@ export function createDriveBeatsTools(): WebMcpTool[] {
                           checkedAt,
                         }
                       : undefined,
-                  ),
-                  folderPath: track.folderStack
-                    .slice(1)
-                    .map((folder) => folder.name)
-                    .join("/"),
-                  contextLabel: track.contextLabel,
-                  matchedFields,
-                }),
+                  );
+                  return format === "compact"
+                    ? compactTrack(value)
+                    : {
+                        ...value,
+                        folderPath: track.folderStack
+                          .slice(1)
+                          .map((folder) => folder.name)
+                          .join("/"),
+                        contextLabel: track.contextLabel,
+                        matchedFields,
+                      };
+                },
               ),
             },
             snapshotTooLarge ? 0 : offset,
@@ -733,10 +920,13 @@ export function createDriveBeatsTools(): WebMcpTool[] {
           throw new SearchSnapshotError("search_changed");
         if (result.tracks.some((track) => !resolveKnownTrack(userId, track.id)))
           throw new SearchSnapshotError("search_changed");
+        const { context, query: snapshotQuery, ...pageResult } = result;
         return {
-          ...result,
+          ...pageResult,
           search: {
-            query: query ?? null,
+            query: snapshotQuery,
+            format: context?.format ?? "detailed",
+            filters: context?.filters ?? {},
             searchFields: [
               "filename",
               "cached_title",
@@ -888,7 +1078,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
     ),
     tool(
       "drivebeats_list_collections",
-      "List synced Playlists and Favorites. Provide collectionId to read that collection's track IDs in saved order.",
+      "List saved Playlists and Favorites for discovery or to verify a change. Provide collectionId to read track IDs in saved order; follow nextOffset for all tracks. Collection IDs can also filter Library Search. Reading collections does not start playback.",
       z.object({ collectionId: id.optional(), ...page }),
       true,
       async ({ collectionId, offset, limit }, userId, signal) => {
@@ -916,6 +1106,58 @@ export function createDriveBeatsTools(): WebMcpTool[] {
             .map((track) => publicTrack(playlistTrackToDriveFile(track))),
           nextOffset:
             offset + limit < selected.tracks.length ? offset + limit : null,
+        };
+      },
+    ),
+    tool(
+      "drivebeats_get_queue",
+      "Read the current browser's Playback Queue in the same order as the page, including played, current and upcoming occurrences. Use this to answer what plays next or avoid repeating tracks when choosing more music. Repeated tracks have distinct entryIds. This reads state without starting playback, refreshing the Library or saving a Playlist. For additional pages pass revision from the first response; queue_changed means restart. Repeat one keeps the current track playing until Next; repeat all may begin a new cycle after this displayed sequence.",
+      z.strictObject({
+        ...page,
+        revision: z.number().int().nonnegative().optional(),
+      }),
+      true,
+      async ({ offset, limit, revision }, userId) => {
+        const state = usePlayerStore.getState();
+        if (revision !== undefined && revision !== queueRevision)
+          throw new ToolError(
+            "queue_changed",
+            "The Playback Queue changed. Read again from offset zero.",
+          );
+        const entries = getPlaybackQueueTracks(state);
+        const catalog = ownedCatalog();
+        if (
+          entries.some(({ track, sourceIndex }) => {
+            const owner =
+              sourceIndex === null
+                ? state.queuedAccountId
+                : state.playbackAccountId;
+            return owner
+              ? owner !== userId
+              : !catalog?.tracks.some((item) => item.id === track.id);
+          })
+        )
+          throw new ToolError(
+            "queue_unverified",
+            "The saved queue has not been verified for this account. Open or play your Library on the page first.",
+          );
+        return {
+          observedAt: Date.now(),
+          revision: queueRevision,
+          total: entries.length,
+          currentIndex: state.playbackCursor,
+          shuffle: state.shuffle,
+          repeat: state.repeat,
+          entries: entries
+            .slice(offset, offset + limit)
+            .map(({ entryId, track, status, removable }, index) => ({
+              entryId,
+              position: offset + index,
+              status,
+              removable,
+              track: compactTrack(publicTrack(track)),
+            })),
+          nextOffset: offset + limit < entries.length ? offset + limit : null,
         };
       },
     ),
@@ -1128,7 +1370,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
     ),
     tool(
       "drivebeats_save_playlist",
-      "Create a named Playlist, or rename an existing Playlist by ID. Changes sync to your DriveBeats cloud library. If completion is uncertain, read collections before repeating creation to avoid duplicates.",
+      "Create a named empty Playlist, or rename an existing Playlist by ID. For a curated Playlist, discover tracks with Library Search, then populate it with drivebeats_edit_playlist_tracks and verify the saved contents with drivebeats_list_collections. Changes sync to your DriveBeats cloud library. If completion is uncertain, read collections before repeating creation to avoid duplicates.",
       z.object({ name, playlistId: id.optional() }),
       false,
       async ({ name, playlistId }, userId, signal, markEffectStarted) => {

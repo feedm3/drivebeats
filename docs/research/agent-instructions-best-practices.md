@@ -1,7 +1,7 @@
 # Repository agent instructions: primary-source review
 
 Checked 2026-10-23. Scope: DriveBeats, Codex and Claude Code, using frontier
-models. This is a design recommendation, not a benchmark of the proposed guide.
+models. This records design reasoning, not a benchmark of the adopted guide.
 
 ## Assessment
 
@@ -35,25 +35,25 @@ cannot infer reliably from code. [Claude Code best practices](https://code.claud
   preserve conditional retrieval. Instructions guide behavior rather than enforce
   access controls. [Claude imports and instruction semantics](https://code.claude.com/docs/en/memory#import-additional-files)
 
-## Proposed allocation for DriveBeats
+## Adopted allocation for DriveBeats
 
 Adopted 2026-10-23: the data/sync contract and its checks moved to
-`docs/data-and-sync.md`; Next.js resolution details moved to the app guide. The
-small code, migration, mobile and base verification rules remain in root. This
-note records research and alternatives; the guides own the standing rules.
+`docs/data-and-sync.md`; code, migration and mobile UI rules moved to
+`docs/coding-standards.md`; Next.js resolution details moved to the app guide.
+The base verification gate remains in root, with links to UI and sync checks.
+This note records research and alternatives; the guides own the standing rules.
 
 The following is repository-specific judgment, based on the loading behavior
 above and the current [root guide](../../AGENTS.md), rather than a vendor-mandated
 layout. Keep one authoritative copy of each detailed rule. These are ownership
-boundaries, not a requirement to create one new file per heading: a few naming or
-mobile rules can remain inline when a pointer costs as much as the rule.
+boundaries, not a requirement to create one new file per heading: related code,
+schema and UI conventions share one standards document.
 
 | Location | Guidance |
 | --- | --- |
-| Root `AGENTS.md` | Public-repository notice; pnpm/root execution; essential music read-only and remote-change boundaries; required validation gate; conditional document pointers. |
-| `docs` topic: code conventions | Naming, table-query/service boundaries and forward-migration rules. Read before the corresponding code or schema changes. |
-| `docs` topic: data boundaries | Cloud/device ownership, consent/migration gates, tag restoration, complete catalog publication and network-free `cache_only`. Read before changing those flows or contracts. |
-| `docs` topic: verification | Auth, playback, sync, deletion and mobile scenarios; test-placement guidance. Read before planning verification and before delivering affected changes. |
+| Root `AGENTS.md` | Public-repository notice; pnpm/root execution; essential music read-only and remote-change boundaries; base validation, auth/playback checks and test-placement guidance; conditional document pointers. |
+| `docs/coding-standards.md` | Naming, table-query/service boundaries, forward-migration rules and mobile UI requirements. Read before code or schema changes/reviews and UI design/review; verify mobile requirements before delivering UI changes. |
+| `docs/data-and-sync.md` | Cloud/device ownership, consent/migration gates, tag restoration, complete catalog publication, network-free `cache_only` and sync acceptance scenarios. Read before changing those flows or contracts; complete the scenarios before delivering sync changes. |
 | Existing app `AGENTS.md` | Generated Next.js instructions and installed-documentation discovery. Keep the root's read-before-app-code pointer. |
 | Existing glossary/access/runbooks | Continue referencing the canonical documents; avoid additional copies. |
 
@@ -76,7 +76,7 @@ The September 2026 revision of *Evaluating AGENTS.md* found no general task-succ
 improvement and higher inference cost from repository context files. It also
 found no clear performance dependence on file length. Its evaluated models and
 Python tasks do not establish the result for this repository's current frontier
-models or compare this proposed router/topic-doc layout. Treat it as evidence
+models or compare the adopted router/topic-doc layout. Treat it as evidence
 against redundant requirements, not proof that shorter always wins or that
 required verification should be removed. [Paper, v3: evaluation, ablations and limitations](https://arxiv.org/html/2602.11988v3)
 

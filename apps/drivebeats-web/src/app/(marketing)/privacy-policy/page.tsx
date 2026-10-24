@@ -137,8 +137,9 @@ export default function PrivacyPolicyPage() {
           >
             Vercel Analytics
           </a>{" "}
-          to measure page views and performance. No personal information is
-          collected.
+          to measure page views, performance and WebMCP usage. WebMCP events
+          include only the tool name, never tool inputs, results or Library
+          content. No personal information is collected.
         </p>
 
         <h2 className="text-lg font-semibold text-foreground">Data sharing</h2>

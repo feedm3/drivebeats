@@ -1,4 +1,6 @@
+import { track } from "@vercel/analytics";
 import type { WebMCP } from "webmcp-types";
+import { webMcpRecovery } from "@/lib/webmcp-recovery";
 
 // Zod validates untrusted inputs at execution time. Older hosts may omit the
 // execution options, return synchronously, or expose unregisterTool.
@@ -49,18 +51,26 @@ export function registerWebMcpTools(
       execute: async (
         input: unknown,
         options?: Partial<WebMCP.ToolExecuteCallbackOptions>,
-      ) =>
-        disposed || controller.signal.aborted
-          ? {
-              ok: false,
-              error: { code: "page_closed", message: "Open DriveBeats again." },
-              recovery: webMcpRecovery("page_closed", true),
-            }
-          : tool.execute(input, {
-              signal: options?.signal
-                ? AbortSignal.any([controller.signal, options.signal])
-                : controller.signal,
-            }),
+      ) => {
+        if (disposed || controller.signal.aborted) {
+          return {
+            ok: false,
+            error: { code: "page_closed", message: "Open DriveBeats again." },
+            recovery: webMcpRecovery("page_closed", true),
+          };
+        }
+        try {
+          // Count invocations, including tool errors, without inputs or results.
+          track("webmcp_tool_used", { tool: tool.name });
+        } catch {
+          // Analytics must never prevent a tool from running.
+        }
+        return tool.execute(input, {
+          signal: options?.signal
+            ? AbortSignal.any([controller.signal, options.signal])
+            : controller.signal,
+        });
+      },
     };
     try {
       Promise.resolve(
@@ -88,5 +98,3 @@ export function registerWebMcpTools(
     }
   };
 }
-
-import { webMcpRecovery } from "@/lib/webmcp-recovery";

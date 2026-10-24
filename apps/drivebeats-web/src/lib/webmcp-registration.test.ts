@@ -1,9 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { track } from "@vercel/analytics";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   registerWebMcpTools,
   type WebMcpContext,
   type WebMcpTool,
 } from "@/lib/webmcp-registration";
+
+vi.mock("@vercel/analytics", () => ({ track: vi.fn() }));
 
 function tool(execute = vi.fn(async () => ({ ok: true }))): WebMcpTool {
   return {
@@ -14,6 +17,10 @@ function tool(execute = vi.fn(async () => ({ ok: true }))): WebMcpTool {
   };
 }
 describe("native WebMCP registration", () => {
+  beforeEach(() => {
+    vi.mocked(track).mockReset();
+  });
+
   it("releases exactly its own tools through abort for StrictMode remounts", async () => {
     const registered = new Map<string, WebMcpTool>();
     const unrelated = tool();
@@ -42,11 +49,41 @@ describe("native WebMCP registration", () => {
       error: { code: "page_closed" },
     });
     expect(execute).not.toHaveBeenCalled();
+    expect(track).not.toHaveBeenCalled();
     const cleanupAgain = registerWebMcpTools(context, [tool(execute)]);
     expect(await registered.get("drivebeats_test")?.execute({})).toEqual({
       ok: true,
     });
     cleanupAgain();
+  });
+
+  it("keeps tool inputs and results out of analytics and tolerates analytics failure", async () => {
+    let registered: WebMcpTool | undefined;
+    const input = { query: "Private library search" };
+    const result = { ok: false, error: { code: "sign_in_required" } };
+    const execute = vi.fn(async () => result);
+    const cleanup = registerWebMcpTools(
+      {
+        registerTool: (descriptor) => {
+          registered = descriptor;
+        },
+      },
+      [tool(execute)],
+    );
+    expect(track).not.toHaveBeenCalled();
+    expect(await registered?.execute(input)).toEqual(result);
+    expect(track).toHaveBeenCalledExactlyOnceWith("webmcp_tool_used", {
+      tool: "drivebeats_test",
+    });
+    vi.mocked(track).mockImplementationOnce(() => {
+      throw new Error("Analytics unavailable");
+    });
+    expect(await registered?.execute(input)).toEqual(result);
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute).toHaveBeenLastCalledWith(input, {
+      signal: expect.any(AbortSignal),
+    });
+    cleanup();
   });
 
   it("forwards host cancellation and aborts in-flight executions on page cleanup", async () => {

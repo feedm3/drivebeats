@@ -1,9 +1,55 @@
 # Retire legacy Neon collections after verified rollout
 
-Status: production migrations 0011–0013 and release `a0e99b1` deployed and smoke
+## Executed early on 31 October 2026
+
+The user explicitly requested immediate execution instead of waiting for
+22 November. Migration `0014_retire_legacy_collections.sql` committed against
+the verified production database. Read-only verification afterward
+confirmed `playlists`, `playlist_tracks` and `favorite_tracks` are absent,
+along with the three allowlisted retired trigger functions. No CASCADE was used.
+
+`legacy_retired` is true; the original rollout start and cutoff remain unchanged.
+The early migration checks the exact original rollout row instead of the
+scheduled procedure's due-date guard. Users without a verified Drive migration
+can no longer recover collections from the retired source through normal login.
+
+Read-only verification confirmed preservation of account/authentication, MCP and
+app-data control/audit records. Upload coordination and dependency checks passed.
+No Google Drive files were changed by this database operation.
+
+The serving application source was checked: its bootstrap checks
+`legacy_retired` before querying legacy collections.
+Older deployments remain in Vercel's history and must not be used for rollback
+unless their compatibility with the retired schema is established.
+
+The transaction was rehearsed on an isolated database branch,
+including rejection of nonempty legacy migrations and successful empty
+initialization after retirement. The rehearsal branch was deleted afterward.
+An expiring recovery snapshot was created before production execution;
+recovery identifiers, expiry and history coverage are recorded in ignored local
+operational evidence. Recovery should use
+an isolated restore and an explicitly approved correction, not an unreviewed
+whole-database rollback that could overwrite subsequent saves.
+
+The user confirmed Playlists and Favorites loaded after refreshing both before
+and after execution. The Codex automation tool confirmed deletion of
+`retire-legacy-drivebeats-collections` after that post-retirement check.
+Agent browser verification was unavailable because local browser access was
+disabled; the production UI check was performed by the user. Fresh sign-in,
+cross-device edits and a real late-user bootstrap were not manually exercised;
+the late-user control flow was checked on the isolated branch.
+`pnpm test` (954 tests), `pnpm lint` and
+`pnpm build` passed; lint reported existing configuration, symlink and asset-size
+warnings. The migration-window test fixture excludes the one-time production
+retirement so its historical pre-cutoff scenarios retain their legacy schema.
+
+## Original scheduled procedure (historical)
+
+Original rollout status: production migrations 0011–0013 and release `a0e99b1` deployed and smoke
 verified on 23 October 2026. The user subsequently approved starting the 30-day
 window and scheduling cleanup. Latest verified serving revision is `a0d852c`.
-This is separate from the unchanged 29 October track_metadata retirement. See
+This was separate from the track_metadata retirement, completed manually on
+31 October; see its [record](retire-cloud-track-metadata.md). See
 [production evidence](../research/drive-appdata-implementation-evidence.md#authorized-production-rollout).
 
 ## Recorded production window

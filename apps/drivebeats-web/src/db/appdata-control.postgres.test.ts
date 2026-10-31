@@ -82,7 +82,13 @@ describe("durable app-data coordination against PostgreSQL", () => {
     fixture.db = new PGlite();
     const folder = resolve(process.cwd(), "../../db/migrations");
     for (const name of (await readdir(folder))
-      .filter((name) => name.endsWith(".sql"))
+      // These scenarios exercise the migration window and its retirement boundary.
+      // The one-time production retirement is rehearsed against a Neon branch.
+      .filter(
+        (name) =>
+          name.endsWith(".sql") &&
+          name !== "0014_retire_legacy_collections.sql",
+      )
       .sort()) {
       await fixture.db.exec(await readFile(resolve(folder, name), "utf8"));
     }

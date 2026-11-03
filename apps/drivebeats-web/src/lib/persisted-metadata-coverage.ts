@@ -1,7 +1,10 @@
 import { metadataEnvironmentKey } from "@/lib/drive-metadata-reader";
 import { resolveKnownTrack } from "@/lib/known-track-resolver";
 import { scanMetadataRecords } from "@/lib/metadata-cache-db";
-import { getMetadataFreshness } from "@/lib/metadata-cache-types";
+import {
+  getMetadataFreshness,
+  isMetadataRetryPending,
+} from "@/lib/metadata-cache-types";
 import { buildMetadataCoverage } from "@/lib/metadata-coverage";
 import type { MetadataView } from "@/lib/track-metadata-loader";
 import { useId3MetadataStore } from "@/stores/id3-metadata-store";
@@ -55,7 +58,7 @@ export async function buildPersistedMetadataCoverage(
         return;
       const before = buildMetadataCoverage([track], getState);
       const after = buildMetadataCoverage([track], () => ({
-        status: record.status,
+        status: isMetadataRetryPending(record) ? "deferred" : record.status,
         freshness: getMetadataFreshness(
           record,
           resolveKnownTrack(accountId, track.id)?.track ?? track,

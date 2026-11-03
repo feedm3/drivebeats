@@ -15,13 +15,18 @@ const mocks = vi.hoisted(() => ({
   media: vi.fn(),
   put: vi.fn(),
   generation: 1,
+  retryRecord: vi.fn(),
+  token: vi.fn(),
+  refresh: vi.fn(),
+  peek: vi.fn(),
 }));
 vi.mock("@/stores/auth-store", () => ({
   useAuthStore: {
     getState: () => ({
       user: { id: "a" },
       authStatus: "authenticated",
-      getValidAccessToken: async () => "token",
+      getValidAccessToken: mocks.token,
+      refreshAccessToken: mocks.refresh,
     }),
     subscribe: vi.fn(),
   },
@@ -71,6 +76,11 @@ vi.mock("@/stores/id3-metadata-store", () => {
         generation: mocks.generation,
         setAccount: async () => {},
         getRecord,
+        peekRecord: async (track: KnownTrack["track"]) => {
+          await mocks.peek();
+          return getRecord(track);
+        },
+        retryUnavailableRecord: mocks.retryRecord,
         observeDescriptor: vi.fn(),
         loadRecord: async (track: KnownTrack["track"]) => getRecord(track),
         putRecord: async (
@@ -125,6 +135,12 @@ beforeEach(() => {
   mocks.current = true;
   mocks.records.clear();
   mocks.generation = 1;
+  mocks.token.mockResolvedValue("token");
+  mocks.refresh.mockResolvedValue(true);
+  mocks.peek.mockResolvedValue(undefined);
+  mocks.retryRecord.mockImplementation(async (track: KnownTrack["track"]) => {
+    mocks.records.delete(track.id);
+  });
   mocks.blob.mockResolvedValue(null);
   mocks.extract.mockResolvedValue({
     status: "ready",
@@ -195,59 +211,92 @@ describe("shared metadata consumer boundary", () => {
     expect(result.metadata.tags).toEqual({ title: "Remote" });
     expect(mocks.extract).not.toHaveBeenCalled();
   });
-  it("defers a media limit across reloads, retries with longer backoff, and can later succeed", async () => {
+  it("finishes a bounded reader limit without retrying the unchanged track after reload", async () => {
     const { MetadataReadError } = await import("./drive-metadata-reader");
-    const { METADATA_RANGE_STRATEGY_VERSION } = await import(
-      "./metadata-cache-types"
-    );
-    mocks.range.mockRejectedValueOnce(
-      new MetadataReadError("budget_exceeded", false),
-    );
-    mocks.range.mockRejectedValueOnce(
-      new MetadataReadError("budget_exceeded", false),
-    );
+    mocks.range.mockRejectedValueOnce(new MetadataReadError("budget_exceeded"));
     let { ensureTrackMetadata } = await import("./track-metadata-loader");
     await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
       metadata: {
-        status: "deferred",
-        error: { code: "budget_exceeded", retryable: true },
+        status: "unresolved",
+        reason: "budget_exceeded",
+        error: { retryable: false },
       },
-    });
-    expect(mocks.records.get(track.id)).toMatchObject({
-      status: "unresolved",
-      reason: "budget_exceeded",
-      rangeStrategyVersion: METADATA_RANGE_STRATEGY_VERSION,
-      retryCount: 1,
     });
     vi.resetModules();
     ({ ensureTrackMetadata } = await import("./track-metadata-loader"));
     await ensureTrackMetadata(known());
     expect(mocks.range).toHaveBeenCalledOnce();
-    expect(mocks.put).toHaveBeenCalledOnce();
-    const clock = vi.spyOn(Date, "now");
-    try {
-      clock.mockReturnValue(
-        Number(mocks.records.get(track.id)?.checkedAt) + 30 * 60_000,
-      );
+  });
+
+  it.each(["transport_error", "version_unknown", "version_changed"])(
+    "allows one short %s retry across reloads, then finishes until content changes",
+    async (code) => {
+      const { MetadataReadError } = await import("./drive-metadata-reader");
+      mocks.range.mockRejectedValue(new MetadataReadError(code, true));
+      let { ensureTrackMetadata } = await import("./track-metadata-loader");
       await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
         metadata: {
           status: "deferred",
-          error: { retryAfterMs: 60 * 60_000 },
+          error: { code, retryable: true },
         },
       });
-      expect(mocks.range).toHaveBeenCalledTimes(2);
+      const checkedAt = Number(mocks.records.get(track.id)?.checkedAt);
+      expect(mocks.records.get(track.id)?.retryCount).toBe(1);
+      vi.resetModules();
+      ({ ensureTrackMetadata } = await import("./track-metadata-loader"));
       await ensureTrackMetadata(known());
-      expect(mocks.range).toHaveBeenCalledTimes(2);
-      clock.mockReturnValue(
-        Number(mocks.records.get(track.id)?.checkedAt) + 60 * 60_000,
-      );
-      await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
-        metadata: { status: "ready", tags: { title: "Remote" } },
-      });
-      expect(mocks.range).toHaveBeenCalledTimes(3);
-    } finally {
-      clock.mockRestore();
-    }
+      expect(mocks.range).toHaveBeenCalledOnce();
+      const clock = vi.spyOn(Date, "now").mockReturnValue(checkedAt + 30_000);
+      try {
+        await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
+          metadata: {
+            status: "unresolved",
+            reason: code,
+            error: { retryable: false },
+          },
+        });
+        expect(mocks.range).toHaveBeenCalledTimes(2);
+        vi.resetModules();
+        ({ ensureTrackMetadata } = await import("./track-metadata-loader"));
+        clock.mockReturnValue(checkedAt + 24 * 60 * 60_000);
+        await ensureTrackMetadata(known());
+        expect(mocks.range).toHaveBeenCalledTimes(2);
+        mocks.range.mockResolvedValue({
+          status: "ready",
+          tags: { title: "New version" },
+          loadedVia: "drive_range",
+        });
+        const updated = known();
+        updated.track.modifiedTime = "v2";
+        mocks.descriptor.mockResolvedValue(Response.json(updated.track));
+        await expect(ensureTrackMetadata(updated)).resolves.toMatchObject({
+          metadata: { status: "ready" },
+        });
+        expect(mocks.range).toHaveBeenCalledTimes(3);
+      } finally {
+        clock.mockRestore();
+      }
+    },
+  );
+
+  it("only retries an explicitly requested unavailable track and preserves successful hits", async () => {
+    const { MetadataReadError } = await import("./drive-metadata-reader");
+    mocks.range.mockRejectedValueOnce(new MetadataReadError("parse_error"));
+    const { ensureTrackMetadata, retryUnavailableTrackMetadata } = await import(
+      "./track-metadata-loader"
+    );
+    await ensureTrackMetadata(known());
+    await ensureTrackMetadata(known());
+    expect(mocks.range).toHaveBeenCalledOnce();
+    await retryUnavailableTrackMetadata(known());
+    await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
+      metadata: { status: "ready" },
+    });
+    expect(mocks.range).toHaveBeenCalledTimes(2);
+    await retryUnavailableTrackMetadata(known());
+    await ensureTrackMetadata(known());
+    expect(mocks.retryRecord).toHaveBeenCalledOnce();
+    expect(mocks.range).toHaveBeenCalledTimes(2);
   });
 
   it("reserves the post-read version check after consuming the full permitted media byte allowance", async () => {
@@ -293,7 +342,7 @@ describe("shared metadata consumer boundary", () => {
     expect(mocks.put).toHaveBeenCalledOnce();
   });
 
-  it("resets a saved reading-limit cooldown when the file version changes", async () => {
+  it("reconsiders a saved reader limit when the file version changes", async () => {
     mocks.records.set(track.id, {
       status: "unresolved",
       reason: "budget_exceeded",
@@ -307,15 +356,15 @@ describe("shared metadata consumer boundary", () => {
     const { ensureTrackMetadata } = await import("./track-metadata-loader");
     await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
       metadata: {
-        status: "deferred",
-        error: { retryAfterMs: expect.any(Number) },
+        status: "unresolved",
+        reason: "budget_exceeded",
       },
     });
     expect(mocks.range).toHaveBeenCalledOnce();
-    expect(mocks.records.get(track.id)?.retryCount).toBe(1);
+    expect(mocks.records.get(track.id)?.retryCount).toBeUndefined();
   });
 
-  it("honors saved cooldowns discovered after strengthening an incomplete descriptor", async () => {
+  it("keeps saved terminal outcomes discovered after strengthening an incomplete descriptor", async () => {
     mocks.records.set(track.id, {
       status: "unresolved",
       reason: "budget_exceeded",
@@ -332,7 +381,7 @@ describe("shared metadata consumer boundary", () => {
     };
     const { ensureTrackMetadata } = await import("./track-metadata-loader");
     await expect(ensureTrackMetadata(incomplete)).resolves.toMatchObject({
-      metadata: { status: "deferred", error: { retryable: true } },
+      metadata: { status: "unresolved", error: { retryable: false } },
     });
     expect(mocks.descriptor).toHaveBeenCalledOnce();
     expect(mocks.range).not.toHaveBeenCalled();
@@ -410,18 +459,17 @@ describe("shared metadata consumer boundary", () => {
     });
     expect(mocks.descriptor).not.toHaveBeenCalled();
   });
-  it("keeps file-access failures transient with bounded per-track access backoff", async () => {
+  it("finishes access failures without an automatic per-track retry", async () => {
     mocks.descriptor.mockImplementation(
       async () => new Response(null, { status: 403 }),
     );
     const { ensureTrackMetadata } = await import("./track-metadata-loader");
     await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
       metadata: {
-        status: "error",
+        status: "unresolved",
         error: {
           code: "permission_denied",
-          retryable: true,
-          retryAfterMs: 300_000,
+          retryable: false,
         },
       },
     });
@@ -505,24 +553,289 @@ describe("shared metadata consumer boundary", () => {
     expect(mocks.put).not.toHaveBeenCalled();
     expect(mocks.range).not.toHaveBeenCalled();
   });
-  it("stops the underlying read when the last deadline expires and publishes no late result", async () => {
-    const reading = deferred<MetadataOutcome>();
-    mocks.range.mockReturnValue(reading.promise);
+  it("does not charge a token wait after a descriptor request was granted", async () => {
+    const item = known();
+    item.track.modifiedTime = undefined;
+    item.track.size = undefined;
+    mocks.token
+      .mockResolvedValueOnce("token")
+      .mockImplementationOnce(() => new Promise(() => {}));
+    mocks.descriptor.mockImplementation(
+      async (_id, _token, _params, options) => {
+        options.onGranted?.();
+        return Response.json(track);
+      },
+    );
     const { ensureTrackMetadata } = await import("./track-metadata-loader");
-    const job = ensureTrackMetadata(known(), { deadline: Date.now() + 80 });
-    await vi.waitFor(() => expect(mocks.range).toHaveBeenCalledOnce());
-    await expect(job).resolves.toMatchObject({
-      metadata: { status: "deferred", error: { code: "timeout" } },
-    });
-    expect(mocks.range.mock.calls[0][0].signal.aborted).toBe(true);
-    reading.resolve({
-      status: "ready",
-      tags: { title: "Too late" },
-      loadedVia: "drive_range",
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await expect(
+      ensureTrackMetadata(item, { deadline: Date.now() + 30 }),
+    ).resolves.toMatchObject({ metadata: { status: "deferred" } });
+    expect(mocks.token).toHaveBeenCalledTimes(2);
+    expect(mocks.descriptor).toHaveBeenCalledOnce();
+    expect(mocks.range).not.toHaveBeenCalled();
     expect(mocks.put).not.toHaveBeenCalled();
+    expect(mocks.records.size).toBe(0);
   });
+
+  it("publishes timeout backoff before a cold failure lookup so concurrent consumers cannot restart the request", async () => {
+    const cold = deferred<void>();
+    mocks.peek.mockReturnValueOnce(cold.promise);
+    mocks.range.mockImplementation(({ signal, requestOptions }) => {
+      requestOptions.onGranted?.();
+      return new Promise((_resolve, reject) =>
+        signal.addEventListener("abort", () => reject(signal.reason), {
+          once: true,
+        }),
+      );
+    });
+    const {
+      ensureTrackMetadata,
+      getTrackMetadataState,
+      getTrackMetadataRetryAt,
+    } = await import("./track-metadata-loader");
+    const first = ensureTrackMetadata(known(), { deadline: Date.now() + 30 });
+    try {
+      await vi.waitFor(() => expect(mocks.peek).toHaveBeenCalledOnce());
+      expect(getTrackMetadataState(known())).toMatchObject({
+        status: "deferred",
+        reason: "timeout",
+      });
+      expect(getTrackMetadataRetryAt(known())).toBeGreaterThan(Date.now());
+      await expect(
+        ensureTrackMetadata(known(), { deadline: Date.now() + 30 }),
+      ).resolves.toMatchObject({
+        metadata: { status: "deferred", error: { code: "timeout" } },
+      });
+      expect(mocks.range).toHaveBeenCalledOnce();
+    } finally {
+      cold.resolve();
+      await first;
+    }
+    expect(mocks.records.get(track.id)).toMatchObject({
+      reason: "timeout",
+      retryCount: 1,
+    });
+  });
+
+  it("does not spend per-track attempts when subscriber deadlines expire before a request is granted", async () => {
+    mocks.range.mockImplementation(
+      ({ signal }) =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), {
+            once: true,
+          });
+        }),
+    );
+    const { ensureTrackMetadata } = await import("./track-metadata-loader");
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await expect(
+        ensureTrackMetadata(known(), { deadline: Date.now() + 30 }),
+      ).resolves.toMatchObject({ metadata: { status: "deferred" } });
+      expect(mocks.records.size).toBe(0);
+      expect(mocks.put).not.toHaveBeenCalled();
+    }
+    expect(mocks.range).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not charge a later range's queue wait after an earlier request was granted", async () => {
+    const { scheduleDriveRequest } = await import("./drive-request-scheduler");
+    let blocker: Response | undefined;
+    const firstRange = vi.fn(async () => new Response("first bytes"));
+    const queuedRange = vi.fn(async () => new Response("later bytes"));
+    mocks.range.mockImplementation(async ({ requestOptions }) => {
+      const first = await scheduleDriveRequest(firstRange, requestOptions);
+      await first.text();
+      blocker = await scheduleDriveRequest(
+        async () => new Response("playback"),
+        {
+          accountId: "a",
+          priority: "playback",
+        },
+      );
+      const queued = await scheduleDriveRequest(queuedRange, requestOptions);
+      await queued.text();
+      return { status: "no_target_tags", loadedVia: "drive_range" };
+    });
+    const { ensureTrackMetadata } = await import("./track-metadata-loader");
+    try {
+      await expect(
+        ensureTrackMetadata(known(), {
+          priority: "navigation",
+          deadline: Date.now() + 100,
+        }),
+      ).resolves.toMatchObject({ metadata: { status: "deferred" } });
+      expect(firstRange).toHaveBeenCalledOnce();
+      expect(queuedRange).not.toHaveBeenCalled();
+      expect(mocks.records.size).toBe(0);
+      expect(mocks.put).not.toHaveBeenCalled();
+    } finally {
+      await blocker?.text();
+    }
+  });
+
+  it("keeps a settled scope-only timeout after the aborted descriptor request unwinds", async () => {
+    const item = known();
+    item.track.modifiedTime = undefined;
+    item.track.size = undefined;
+    mocks.descriptor.mockImplementation((_id, _token, _params, options) => {
+      options.onGranted?.();
+      return new Promise((_resolve, reject) =>
+        options.signal.addEventListener(
+          "abort",
+          () => reject(options.signal.reason),
+          { once: true },
+        ),
+      );
+    });
+    const { ensureTrackMetadata, getTrackMetadataState } = await import(
+      "./track-metadata-loader"
+    );
+    await expect(
+      ensureTrackMetadata(item, { deadline: Date.now() + 30 }),
+    ).resolves.toMatchObject({
+      metadata: { status: "deferred", reason: "timeout" },
+    });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 30_001);
+    try {
+      await expect(
+        ensureTrackMetadata(item, { deadline: Date.now() + 30 }),
+      ).resolves.toMatchObject({
+        metadata: {
+          status: "unresolved",
+          freshness: "unknown",
+          attemptComplete: true,
+          reason: "timeout",
+        },
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(getTrackMetadataState(item)).toMatchObject({
+        status: "unresolved",
+        freshness: "unknown",
+        attemptComplete: true,
+        reason: "timeout",
+      });
+      await ensureTrackMetadata(item);
+      expect(mocks.descriptor).toHaveBeenCalledTimes(2);
+      expect(mocks.put).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("does not count shared metadata setup failures as per-track attempts", async () => {
+    const { MetadataReadError } = await import("./drive-metadata-reader");
+    mocks.range.mockRejectedValue(
+      new MetadataReadError("metadata_setup_error", true),
+    );
+    const { ensureTrackMetadata } = await import("./track-metadata-loader");
+    await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
+      metadata: { error: { code: "metadata_setup_error", retryable: true } },
+    });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 30_001);
+    try {
+      await expect(ensureTrackMetadata(known())).resolves.toMatchObject({
+        metadata: { error: { code: "metadata_setup_error", retryable: true } },
+      });
+      expect(mocks.range).toHaveBeenCalledTimes(2);
+      expect(mocks.records.size).toBe(0);
+      expect(mocks.put).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("bounds real subscriber timeouts across reloads and never publishes late tags", async () => {
+    const reading = deferred<MetadataOutcome>();
+    mocks.range.mockImplementation(({ requestOptions }) => {
+      requestOptions.onGranted?.();
+      return reading.promise;
+    });
+    let { ensureTrackMetadata } = await import("./track-metadata-loader");
+    await expect(
+      ensureTrackMetadata(known(), { deadline: Date.now() + 80 }),
+    ).resolves.toMatchObject({
+      metadata: {
+        status: "deferred",
+        reason: "timeout",
+        error: { retryable: true },
+      },
+    });
+    const checkedAt = Number(mocks.records.get(track.id)?.checkedAt);
+    expect(mocks.range.mock.calls[0][0].signal.aborted).toBe(true);
+    vi.resetModules();
+    ({ ensureTrackMetadata } = await import("./track-metadata-loader"));
+    await ensureTrackMetadata(known());
+    expect(mocks.range).toHaveBeenCalledOnce();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(checkedAt + 30_000);
+    try {
+      await expect(
+        ensureTrackMetadata(known(), { deadline: Date.now() + 80 }),
+      ).resolves.toMatchObject({
+        metadata: {
+          status: "unresolved",
+          reason: "timeout",
+          error: { retryable: false },
+        },
+      });
+      vi.resetModules();
+      ({ ensureTrackMetadata } = await import("./track-metadata-loader"));
+      await ensureTrackMetadata(known());
+      expect(mocks.range).toHaveBeenCalledTimes(2);
+      reading.resolve({
+        status: "ready",
+        tags: { title: "Too late" },
+        loadedVia: "drive_range",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(mocks.records.get(track.id)).toMatchObject({
+        status: "unresolved",
+        reason: "timeout",
+        retryCount: 2,
+      });
+      expect(mocks.put).toHaveBeenCalledTimes(2);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("bounds failures without content validators in this session without claiming freshness", async () => {
+    const item = known();
+    item.track.modifiedTime = undefined;
+    item.track.size = undefined;
+    mocks.descriptor.mockResolvedValue(new Response(null, { status: 503 }));
+    const { ensureTrackMetadata } = await import("./track-metadata-loader");
+    await expect(ensureTrackMetadata(item)).resolves.toMatchObject({
+      metadata: { status: "deferred", freshness: "unknown" },
+    });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 30_001);
+    try {
+      await expect(ensureTrackMetadata(item)).resolves.toMatchObject({
+        metadata: {
+          status: "unresolved",
+          freshness: "unknown",
+          attemptComplete: true,
+        },
+      });
+      await ensureTrackMetadata(item);
+      expect(mocks.descriptor).toHaveBeenCalledTimes(2);
+      expect(mocks.put).not.toHaveBeenCalled();
+      const stronger = known();
+      stronger.scopeKey = "strengthened";
+      mocks.range.mockResolvedValue({
+        status: "ready",
+        tags: { title: "Recovered" },
+        loadedVia: "drive_range",
+      });
+      mocks.descriptor.mockResolvedValue(Response.json(stronger.track));
+      await expect(ensureTrackMetadata(stronger)).resolves.toMatchObject({
+        metadata: { status: "ready" },
+      });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it("discards bytes when the post-read descriptor observes a different version", async () => {
     mocks.descriptor.mockResolvedValue(
       Response.json({ ...track, modifiedTime: "v2" }),

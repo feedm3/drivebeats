@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  getMetadataBudgetRetryAt,
   getMetadataFreshness,
+  getMetadataRetryAt,
   METADATA_PARSER_VERSION,
   METADATA_POLICY_VERSION,
   METADATA_RANGE_STRATEGY_VERSION,
@@ -25,20 +25,17 @@ const record: MetadataRecord = {
 };
 
 describe("range strategy freshness", () => {
-  it("preserves legacy retry delays and caps repeated read limits at one day", () => {
-    expect(getMetadataBudgetRetryAt(record)).toBe(1 + 30 * 60_000);
-    expect(getMetadataBudgetRetryAt({ ...record, retryCount: 2 })).toBe(
-      1 + 60 * 60_000,
-    );
-    expect(getMetadataBudgetRetryAt({ ...record, retryCount: 1000 })).toBe(
-      1 + 24 * 60 * 60_000,
-    );
-    expect(getMetadataBudgetRetryAt({ ...record, reason: "parse_error" })).toBe(
-      0,
-    );
+  it("never schedules old reader limits and permits just one short transient retry", () => {
+    expect(getMetadataRetryAt(record)).toBe(0);
+    expect(
+      getMetadataRetryAt({ ...record, reason: "network_error", retryCount: 1 }),
+    ).toBe(30_001);
+    expect(
+      getMetadataRetryAt({ ...record, reason: "network_error", retryCount: 2 }),
+    ).toBe(0);
   });
   it("reconsiders only legacy range budget negatives after the unused tail probe is removed", () => {
-    expect(getMetadataFreshness(record, descriptor)).toBe("stale");
+    expect(getMetadataFreshness(record, descriptor)).toBe("current");
     expect(
       getMetadataFreshness({ ...record, rangeStrategyVersion: 1 }, descriptor),
     ).toBe("stale");

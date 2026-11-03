@@ -21,10 +21,10 @@ import {
   updateKnownTrackDescriptor,
 } from "@/lib/known-track-resolver";
 import {
-  getMetadataBudgetRetryAt,
-  getMetadataBudgetRetryCount,
   getMetadataFingerprint,
-  isMetadataBudgetDeferred,
+  getMetadataRetryAt,
+  isMetadataRetryPending,
+  isRetryableMetadataFailure,
   METADATA_RANGE_STRATEGY_VERSION,
   type MetadataFreshness,
   type MetadataOutcome,
@@ -49,6 +49,8 @@ export interface MetadataView {
   checkedAt?: number;
   loadedVia?: "local_blob" | "drive_range";
   reason?: string;
+  /** A bounded attempt finished for this session scope without proving content freshness. */
+  attemptComplete?: boolean;
   error?: {
     code: string;
     retryable: boolean;
@@ -99,11 +101,16 @@ interface Flight {
   blob?: BoundMetadataBlob;
   budgets: Set<DriveRequestBudget>;
   budget?: DriveRequestBudget;
+  generation?: number;
+  reading?: boolean;
+  failureRevision: number;
 }
 const flights = new Map<string, Flight>();
 const statuses = new Map<string, MetadataView>();
 const statusScopes = new Map<string, string>();
 const retryAt = new Map<string, number>();
+const failureAttempts = new Map<string, number>();
+const failureRevisions = new Map<string, number>();
 export const useMetadataLoaderStore = create<{ revision: number }>(() => ({
   revision: 0,
 }));
@@ -129,6 +136,133 @@ function setStatus(known: KnownTrack, view: MetadataView) {
     statuses.delete(statuses.keys().next().value as string);
   changed();
 }
+
+/** A failed request is local bookkeeping, never portable metadata. */
+async function saveRequestFailure(
+  known: KnownTrack,
+  code: string,
+  expectedGeneration: number,
+  retryable: boolean,
+  expectedRevision: number,
+): Promise<MetadataLoadResult | null> {
+  if (
+    !assertKnownTrack(known) ||
+    (failureRevisions.get(keyFor(known)) ?? 0) !== expectedRevision
+  )
+    return null;
+  const store = useId3MetadataStore.getState();
+  if (
+    store.accountId !== known.accountId ||
+    store.generation !== expectedGeneration
+  )
+    return null;
+  if (!getMetadataFingerprint(known.track)) {
+    const key = `${keyFor(known)}:${known.scopeKey}`;
+    const attempts = (failureAttempts.get(key) ?? 0) + 1;
+    failureAttempts.set(key, attempts);
+    const complete = !retryable || attempts >= 2;
+    const view: MetadataView = {
+      status: complete ? "unresolved" : "deferred",
+      freshness: "unknown",
+      reason: code,
+      attemptComplete: complete,
+      error: {
+        code,
+        retryable: !complete,
+        ...(!complete ? { retryAfterMs: 30_000 } : {}),
+      },
+    };
+    if (complete) retryAt.delete(key);
+    else retryAt.set(key, Date.now() + 30_000);
+    setStatus(known, view);
+    return { metadata: view, loadedNow: false };
+  }
+  const previous = await store.peekRecord(
+    known.track,
+    metadataEnvironmentKey(),
+  );
+  if (
+    !assertKnownTrack(known) ||
+    useId3MetadataStore.getState().generation !== expectedGeneration ||
+    (failureRevisions.get(keyFor(known)) ?? 0) !== expectedRevision
+  )
+    return null;
+  if (
+    previous.freshness === "current" &&
+    previous.record &&
+    ["ready", "no_target_tags"].includes(previous.record.status)
+  ) {
+    retryAt.delete(`${keyFor(known)}:${known.scopeKey}`);
+    statuses.delete(keyFor(known));
+    return { metadata: getTrackMetadataState(known), loadedNow: false };
+  }
+  const retryCount = retryable
+    ? previous.freshness === "current" &&
+      isMetadataRetryPending(previous.record)
+      ? 2
+      : 1
+    : undefined;
+  const saved = await useId3MetadataStore.getState().putRecord(
+    known.track,
+    {
+      status: "unresolved",
+      reason: code,
+      loadedVia: "drive_range",
+      retryCount,
+      rangeStrategyVersion: METADATA_RANGE_STRATEGY_VERSION,
+    },
+    expectedGeneration,
+  );
+  if (!saved || !assertKnownTrack(known)) return null;
+  retryAt.delete(`${keyFor(known)}:${known.scopeKey}`);
+  statuses.delete(keyFor(known));
+  changed();
+  return { metadata: getTrackMetadataState(known), loadedNow: true };
+}
+
+/** Explicit user retry only invalidates a proven current unavailable outcome. */
+export async function retryUnavailableTrackMetadata(known: KnownTrack) {
+  if (!assertKnownTrack(known)) return;
+  const store = useId3MetadataStore.getState();
+  const generation = store.generation;
+  const scoped =
+    statusScopes.get(keyFor(known)) === known.scopeKey
+      ? statuses.get(keyFor(known))
+      : undefined;
+  if (scoped?.attemptComplete) {
+    failureRevisions.set(
+      keyFor(known),
+      (failureRevisions.get(keyFor(known)) ?? 0) + 1,
+    );
+    flights.get(keyFor(known))?.controller.abort();
+    failureAttempts.delete(`${keyFor(known)}:${known.scopeKey}`);
+    retryAt.delete(`${keyFor(known)}:${known.scopeKey}`);
+    statuses.delete(keyFor(known));
+    statusScopes.delete(keyFor(known));
+    changed();
+    return;
+  }
+  const cached = await store.peekRecord(known.track, metadataEnvironmentKey());
+  if (
+    !assertKnownTrack(known) ||
+    store.accountId !== known.accountId ||
+    useId3MetadataStore.getState().generation !== generation ||
+    cached.freshness !== "current" ||
+    cached.record?.status !== "unresolved" ||
+    isMetadataRetryPending(cached.record)
+  )
+    return;
+  failureRevisions.set(
+    keyFor(known),
+    (failureRevisions.get(keyFor(known)) ?? 0) + 1,
+  );
+  flights.get(keyFor(known))?.controller.abort();
+  await store.retryUnavailableRecord(known.track, metadataEnvironmentKey());
+  retryAt.delete(`${keyFor(known)}:${known.scopeKey}`);
+  statuses.delete(keyFor(known));
+  statusScopes.delete(keyFor(known));
+  changed();
+}
 export function getTrackMetadataRetryAt(known: KnownTrack): number {
   const store = useId3MetadataStore.getState();
   const saved =
@@ -138,7 +272,7 @@ export function getTrackMetadataRetryAt(known: KnownTrack): number {
   return Math.max(
     retryAt.get(`${keyFor(known)}:${known.scopeKey}`) ?? 0,
     saved?.record && saved.freshness === "current"
-      ? getMetadataBudgetRetryAt(saved.record)
+      ? getMetadataRetryAt(saved.record)
       : 0,
   );
 }
@@ -152,9 +286,13 @@ export function getTrackMetadataState(known: KnownTrack): MetadataView {
     known.track,
     metadataEnvironmentKey(),
   );
+  const scoped =
+    statusScopes.get(keyFor(known)) === known.scopeKey
+      ? statuses.get(keyFor(known))
+      : undefined;
+  if (freshness !== "current" && scoped?.attemptComplete) return scoped;
   if (record && (freshness === "current" || freshness === "stale")) {
-    const deferred =
-      freshness === "current" && isMetadataBudgetDeferred(record);
+    const deferred = freshness === "current" && isMetadataRetryPending(record);
     return {
       status: deferred ? "deferred" : record.status,
       freshness,
@@ -171,7 +309,7 @@ export function getTrackMetadataState(known: KnownTrack): MetadataView {
                 ? {
                     retryAfterMs: Math.max(
                       0,
-                      getMetadataBudgetRetryAt(record) - Date.now(),
+                      getMetadataRetryAt(record) - Date.now(),
                     ),
                   }
                 : {}),
@@ -266,6 +404,7 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
   assertCurrent(flight);
   const hydration = useId3MetadataStore.getState().setAccount(known.accountId);
   const generation = useId3MetadataStore.getState().generation;
+  flight.generation = generation;
   await hydration;
   assertCurrent(flight);
   if (
@@ -286,6 +425,12 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
     signal,
     budget,
     maxAttempts: 1,
+    onQueued: () => {
+      flight.reading = false;
+    },
+    onGranted: () => {
+      flight.reading = true;
+    },
   };
   const cached = getTrackMetadataState(known);
   const pendingRetry = getTrackMetadataRetryAt(known);
@@ -307,6 +452,7 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
     !(cached.status === "unresolved" && flight.blob)
   )
     return { metadata: cached, loadedNow: false };
+  if (cached.attemptComplete) return { metadata: cached, loadedNow: false };
   // Existing local hits remain available during an offline/failed restore. Missing
   // records must wait; falling through would reread already acknowledged audio.
   if (!(await waitForDriveAppDataRestore(known.accountId, known.track))) {
@@ -326,7 +472,8 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
   const restored = getTrackMetadataState(known);
   if (
     restored.freshness === "current" &&
-    ["ready", "no_target_tags", "unresolved"].includes(restored.status)
+    ["ready", "no_target_tags", "unresolved"].includes(restored.status) &&
+    !(restored.status === "unresolved" && flight.blob)
   )
     return { metadata: restored, loadedNow: false };
   setStatus(known, { status: "loading", freshness: cached.freshness });
@@ -345,6 +492,7 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
     )
       throw new MetadataReadError("drive_auth_required", true);
     if (++checks > 2) throw new MetadataReadError("budget_exceeded");
+    flight.reading = false;
     const token = await useAuthStore.getState().getValidAccessToken();
     assertCurrent(flight);
     if (!token) throw new MetadataReadError("drive_auth_required", true);
@@ -438,6 +586,7 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
         return { metadata: existing, loadedNow: false };
     }
     if (blob) {
+      flight.reading = true;
       outcome = await extractId3MetadataResult(blob);
       assertCurrent(flight);
       if (
@@ -475,6 +624,7 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
         getTrackMetadataRetryAt(known) > Date.now()
       )
         return { metadata: existing, loadedNow: false };
+      flight.reading = false;
       const token = await useAuthStore.getState().getValidAccessToken();
       assertCurrent(flight);
       if (!token) throw new MetadataReadError("drive_auth_required", true);
@@ -511,6 +661,7 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
           requestOptions,
           assertCurrent: () => assertCurrent(flight),
           refreshAccessToken: async () => {
+            flight.reading = false;
             const refreshed = await useAuthStore
               .getState()
               .refreshAccessToken();
@@ -549,6 +700,13 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
       }
     }
   } catch (error) {
+    if (signal.aborted) {
+      const settled = getTrackMetadataState(known);
+      // The last subscriber's deadline may already have settled this attempt.
+      // Its request's abort rejection must not replace that result with cancellation.
+      if (settled.reason === "timeout")
+        return { metadata: settled, loadedNow: false };
+    }
     if (
       error instanceof MetadataReadError &&
       !error.retryable &&
@@ -559,9 +717,6 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
         "parse_error",
       ].includes(error.code)
     ) {
-      const previous = useId3MetadataStore
-        .getState()
-        .getRecord(descriptor, metadataEnvironmentKey());
       outcome = {
         status: "unresolved",
         reason: error.code,
@@ -569,15 +724,6 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
         ...(error.code === "budget_exceeded"
           ? {
               rangeStrategyVersion: METADATA_RANGE_STRATEGY_VERSION,
-              retryCount:
-                previous.freshness === "current" &&
-                previous.record &&
-                isMetadataBudgetDeferred(previous.record)
-                  ? Math.min(
-                      7,
-                      getMetadataBudgetRetryCount(previous.record) + 1,
-                    )
-                  : 1,
             }
           : {}),
         ...(error.code === "range_unsupported"
@@ -599,6 +745,25 @@ async function run(flight: Flight): Promise<MetadataLoadResult> {
               : signal.aborted
                 ? "cancelled"
                 : "network_error";
+      if (
+        !signal.aborted &&
+        (isRetryableMetadataFailure(code) ||
+          ["permission_denied", "not_found"].includes(code)) &&
+        !(
+          code === "version_changed" &&
+          getMetadataFingerprint(known.track) !==
+            getMetadataFingerprint(descriptor)
+        )
+      ) {
+        const saved = await saveRequestFailure(
+          known,
+          code,
+          generation,
+          isRetryableMetadataFailure(code),
+          flight.failureRevision,
+        );
+        if (saved) return saved;
+      }
       const view: MetadataView = {
         status: deferred ? "deferred" : "error",
         freshness: cached.freshness,
@@ -666,6 +831,7 @@ export function ensureTrackMetadata(
       controller: new AbortController(),
       subscribers: new Set(),
       budgets: new Set(),
+      failureRevision: failureRevisions.get(key) ?? 0,
       promise: Promise.resolve({
         metadata: { status: "queued", freshness: "unknown" },
         loadedNow: false,
@@ -710,6 +876,7 @@ export function ensureTrackMetadata(
   }
   current.subscribers.add(subscriber);
   return new Promise((resolve, reject) => {
+    let expired = false;
     const finish = () => {
       clearTimeout(timer);
       options.signal?.removeEventListener("abort", abort);
@@ -723,15 +890,57 @@ export function ensureTrackMetadata(
       );
     };
     const timeout = () => {
+      expired = true;
       finish();
-      resolve({
+      const fallback: MetadataLoadResult = {
         metadata: {
           status: "deferred",
           freshness: "unknown",
           error: { code: "timeout", retryable: true },
         },
         loadedNow: false,
-      });
+      };
+      if (
+        !current.subscribers.size &&
+        current.reading &&
+        current.generation !== undefined
+      ) {
+        const store = useId3MetadataStore.getState();
+        const observed = getTrackMetadataState(known);
+        if (
+          assertKnownTrack(known) &&
+          store.accountId === known.accountId &&
+          store.generation === current.generation &&
+          (failureRevisions.get(keyFor(known)) ?? 0) ===
+            current.failureRevision &&
+          !(
+            observed.freshness === "current" &&
+            ["ready", "no_target_tags"].includes(observed.status)
+          )
+        ) {
+          // Close the retry gate synchronously, including while a cold record is read.
+          retryAt.set(
+            `${keyFor(known)}:${known.scopeKey}`,
+            Date.now() + 30_000,
+          );
+          setStatus(known, {
+            status: "deferred",
+            freshness: observed.freshness,
+            reason: "timeout",
+            error: { code: "timeout", retryable: true, retryAfterMs: 30_000 },
+          });
+        }
+        void saveRequestFailure(
+          known,
+          "timeout",
+          current.generation,
+          true,
+          current.failureRevision,
+        ).then(
+          (saved) => resolve(saved ?? fallback),
+          () => resolve(fallback),
+        );
+      } else resolve(fallback);
     };
     const timer = setTimeout(
       timeout,
@@ -744,6 +953,7 @@ export function ensureTrackMetadata(
     }
     void current.promise.then(
       (value) => {
+        if (expired) return;
         finish();
         resolve(
           assertKnownTrack(known)
@@ -755,6 +965,7 @@ export function ensureTrackMetadata(
         );
       },
       (error) => {
+        if (expired) return;
         finish();
         reject(error);
       },
@@ -788,6 +999,8 @@ useAuthStore.subscribe((state, previous) => {
     statuses.clear();
     statusScopes.clear();
     retryAt.clear();
+    failureAttempts.clear();
+    failureRevisions.clear();
     changed();
   }
 });

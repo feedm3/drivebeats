@@ -38,6 +38,7 @@ const fixtures = vi.hoisted(() => {
     leader: vi.fn(),
     loadedCache: vi.fn(),
     retryAt: vi.fn(),
+    retryUnavailable: vi.fn(),
     coverage: vi.fn(),
     descriptorRevision: 0,
     metadata: { records: {}, generation: 1, accountId: "account" },
@@ -99,6 +100,7 @@ vi.mock("@/lib/track-metadata-loader", () => ({
   ensureTrackMetadata: fixtures.ensure,
   getTrackMetadataState: fixtures.getMetadata,
   getTrackMetadataRetryAt: fixtures.retryAt,
+  retryUnavailableTrackMetadata: fixtures.retryUnavailable,
   useMetadataLoaderStore: {
     getState: () => ({ revision: 0 }),
     subscribe: () => () => {},
@@ -168,6 +170,7 @@ beforeEach(() => {
   fixtures.load.mockResolvedValue(undefined);
   fixtures.loadedCache.mockResolvedValue({ freshness: "unknown" });
   fixtures.retryAt.mockReturnValue(0);
+  fixtures.retryUnavailable.mockResolvedValue(undefined);
   fixtures.save.mockResolvedValue(true);
   fixtures.ensure.mockResolvedValue({
     metadata: { status: "ready", freshness: "current" },
@@ -208,6 +211,53 @@ async function module() {
 }
 
 describe("automatic metadata coordinator", () => {
+  it("finishes an unversioned track's scoped failure rather than keeping its retry loop alive", async () => {
+    const coordinator = await module();
+    coordinator.setCurrentMetadataFolder([], []);
+    fixtures.search.isStale = () => false;
+    fixtures.search.catalog = {
+      userId: "account",
+      importsSignature: "imports",
+      fetchedAt: 1,
+      tracks: [track("unversioned")],
+    };
+    fixtures.ensure.mockResolvedValue({
+      metadata: {
+        status: "unresolved",
+        freshness: "unknown",
+        attemptComplete: true,
+        reason: "not_found",
+      },
+    });
+    stop = coordinator.startMetadataIndex();
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(fixtures.ensure).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fixtures.ensure).toHaveBeenCalledOnce();
+    expect(coordinator.useMetadataIndexStore.getState().pauseReason).toBeNull();
+  });
+  it("manually retries the complete current Library and stops if the account changes", async () => {
+    const coordinator = await module();
+    fixtures.search.catalog = {
+      userId: "account",
+      importsSignature: "imports",
+      fetchedAt: 1,
+      tracks: [track("disk-failure"), track("other")],
+    };
+    await coordinator.retryUnavailableMetadata();
+    expect(
+      fixtures.retryUnavailable.mock.calls.map(([known]) => known.track.id),
+    ).toEqual(["disk-failure", "other"]);
+    fixtures.retryUnavailable.mockClear();
+    fixtures.retryUnavailable.mockImplementationOnce(async () => {
+      fixtures.auth.user.id = "replacement";
+    });
+    await expect(coordinator.retryUnavailableMetadata()).rejects.toThrow(
+      "account or Library changed",
+    );
+    expect(fixtures.retryUnavailable).toHaveBeenCalledOnce();
+  });
+
   it("starts the catalog without search and processes proven folder tracks while that build waits", async () => {
     const coordinator = await module();
     coordinator.setCurrentMetadataFolder(
@@ -616,7 +666,7 @@ describe("automatic metadata coordinator", () => {
     expect(fixtures.ensure).toHaveBeenCalledOnce();
   });
 
-  it("waits on a saved reading limit, continues healthy tracks, and retries when due", async () => {
+  it("finishes saved reader limits without a long retry and continues healthy tracks", async () => {
     const coordinator = await module();
     coordinator.setCurrentMetadataFolder([], []);
     fixtures.search.isStale = () => false;
@@ -645,15 +695,10 @@ describe("automatic metadata coordinator", () => {
     expect(fixtures.ensure.mock.calls.map(([known]) => known.track.id)).toEqual(
       ["good"],
     );
-    expect(coordinator.useMetadataIndexStore.getState().pauseReason).toBe(
-      "waiting",
-    );
-    expect(coordinator.getMetadataIndexStatus().nextRetryAt).toBe(
-      checkedAt + 30 * 60_000,
-    );
-    await vi.advanceTimersByTimeAsync(30 * 60_000);
+    expect(coordinator.useMetadataIndexStore.getState().pauseReason).toBeNull();
+    await vi.advanceTimersByTimeAsync(24 * 60 * 60_000);
     expect(fixtures.ensure.mock.calls.map(([known]) => known.track.id)).toEqual(
-      ["good", "limited"],
+      ["good"],
     );
   });
 

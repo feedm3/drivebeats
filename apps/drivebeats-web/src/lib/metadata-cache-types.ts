@@ -20,7 +20,7 @@ export interface MetadataOutcome {
   reason?: string;
   environmentKey?: string;
   rangeStrategyVersion?: number;
-  /** Consecutive bounded reader limits for this content and reading strategy. */
+  /** Local transient attempts: one waits briefly; two finishes unavailable. */
   retryCount?: number;
 }
 
@@ -38,26 +38,29 @@ export interface MetadataRecord extends MetadataOutcome {
 
 export type MetadataFreshness = "current" | "stale" | "unknown";
 
-export function isMetadataBudgetDeferred(
-  record: { status: string; reason?: string } | undefined,
+export function isRetryableMetadataFailure(code: string) {
+  return [
+    "network_error",
+    "transport_error",
+    "timeout",
+    "version_unknown",
+    "version_changed",
+  ].includes(code);
+}
+
+/** Only a first transient request failure gets one short automatic retry. */
+export function isMetadataRetryPending(
+  record: { status: string; reason?: string; retryCount?: number } | undefined,
 ) {
-  return record?.status === "unresolved" && record.reason === "budget_exceeded";
-}
-
-export function getMetadataBudgetRetryCount(record: MetadataOutcome) {
-  return Number.isSafeInteger(record.retryCount) && (record.retryCount ?? 0) > 0
-    ? Math.min(7, record.retryCount as number)
-    : 1;
-}
-
-/** Legacy saved limits also wait before retrying; reloads never reset backoff. */
-export function getMetadataBudgetRetryAt(record: MetadataRecord) {
-  if (!isMetadataBudgetDeferred(record)) return 0;
-  const delay = Math.min(
-    24 * 60 * 60_000,
-    30 * 60_000 * 2 ** (getMetadataBudgetRetryCount(record) - 1),
+  return (
+    record?.status === "unresolved" &&
+    record.retryCount === 1 &&
+    isRetryableMetadataFailure(record.reason ?? "")
   );
-  return record.checkedAt + delay;
+}
+
+export function getMetadataRetryAt(record: MetadataRecord) {
+  return isMetadataRetryPending(record) ? record.checkedAt + 30_000 : 0;
 }
 
 /** An absent validator is never an enduring cache hit. */
@@ -83,7 +86,7 @@ export function getMetadataFreshness(
     record.policyVersion !== METADATA_POLICY_VERSION ||
     record.schemaVersion !== METADATA_SCHEMA_VERSION ||
     (record.status === "unresolved" &&
-      record.reason === "budget_exceeded" &&
+      record.rangeStrategyVersion !== undefined &&
       record.loadedVia === "drive_range" &&
       record.rangeStrategyVersion !== METADATA_RANGE_STRATEGY_VERSION) ||
     (record.environmentKey !== undefined &&

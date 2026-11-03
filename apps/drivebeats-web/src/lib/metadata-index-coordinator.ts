@@ -18,8 +18,8 @@ import {
   verifyKnownCollections,
 } from "@/lib/known-track-resolver";
 import {
-  getMetadataBudgetRetryAt,
-  isMetadataBudgetDeferred,
+  getMetadataRetryAt,
+  isMetadataRetryPending,
   METADATA_PARSER_VERSION,
   METADATA_POLICY_VERSION,
 } from "@/lib/metadata-cache-types";
@@ -30,6 +30,7 @@ import {
   ensureTrackMetadata,
   getTrackMetadataRetryAt,
   getTrackMetadataState,
+  retryUnavailableTrackMetadata,
   useMetadataLoaderStore,
 } from "@/lib/track-metadata-loader";
 import { useAuthStore } from "@/stores/auth-store";
@@ -57,6 +58,33 @@ let controller: AbortController | null = null;
 let wake: (() => void) | null = null;
 let persistedRevision = 0;
 let priorityRevision = 0;
+let retryRevision = 0;
+
+/** Retry only unavailable metadata in this account's complete Library. */
+export async function retryUnavailableMetadata(): Promise<void> {
+  const scope = coverageScope();
+  if (!scope.complete || !scope.accountId || !scope.catalog) return;
+  const accountId = scope.accountId;
+  for (const track of scope.catalog.tracks) {
+    const current = coverageScope();
+    if (!sameCoverageBaseScope(scope, current))
+      throw new Error("The account or Library changed. Try again.");
+    const known = resolveKnownTrack(accountId, track.id);
+    if (known) await retryUnavailableTrackMetadata(known);
+  }
+  retryRevision += 1;
+  try {
+    localStorage.setItem(
+      "drivebeats-metadata-retry",
+      JSON.stringify({ accountId, at: Date.now() }),
+    );
+  } catch {
+    /* The originating tab can still retry. */
+  }
+  persistedRevision += 1;
+  refreshCoverageSoon();
+  wake?.();
+}
 
 function isMetadataTrack(track: DriveFile) {
   return track.mimeType !== FOLDER_MIME && isSupportedAudioFile(track);
@@ -425,6 +453,20 @@ export function startMetadataIndex() {
   const unsubscribeImports = useImportedDriveStore.subscribe(poke);
   const unsubscribeSearch = useLibrarySearchStore.subscribe(poke);
   const onStorage = (event: StorageEvent) => {
+    if (event.key === "drivebeats-metadata-retry" && event.newValue) {
+      try {
+        const { accountId } = JSON.parse(event.newValue) as {
+          accountId?: string;
+        };
+        if (accountId === currentAccount()) {
+          retryRevision += 1;
+          poke();
+        }
+      } catch {
+        /* Ignore malformed local notifications. */
+      }
+      return;
+    }
     if (event.key !== "drivebeats-metadata-updated" || !event.newValue) return;
     try {
       const { accountId } = JSON.parse(event.newValue) as {
@@ -559,7 +601,7 @@ export function startMetadataIndex() {
                     ? catalog.tracks
                     : [];
                 const nextKey = `metadata:${accountId}:${signature}:${catalog?.fetchedAt ?? 0}`;
-                const nextStamp = `${METADATA_PARSER_VERSION}:${METADATA_POLICY_VERSION}:${getKnownTrackDescriptorRevision()}:${useId3MetadataStore.getState().generation}`;
+                const nextStamp = `${METADATA_PARSER_VERSION}:${METADATA_POLICY_VERSION}:${getKnownTrackDescriptorRevision()}:${useId3MetadataStore.getState().generation}:${retryRevision}`;
                 if (progressKey !== nextKey) {
                   progressKey = nextKey;
                   progress = decodeProgress(
@@ -688,11 +730,11 @@ export function startMetadataIndex() {
                     .peekRecord(known.track, metadataEnvironmentKey());
                   if (!valid()) break;
                   if (cached.freshness === "current" && cached.record) {
-                    if (!isMetadataBudgetDeferred(cached.record)) {
+                    if (!isMetadataRetryPending(cached.record)) {
                       retries.delete(track.id);
                       continue;
                     }
-                    const at = getMetadataBudgetRetryAt(cached.record);
+                    const at = getMetadataRetryAt(cached.record);
                     if (at > Date.now()) {
                       retries.set(track.id, { track, at });
                       continue;
@@ -718,7 +760,8 @@ export function startMetadataIndex() {
                   if (!valid()) break;
                   attempted = true;
                   const terminal =
-                    result.metadata.freshness === "current" &&
+                    (result.metadata.freshness === "current" ||
+                      result.metadata.attemptComplete) &&
                     ["ready", "no_target_tags", "unresolved"].includes(
                       result.metadata.status,
                     );

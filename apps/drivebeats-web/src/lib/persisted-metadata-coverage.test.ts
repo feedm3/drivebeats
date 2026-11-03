@@ -57,7 +57,7 @@ beforeEach(() => {
   fixtures.records = {};
 });
 describe("persisted metadata coverage beyond the memory cache", () => {
-  it("keeps memory and durable budget deferrals pending while counting real parse failures", async () => {
+  it("counts memory and durable reader limits as processed unavailable metadata", async () => {
     const tracks = [
       track("parse"),
       track("memory-budget"),
@@ -91,10 +91,10 @@ describe("persisted metadata coverage beyond the memory cache", () => {
     expect(result).toMatchObject({
       total: 3,
       checked: 0,
-      unresolved: 1,
-      unknown: 2,
-      remaining: 2,
-      unresolvedReasons: { parse_error: 1 },
+      unresolved: 3,
+      unknown: 0,
+      remaining: 0,
+      unresolvedReasons: { parse_error: 1, budget_exceeded: 2 },
       metadataSearchComplete: false,
     });
     expect(fixtures.records["durable-budget"]).toBeUndefined();

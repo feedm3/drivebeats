@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Id3Metadata } from "@/lib/id3-metadata";
 import {
   clearMetadataCache,
+  invalidateMetadataFailure,
   loadMetadataCache,
   loadMetadataRecord,
   saveMetadataRecord,
@@ -62,6 +63,10 @@ interface Id3MetadataState {
     record: MetadataRecord,
     expectedFingerprint?: string,
   ) => Promise<boolean>;
+  retryUnavailableRecord: (
+    track: MetadataDescriptor,
+    environmentKey?: string,
+  ) => Promise<void>;
   setMetadata: (fileId: string, metadata: CachedId3Metadata) => void;
   requestMetadata: (
     fileId: string,
@@ -480,6 +485,56 @@ export const useId3MetadataStore = create<Id3MetadataState>((set, get) => ({
       return { records, cache, durable: state.durable && durable };
     });
     return true;
+  },
+
+  retryUnavailableRecord: async (track, environmentKey) => {
+    const { accountId, generation } = get();
+    const epoch = storageEpoch;
+    if (!accountId) return;
+    const cached = await get().peekRecord(track, environmentKey);
+    if (
+      get().accountId !== accountId ||
+      get().generation !== generation ||
+      !cached.record ||
+      cached.freshness !== "current" ||
+      cached.record.status !== "unresolved"
+    )
+      return;
+    const record = cached.record;
+    const invalidated = get().durable
+      ? await invalidateMetadataFailure(record, epoch)
+      : {
+          ...record,
+          policyVersion: -1,
+          checkedAt: Math.max(Date.now(), record.checkedAt + 1),
+        };
+    if (
+      !invalidated ||
+      get().accountId !== accountId ||
+      get().generation !== generation
+    )
+      return;
+    const current = get().records[track.id];
+    if (
+      !current ||
+      (current.status === "unresolved" &&
+        current.checkedAt === record.checkedAt)
+    )
+      set((state) => ({
+        records: { ...state.records, [track.id]: invalidated },
+      }));
+    try {
+      localStorage.setItem(
+        "drivebeats-metadata-updated",
+        JSON.stringify({
+          accountId,
+          fileId: track.id,
+          checkedAt: invalidated.checkedAt,
+        }),
+      );
+    } catch {
+      /* The local invalidation remains valid without cross-tab notifications. */
+    }
   },
 
   setMetadata: (fileId, metadata) => {

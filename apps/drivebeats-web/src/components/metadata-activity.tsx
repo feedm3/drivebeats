@@ -1,5 +1,5 @@
 "use client";
-import { ChevronDown, Info, Loader2 } from "lucide-react";
+import { ChevronDown, Info, Loader2, Pause } from "lucide-react";
 import { memo, useEffect, useId, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { restoreDriveAppData } from "@/lib/drive-appdata-client";
 import { getMetadataUnresolvedDiagnostics } from "@/lib/metadata-diagnostics";
 import {
   getMetadataIndexStatus,
+  retryUnavailableMetadata,
   useMetadataIndexStore,
 } from "@/lib/metadata-index-coordinator";
 import { useDriveAppDataStore } from "@/stores/drive-appdata-store";
@@ -38,21 +39,31 @@ const REASON_COPY: Record<string, { title: string; explanation: string }> = {
     title: "Track unavailable",
     explanation: "Track not found in Google Drive.",
   },
+  budget_exceeded: {
+    title: "Reading limit reached",
+    explanation:
+      "Metadata could not be read within the supported reading limits.",
+  },
 };
 const UNKNOWN_REASON = {
   title: "Metadata unavailable",
   explanation: "The track's metadata could not be read during this check.",
 };
-const TIMED_PAUSE_REASONS = new Set([
-  "waiting",
-  "rate_limited",
-  "budget_exceeded",
-  "temporarily_unavailable",
-  "coordination_unavailable",
-  "metadata_auth_required",
-  "metadata_setup_error",
-  "drive_auth_required",
-]);
+const PAUSE_COPY: Record<string, string> = {
+  offline: "Metadata checks are paused while you are offline.",
+  hidden: "Metadata checks are paused while DriveBeats is in the background.",
+  data_saver: "Metadata checks are paused while data saving is enabled.",
+  slow_connection: "Metadata checks are paused on this slow connection.",
+  hydrating: "Metadata checks are waiting for your Library to load.",
+  rate_limited:
+    "Google Drive is busy. Metadata checks will resume automatically.",
+  metadata_auth_required:
+    "Metadata checks are waiting for sign-in. Sign in again to continue.",
+  drive_auth_required:
+    "Metadata checks are waiting for sign-in. Sign in again to continue.",
+  metadata_setup_error:
+    "Metadata checks are unavailable because of a connection setup problem. Playback may still work.",
+};
 type Diagnostics = Awaited<ReturnType<typeof getMetadataUnresolvedDiagnostics>>;
 
 export const MetadataActivity = memo(function MetadataActivity() {
@@ -61,7 +72,6 @@ export const MetadataActivity = memo(function MetadataActivity() {
       revision: state.revision,
       running: state.running,
       pauseReason: state.pauseReason,
-      retryAt: state.retryAt,
     })),
   );
   useLibrarySearchStore(
@@ -77,6 +87,26 @@ export const MetadataActivity = memo(function MetadataActivity() {
   const [open, setOpen] = useState(false);
   const [retryingRestore, setRetryingRestore] = useState(false);
   const [restoreRetryFailed, setRestoreRetryFailed] = useState(false);
+  const [metadataRetry, setMetadataRetry] = useState<{
+    scope: number;
+    pending: boolean;
+    failed: boolean;
+  } | null>(null);
+  const visibleRetry =
+    metadataRetry?.scope === status.coverageScopeVersion ? metadataRetry : null;
+  const retryUnavailable = async () => {
+    const scope = status.coverageScopeVersion;
+    setMetadataRetry({ scope, pending: true, failed: false });
+    let failed = false;
+    try {
+      await retryUnavailableMetadata();
+    } catch {
+      failed = true;
+    }
+    setMetadataRetry((current) =>
+      current?.scope === scope ? { scope, pending: false, failed } : current,
+    );
+  };
   const backupAccountId = useDriveAppDataStore((state) => state.accountId);
   const retryRestore = async () => {
     if (!backupAccountId) return;
@@ -127,11 +157,8 @@ export const MetadataActivity = memo(function MetadataActivity() {
       status.indexingState === "complete")
   )
     return null;
-  const animate =
-    status.total === null ||
-    status.indexingState === "running" ||
-    status.indexingState === "paused" ||
-    status.coveragePending;
+  const animate = status.indexingState === "running" && !status.pauseReason;
+  const paused = !finished && Boolean(status.pauseReason);
   return (
     <Popover open={open} onOpenChange={(nextOpen) => setOpen(nextOpen)}>
       <PopoverTrigger
@@ -151,7 +178,13 @@ export const MetadataActivity = memo(function MetadataActivity() {
               : "inline-flex"
           }
         >
-          <Loader2 aria-hidden="true" />
+          {animate ? (
+            <Loader2 aria-hidden="true" />
+          ) : paused ? (
+            <Pause aria-hidden="true" />
+          ) : (
+            <Info aria-hidden="true" />
+          )}
         </span>
       </PopoverTrigger>
       <PopoverContent
@@ -280,36 +313,30 @@ export const MetadataActivity = memo(function MetadataActivity() {
                 </p>
               )}
             </div>
-          ) : status.pauseReason === "waiting" &&
-            status.nextRetryAt &&
-            status.remaining !== null ? (
-            <p className="text-muted-foreground">
-              {status.remaining} {status.remaining === 1 ? "track" : "tracks"}{" "}
-              remaining.
-            </p>
           ) : status.pauseReason ? (
             <p className="text-muted-foreground">
-              {status.pauseReason === "metadata_auth_required" ||
-              status.pauseReason === "drive_auth_required"
-                ? "Metadata checks are waiting for sign-in. Sign in again to continue."
-                : status.pauseReason === "metadata_setup_error"
-                  ? "Metadata checks are unavailable because of a connection setup problem. Playback may still work."
-                  : "Waiting. Metadata checks will continue when available."}
+              {PAUSE_COPY[status.pauseReason] ??
+                "Metadata checks are paused. They will resume automatically."}
             </p>
           ) : null}
-          {!finished &&
-          TIMED_PAUSE_REASONS.has(status.pauseReason ?? "") &&
-          status.nextRetryAt ? (
-            <p className="text-muted-foreground">
-              Next retry scheduled for{" "}
-              <time dateTime={new Date(status.nextRetryAt).toISOString()}>
-                {new Date(status.nextRetryAt).toLocaleString(undefined, {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
-              </time>
-              .
-            </p>
+          {status.unresolved > 0 ? (
+            <div className="flex flex-col gap-2">
+              <Button
+                variant="outline"
+                className="min-h-11 min-w-11"
+                disabled={visibleRetry?.pending ?? false}
+                onClick={() => void retryUnavailable()}
+              >
+                {visibleRetry?.pending
+                  ? "Preparing retry…"
+                  : "Retry unavailable metadata"}
+              </Button>
+              {visibleRetry?.failed ? (
+                <p role="alert" className="text-muted-foreground">
+                  Metadata retry could not start. Try again.
+                </p>
+              ) : null}
+            </div>
           ) : null}
           {status.sessionOnlyCatalog ? (
             <p className="text-muted-foreground">

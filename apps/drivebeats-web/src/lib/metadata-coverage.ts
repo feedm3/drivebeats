@@ -17,11 +17,7 @@ export function buildMetadataCoverage(
   const fields = { title: 0, artist: 0, album: 0 };
   for (const track of tracks ?? []) {
     const value = getState(track);
-    // Budget limits defer another bounded attempt; they are never read failures.
-    // Include old persisted outcomes and transient consumer/background deferrals.
-    if ((value.reason ?? value.error?.code) === "budget_exceeded")
-      counts.unknown += 1;
-    else if (value.freshness === "stale") counts.stale += 1;
+    if (value.freshness === "stale") counts.stale += 1;
     else if (value.freshness === "current" && value.status === "ready") {
       counts.ready += 1;
       for (const field of ["title", "artist", "album"] as const)
@@ -31,7 +27,10 @@ export function buildMetadataCoverage(
       value.status === "no_target_tags"
     )
       counts.noTargetTags += 1;
-    else if (value.freshness === "current" && value.status === "unresolved") {
+    else if (
+      (value.freshness === "current" || value.attemptComplete) &&
+      value.status === "unresolved"
+    ) {
       counts.unresolved += 1;
       const reason = value.reason ?? value.error?.code ?? "unknown";
       unresolvedReasons[reason] = (unresolvedReasons[reason] ?? 0) + 1;

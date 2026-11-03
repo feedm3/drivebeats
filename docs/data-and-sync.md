@@ -18,6 +18,28 @@ Google Drive access policy remains in [AGENTS.md](../AGENTS.md).
 - Restore saved tags before missing-tag extraction. WebMCP `cache_only` stays
   network-free.
 
+## Metadata completion
+
+Metadata checking is best effort. Unsupported formats, decoding failures,
+inaccessible or missing tracks and per-track reading limits finish as unavailable
+metadata. Temporary track-request
+failures get one automatic retry after a short pause; a repeated failure also
+finishes as unavailable. Versioned failure records and their attempt counts are
+device-local and survive reloads. They are not portable tags or Google Drive
+backup content.
+
+Offline access, sign-in, backup restore, endpoint setup outages, provider cooldowns
+and shared request queues or allowances pause the worker rather than consuming
+a track's retry allowance.
+The progress control animates during active checking and remains static while
+paused or finished. Unavailable outcomes count as processed attempts, without
+claiming complete metadata coverage for Library Search.
+
+An explicit metadata retry reopens only unavailable outcomes in the current
+Library and account, preserving successful tags. Changed content or a changed
+metadata reader makes old outcomes eligible for checking again. Navigation and
+refresh do not reopen unchanged, versioned terminal outcomes.
+
 ## Conditional reads
 
 Collection sync and portable restore may reuse a completed snapshot within the

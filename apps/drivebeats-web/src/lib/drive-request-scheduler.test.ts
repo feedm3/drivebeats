@@ -66,6 +66,32 @@ afterEach(async () => {
 });
 
 describe("shared Drive transport", () => {
+  it("reports each queue entry before a blocked request is granted", async () => {
+    const blocker = await scheduleDriveRequest(
+      async () => new Response("audio"),
+      {
+        accountId: "queue-observation",
+        priority: "playback",
+      },
+    );
+    const events: string[] = [];
+    const request = vi.fn(async () => new Response("metadata"));
+    const pending = scheduleDriveRequest(request, {
+      accountId: "queue-observation",
+      priority: "navigation",
+      onQueued: () => events.push("queued"),
+      onGranted: () => events.push("granted"),
+    }).then((response) => response.text());
+    try {
+      expect(events).toEqual(["queued"]);
+      expect(request).not.toHaveBeenCalled();
+    } finally {
+      await blocker.text();
+      await pending.catch(() => {});
+    }
+    expect(await pending).toBe("metadata");
+    expect(events).toEqual(["queued", "granted"]);
+  });
   it.each(["headers", "body"])(
     "bounds protected navigation %s after grant and releases playback",
     async (phase) => {

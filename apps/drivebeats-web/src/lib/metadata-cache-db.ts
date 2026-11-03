@@ -128,6 +128,41 @@ export async function saveMetadataRecord(
   }
 }
 
+/** Compare-and-stale one failed attempt without overwriting a newer success. */
+export async function invalidateMetadataFailure(
+  record: MetadataRecord,
+  epoch: number,
+): Promise<MetadataRecord | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Metadata storage is unavailable.");
+  const tx = db.transaction(["records", "epochs"], "readwrite");
+  const currentEpoch =
+    (await tx.objectStore("epochs").get(record.accountId)) ?? 0;
+  const current = await tx
+    .objectStore("records")
+    .get([record.accountId, record.fileId]);
+  if (
+    currentEpoch !== epoch ||
+    !current ||
+    current.status !== "unresolved" ||
+    current.checkedAt !== record.checkedAt ||
+    current.fingerprint !== record.fingerprint ||
+    current.retryCount !== record.retryCount ||
+    current.policyVersion !== record.policyVersion
+  ) {
+    await tx.done;
+    return null;
+  }
+  const invalidated = {
+    ...current,
+    policyVersion: -1,
+    checkedAt: Math.max(Date.now(), current.checkedAt + 1),
+  };
+  await tx.objectStore("records").put(invalidated);
+  await tx.done;
+  return invalidated;
+}
+
 export async function clearMetadataCache(accountId: string): Promise<boolean> {
   try {
     const db = await getDb();

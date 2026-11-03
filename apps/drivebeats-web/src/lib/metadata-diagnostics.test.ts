@@ -116,7 +116,23 @@ beforeEach(() => {
 });
 
 describe("cache-only metadata issue details", () => {
-  it("lists genuine failures but excludes memory, durable and legacy budget deferrals without media reads", async () => {
+  it("explains scope-only unavailable attempts without inventing a persisted content version", async () => {
+    catalog(["unversioned"]);
+    mocks.states.set("unversioned", {
+      status: "unresolved",
+      freshness: "unknown",
+      attemptComplete: true,
+      reason: "not_found",
+    });
+    const result = await getMetadataUnresolvedDiagnostics();
+    expect(result).toMatchObject({
+      total: 1,
+      reasons: [{ code: "not_found", count: 1 }],
+      tracks: [{ id: "unversioned", reason: "not_found", retryable: false }],
+    });
+    expect(mocks.store.records).toEqual({});
+  });
+  it("lists saved reader limits including legacy records but excludes shared budget pauses", async () => {
     catalog([
       "parse",
       "large",
@@ -151,20 +167,20 @@ describe("cache-only metadata issue details", () => {
     const result = await getMetadataUnresolvedDiagnostics();
     expect(result).toMatchObject({
       available: true,
-      total: 1,
+      total: 4,
       truncated: false,
-      reasons: [{ code: "parse_error", count: 1 }],
-      tracks: [
-        {
-          id: "parse",
-          fileName: "parse.mp3",
-          reason: "parse_error",
-          retryable: false,
-        },
+      reasons: [
+        { code: "parse_error", count: 1 },
+        { code: "budget_exceeded", count: 3 },
       ],
     });
     expect(result.tracks.map((row) => row.id)).not.toContain("temporary");
-    expect(result.tracks.map((row) => row.id)).toEqual(["parse"]);
+    expect(result.tracks.map((row) => row.id)).toEqual([
+      "parse",
+      "large",
+      "memory-budget",
+      "legacy-budget",
+    ]);
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });

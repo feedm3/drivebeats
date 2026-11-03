@@ -97,7 +97,9 @@ export async function readDriveTrackMetadata(
       if (
         proxyError === "invalid_origin" ||
         proxyError === "invalid_input" ||
-        proxyError === "service_unavailable"
+        proxyError === "service_unavailable" ||
+        proxyError === "auth_unavailable" ||
+        proxyError === "appdata_not_ready"
       )
         throw new MetadataReadError("metadata_setup_error", true);
       if (
@@ -110,10 +112,7 @@ export async function readDriveTrackMetadata(
         throw new MetadataReadError("timeout", true);
       if (proxyError === "incomplete_range")
         throw new MetadataReadError("transport_error", true);
-      if (
-        proxyError === "provider_unavailable" ||
-        proxyError === "auth_unavailable"
-      )
+      if (proxyError === "provider_unavailable")
         throw new MetadataReadError("transport_error", true);
       if (
         proxyError === "provider_invalid_response" ||

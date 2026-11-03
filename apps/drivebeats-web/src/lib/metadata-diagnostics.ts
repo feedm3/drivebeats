@@ -6,9 +6,11 @@ import {
 import { scanMetadataRecords } from "@/lib/metadata-cache-db";
 import {
   getMetadataFreshness,
+  isMetadataRetryPending,
   type MetadataRecord,
 } from "@/lib/metadata-cache-types";
 import { getLocalMetadataAccountId } from "@/lib/metadata-local-account";
+import { getTrackMetadataState } from "@/lib/track-metadata-loader";
 import { useId3MetadataStore } from "@/stores/id3-metadata-store";
 import {
   getLibrarySearchImportsSignature,
@@ -93,7 +95,7 @@ export async function getMetadataUnresolvedDiagnostics(
     if (
       record?.accountId === accountId &&
       record.status === "unresolved" &&
-      record.reason !== "budget_exceeded" &&
+      !isMetadataRetryPending(record) &&
       getMetadataFreshness(record, known.track, environment) === "current"
     ) {
       const reason = record.reason ?? "unknown";
@@ -102,6 +104,15 @@ export async function getMetadataUnresolvedDiagnostics(
         status: "unresolved",
         retryable: false,
         checkedAt: record.checkedAt,
+      });
+      return;
+    }
+    const session = getTrackMetadataState(known);
+    if (session.attemptComplete && session.status === "unresolved") {
+      issues.set(fileId, {
+        reason: session.reason ?? session.error?.code ?? "unknown",
+        status: "unresolved",
+        retryable: false,
       });
       return;
     }

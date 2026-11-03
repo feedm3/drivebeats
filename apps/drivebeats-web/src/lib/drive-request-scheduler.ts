@@ -32,6 +32,7 @@ export interface DriveRequestOptions {
   maxAttempts?: number;
   maxBytes?: number;
   budget?: DriveRequestBudget;
+  onQueued?: () => void;
   onGranted?: () => void;
   headersTimeoutMs?: number;
 }
@@ -363,6 +364,7 @@ export function scheduleDriveRequest(
 ): Promise<Response> {
   const accountId = accountFor(options);
   options.signal?.throwIfAborted();
+  options.onQueued?.();
   if (queue.length >= 100)
     return Promise.reject(new DriveDeferredError("busy"));
   const controller = new AbortController();

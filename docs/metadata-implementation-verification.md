@@ -174,3 +174,45 @@ The single focused Claude follow-up also completed successfully (16 turns, exit 
 Final validation passed **741 tests in 69 files**, lint/type checking, production build, and `git diff --check`. The final scoped React Doctor run reports 88/100 with two `await inside a loop` warnings in the sparse reader. Both were inspected: range loading must remain sequential to honor shared transport ownership, accounting and cancellation, and later frame offsets depend on the headers just read. Parallelizing those operations would be incorrect; no suppression or configuration change was added.
 
 Firefox 151.0 verification was repeated on the corrected local production build, including all six compatibility layouts (unusual IDs, raw v2.4 sizes, several artworks, overshooting artwork, and two-cover layouts before/after text); all six reached `ready` with the expected title. Deliberately slow coverage scans still published progress, saved tracks caused zero repeated media reads after reload, metadata paused/resumed at the shared budget boundary, and native WAV playback worked during that pause. At 320/428/1280 px there was no horizontal overflow and the progress control measured 44 × 44 px. The run recorded zero page or console errors. Provider/account responses were synthetic and the two-minute rollover used a controlled clock; this is not a claim of live Google authentication or deployed acceptance. No unrelated glossary or research changes are included in this follow-up's commit.
+
+## Bounded metadata checking, 3 November 2026
+
+Per-track reading limits now finish as unavailable metadata, including saved
+outcomes that previously waited hours. Transient request failures get one
+30-second retry and then finish; account/content-scoped records preserve that
+limit across reloads. Missing content validators use a bounded session outcome
+without claiming fresh metadata. Shared pauses do not consume track attempts.
+The explicit retry action reopens unavailable outcomes while preserving
+successful tags. Paused and finished states use static icons.
+
+The final isolated patch passed 990 tests in 91 suites, lint/type checking and the
+production build. Independent subagent review checked failure classification,
+subscriber timeouts, unknown validators, cross-tab success/logout fencing and
+memory-only storage. React Doctor reported one reviewed warning about serial
+local invalidations in the explicit retry action; that loop retains account
+checks between records and avoids unbounded concurrent IndexedDB work.
+
+Claude review found additional timeout and shared-pause cases. Regression tests
+now cover deadlines before a request is granted, later range reads queued behind
+playback, token refresh after an earlier request, and timeout state while local
+failure bookkeeping settles. Queue and token waits do not consume a track
+attempt. Endpoint authentication-service and backup-readiness failures use a
+shared metadata pause. The focused Claude follow-up confirmed the original
+three findings were resolved; the final small timeout guards were independently
+reproduced and verified with targeted tests afterward.
+
+A browser harness was rerun against the isolated patch after the review fixes.
+It exercised the actual progress UI, coordinator, loader, known
+track resolver, request coordinator and IndexedDB, with synthetic account,
+catalog and provider-read fixtures. A saved reading-limit outcome finished
+without reading that track. A transport failure made two attempts and settled;
+reload made no further reads. Explicit retry recovered both unavailable tracks
+after their fixture became readable, while the successful track stayed at one
+read. A shared restore pause did not consume another media attempt. At 320 and
+428 pixels the progress/details controls were 44 × 44 pixels, the retry action
+was 44 pixels high, no horizontal overflow occurred, and finished progress had
+no animation. The browser recorded no console errors. Local evidence is in the
+ignored `.cache/metadata-simplification/` directory.
+
+This verifies local behavior with controlled read outcomes. Live Google sign-in,
+real provider failures and production deployment were not verified in this run.

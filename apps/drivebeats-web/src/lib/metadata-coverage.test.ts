@@ -3,7 +3,25 @@ import { buildMetadataCoverage } from "@/lib/metadata-coverage";
 import type { MetadataView } from "@/lib/track-metadata-loader";
 
 describe("truthful complete-library coverage", () => {
-  it("counts stored budget limits as pending alongside genuine parse failures", () => {
+  it("finishes a scope-only failed attempt without claiming fresh or complete search metadata", () => {
+    expect(
+      buildMetadataCoverage(
+        [{ id: "unversioned", name: "track.mp3", mimeType: "audio/mpeg" }],
+        () => ({
+          status: "unresolved",
+          freshness: "unknown",
+          attemptComplete: true,
+          reason: "not_found",
+        }),
+      ),
+    ).toMatchObject({
+      checked: 0,
+      unresolved: 1,
+      remaining: 0,
+      metadataSearchComplete: false,
+    });
+  });
+  it("finishes saved per-track reading limits while leaving shared budget deferrals pending", () => {
     const states: MetadataView[] = [
       { status: "unresolved", freshness: "current", reason: "parse_error" },
       { status: "unresolved", freshness: "current", reason: "budget_exceeded" },
@@ -33,11 +51,12 @@ describe("truthful complete-library coverage", () => {
     ).toMatchObject({
       total: 5,
       checked: 0,
-      unresolved: 1,
-      unknown: 4,
-      stale: 0,
-      remaining: 4,
-      unresolvedReasons: { parse_error: 1 },
+      unresolved: 2,
+      unknown: 1,
+      errors: 1,
+      stale: 1,
+      remaining: 3,
+      unresolvedReasons: { parse_error: 1, budget_exceeded: 1 },
       metadataSearchComplete: false,
     });
   });

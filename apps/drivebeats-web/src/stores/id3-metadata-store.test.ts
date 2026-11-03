@@ -32,6 +32,15 @@ vi.mock("@/lib/metadata-cache-db", () => ({
     );
     return true;
   },
+  invalidateMetadataFailure: async (record: MetadataRecord) => {
+    const invalidated = {
+      ...record,
+      policyVersion: -1,
+      checkedAt: record.checkedAt + 1,
+    };
+    mocks.records.set(`${record.accountId}:${record.fileId}`, invalidated);
+    return invalidated;
+  },
   clearMetadataCache: async (accountId: string) => {
     if ((await mocks.clear()) === false) return false;
     for (const [key, record] of mocks.records)
@@ -64,6 +73,46 @@ beforeEach(() => {
 });
 
 describe("browser-local tag lifecycle", () => {
+  it("allows an explicit retry when unavailable metadata exists only in memory", async () => {
+    const store = await load();
+    await store.getState().setAccount("a");
+    await store.getState().putRecord(descriptor, {
+      status: "unresolved",
+      reason: "parse_error",
+      loadedVia: "drive_range",
+    });
+    store.setState({ durable: false });
+    mocks.records.clear();
+    await store.getState().retryUnavailableRecord(descriptor);
+    expect(store.getState().getRecord(descriptor).freshness).toBe("stale");
+    expect(store.getState().accountId).toBe("a");
+    expect(mocks.records.size).toBe(0);
+  });
+  it("retries disk-only environment-bound failures without removing successful tags", async () => {
+    const store = await load();
+    await store.getState().setAccount("a");
+    await store.getState().putRecord(descriptor, {
+      status: "unresolved",
+      reason: "range_unsupported",
+      loadedVia: "drive_range",
+      environmentKey: "environment",
+    });
+    const ready = { ...descriptor, id: "ready" };
+    await store.getState().putRecord(ready, {
+      status: "ready",
+      tags: { title: "Retained" },
+      loadedVia: "drive_range",
+    });
+    const success = store.getState().records.ready;
+    store.setState({ records: { ready: success } });
+    await store.getState().retryUnavailableRecord(descriptor, "environment");
+    expect(
+      store.getState().getRecord(descriptor, "environment").freshness,
+    ).toBe("stale");
+    expect(mocks.records.get("a:track")?.policyVersion).toBe(-1);
+    expect(store.getState().records.ready).toEqual(success);
+    expect(store.getState().cache.ready.title).toBe("Retained");
+  });
   it("reports failure when durable cache deletion fails while still fencing old writes", async () => {
     const store = await load();
     await store.getState().setAccount("a");

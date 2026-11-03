@@ -18,6 +18,7 @@ const fixtures = vi.hoisted(() => ({
   status: vi.fn(),
   diagnostics: vi.fn(),
   restore: vi.fn(),
+  retryUnavailable: vi.fn(),
 }));
 vi.mock("@/lib/drive-appdata-client", () => ({
   restoreDriveAppData: fixtures.restore,
@@ -35,6 +36,7 @@ vi.mock("@/lib/metadata-index-coordinator", async () => {
       retryAt: 0,
     })),
     getMetadataIndexStatus: fixtures.status,
+    retryUnavailableMetadata: fixtures.retryUnavailable,
   };
 });
 vi.mock("@/lib/track-metadata-loader", async () => {
@@ -99,6 +101,7 @@ vi.mock("@/components/ui/popover", async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   fixtures.restore.mockResolvedValue(undefined);
+  fixtures.retryUnavailable.mockResolvedValue(undefined);
   useDriveAppDataStore.setState(useDriveAppDataStore.getInitialState(), true);
   fixtures.status.mockReturnValue({
     indexingState: "running",
@@ -139,39 +142,34 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("metadata activity subscriptions", () => {
-  it("counts unreadable attempts as processed and updates the scheduled retry independently", () => {
-    const nextRetryAt = Date.now() + 30 * 60_000;
-    const status = {
+  it("keeps paused work static while retaining processed counts without a retry schedule", () => {
+    fixtures.status.mockReturnValue({
       indexingState: "paused",
       total: 10,
       checked: 7,
       unresolved: 2,
       remaining: 1,
       pauseReason: "waiting",
-      coveragePending: false,
+      coveragePending: true,
       observedAt: 1,
-      nextRetryAt,
-    };
-    fixtures.status.mockReturnValue(status);
+      nextRetryAt: Date.now() + 6 * 60 * 60_000,
+    });
     const view = render(<MetadataActivity />);
     fireEvent.click(
       screen.getByRole("button", { name: "Music metadata progress" }),
     );
     expect(screen.getByText("9 of 10 processed")).toBeVisible();
     expect(screen.getByText("2 tracks could not be read.")).toBeVisible();
-    expect(screen.getByText("1 track remaining.")).toBeVisible();
-    expect(screen.getByText(/Next retry scheduled for/)).toBeVisible();
-    expect(view.container.querySelector("time")).toHaveAttribute(
-      "dateTime",
-      new Date(nextRetryAt).toISOString(),
-    );
-    const laterRetryAt = nextRetryAt + 30 * 60_000;
-    fixtures.status.mockReturnValue({ ...status, nextRetryAt: laterRetryAt });
-    act(() => useMetadataIndexStore.setState({ retryAt: laterRetryAt }));
-    expect(view.container.querySelector("time")).toHaveAttribute(
-      "dateTime",
-      new Date(laterRetryAt).toISOString(),
-    );
+    expect(
+      screen.getByText(
+        "Metadata checks are paused. They will resume automatically.",
+      ),
+    ).toBeVisible();
+    expect(view.container.querySelector(".animate-spin")).toBeNull();
+    expect(view.container.querySelector(".lucide-pause")).not.toBeNull();
+    expect(
+      screen.queryByText(/Next retry scheduled for/),
+    ).not.toBeInTheDocument();
   });
 
   it("finishes with unreadable tracks and suppresses stale waiting information", () => {
@@ -201,46 +199,75 @@ describe("metadata activity subscriptions", () => {
     expect(view.container.querySelector(".animate-spin")).toBeNull();
   });
 
-  it("does not describe unattempted tracks as retries during a mid-scan pause", () => {
+  it("offers one explicit retry action for unavailable metadata and reports preparation failures", async () => {
     fixtures.status.mockReturnValue({
-      indexingState: "paused",
+      indexingState: "partial",
       total: 10,
-      checked: 2,
-      unresolved: 1,
-      remaining: 7,
-      pauseReason: "waiting",
-      nextRetryAt: Date.now() + 60_000,
+      checked: 8,
+      unresolved: 2,
+      remaining: 0,
+      pauseReason: null,
       coveragePending: false,
+      coverageScopeVersion: 1,
       observedAt: 1,
     });
-    render(<MetadataActivity />);
+    let rejectRetry!: (error: Error) => void;
+    fixtures.retryUnavailable.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectRetry = reject;
+      }),
+    );
+    const view = render(<MetadataActivity />);
     fireEvent.click(
       screen.getByRole("button", { name: "Music metadata progress" }),
     );
-    expect(screen.getByText("3 of 10 processed")).toBeVisible();
-    expect(screen.getByText("7 tracks remaining.")).toBeVisible();
-    expect(screen.queryByText(/awaiting retry/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Next retry scheduled for/)).toBeVisible();
+    expect(view.container.querySelector(".animate-spin")).toBeNull();
+    expect(view.container.querySelector(".lucide-info")).not.toBeNull();
+    const retry = screen.getByRole("button", {
+      name: "Retry unavailable metadata",
+    });
+    expect(retry).toHaveClass("min-h-11", "min-w-11");
+    expect(fixtures.retryUnavailable).not.toHaveBeenCalled();
+    fireEvent.click(retry);
+    expect(fixtures.retryUnavailable).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole("button", { name: "Preparing retry…" }),
+    ).toBeDisabled();
+    await act(async () => rejectRetry(new Error("local cache unavailable")));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Metadata retry could not start. Try again.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Retry unavailable metadata" }),
+    ).toBeEnabled();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry unavailable metadata" }),
+    );
+    await waitFor(() =>
+      expect(fixtures.retryUnavailable).toHaveBeenCalledTimes(2),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("10 of 10 processed")).toBeVisible();
   });
 
   it.each([
-    "appdata_restore_required",
-    "offline",
-    "hidden",
-    "hydrating",
-    "data_saver",
-    "slow_connection",
+    ["offline", "Metadata checks are paused while you are offline."],
+    [
+      "rate_limited",
+      "Google Drive is busy. Metadata checks will resume automatically.",
+    ],
   ])(
-    "does not promise a timed retry while blocked by %s despite an old cooldown",
-    (pauseReason) => {
+    "explains %s without presenting a pause as active work",
+    (pauseReason, message) => {
       fixtures.status.mockReturnValue({
         indexingState: "paused",
         total: 10,
-        checked: 7,
-        unresolved: 2,
-        remaining: 1,
+        checked: 2,
+        unresolved: 0,
+        remaining: 8,
         pauseReason,
-        nextRetryAt: Date.now() + 60_000,
         coveragePending: false,
         observedAt: 1,
       });
@@ -248,15 +275,54 @@ describe("metadata activity subscriptions", () => {
       fireEvent.click(
         screen.getByRole("button", { name: "Music metadata progress" }),
       );
-      expect(screen.getByText("9 of 10 processed")).toBeVisible();
+      expect(screen.getByText(message)).toBeVisible();
+      expect(view.container.querySelector(".animate-spin")).toBeNull();
       expect(
-        screen.queryByText(/Next retry scheduled for/),
+        screen.queryByRole("button", { name: "Retry unavailable metadata" }),
       ).not.toBeInTheDocument();
-      expect(view.container.querySelector("time")).toBeNull();
     },
   );
 
-  it("keeps discovery truthful when a visible track waits before the Library catalog is ready", () => {
+  it("does not carry a retry failure into a replacement Library scope", async () => {
+    const status = {
+      indexingState: "partial",
+      total: 10,
+      checked: 8,
+      unresolved: 2,
+      remaining: 0,
+      pauseReason: null,
+      coveragePending: false,
+      coverageScopeVersion: 1,
+      observedAt: 1,
+    };
+    fixtures.status.mockReturnValue(status);
+    let rejectRetry!: (error: Error) => void;
+    fixtures.retryUnavailable.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectRetry = reject;
+      }),
+    );
+    render(<MetadataActivity />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Music metadata progress" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry unavailable metadata" }),
+    );
+    fixtures.status.mockReturnValue({ ...status, coverageScopeVersion: 2 });
+    act(() =>
+      useMetadataIndexStore.setState((state) => ({
+        revision: state.revision + 1,
+      })),
+    );
+    expect(
+      screen.getByRole("button", { name: "Retry unavailable metadata" }),
+    ).toBeEnabled();
+    await act(async () => rejectRetry(new Error("account changed")));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps discovery truthful when paused before the Library catalog is ready", () => {
     fixtures.status.mockReturnValue({
       indexingState: "paused",
       total: null,
@@ -264,16 +330,18 @@ describe("metadata activity subscriptions", () => {
       unresolved: 0,
       remaining: null,
       pauseReason: "waiting",
-      nextRetryAt: Date.now() + 30_000,
+      coveragePending: true,
       catalogItemsDiscovered: 0,
     });
-    render(<MetadataActivity />);
+    const view = render(<MetadataActivity />);
     fireEvent.click(
       screen.getByRole("button", { name: "Music metadata progress" }),
     );
     expect(screen.getByText("Checking your Library…")).toBeVisible();
-    expect(screen.queryByText(/tracks remaining/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Next retry scheduled for/)).toBeVisible();
+    expect(view.container.querySelector(".animate-spin")).toBeNull();
+    expect(
+      screen.queryByText(/tracks remaining|Next retry/),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the open details panel stable while row jobs and unrelated parent tooltip state stream", () => {
@@ -312,7 +380,7 @@ describe("metadata activity subscriptions", () => {
     expect(screen.getByText("100 of 3000 processed")).toBeInTheDocument();
     expect(fixtures.status).toHaveBeenCalledTimes(2);
   });
-  it("keeps the same animation through count updates and pauses between reads", () => {
+  it("keeps the animation through active count updates and stops it during pauses", () => {
     const view = render(<MetadataActivity />);
     const spinner = view.container.querySelector(".animate-spin");
     expect(spinner).not.toBeNull();
@@ -348,8 +416,12 @@ describe("metadata activity subscriptions", () => {
           revision: state.revision + 1,
         })),
       );
-      expect(view.container.querySelector(".animate-spin")).toBe(spinner);
-      expect(spinner).toHaveClass("motion-reduce:animate-none");
+      if (pauseReason)
+        expect(view.container.querySelector(".animate-spin")).toBeNull();
+      else
+        expect(view.container.querySelector(".animate-spin")).toHaveClass(
+          "motion-reduce:animate-none",
+        );
     }
   });
   it("shows readable failure reasons and saved track names only after the accessible expand action", async () => {

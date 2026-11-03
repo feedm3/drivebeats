@@ -186,6 +186,41 @@ describe("DriveBeats WebMCP actions", () => {
     expect(fetchCloudLibrarySync).not.toHaveBeenCalled();
     expect(useLibrarySearchStore.getState().ensureReady).not.toHaveBeenCalled();
   });
+  it("reads a restored queue from verified saved collections without rebuilding the catalog or starting playback", async () => {
+    const saved = { ...track, id: "saved-only", name: "Saved only.mp3" };
+    useImportedDriveStore.setState({ rootFiles: [] });
+    useLibrarySearchStore.setState({ catalog: null, status: "idle" });
+    usePlayerStore.setState({
+      playbackAccountId: null,
+      playbackCursor: 0,
+      playbackSequence: [
+        { entryId: "restored", track: saved, sourceIndex: 0, folderStack: [] },
+      ],
+    });
+    expect(await run("drivebeats_get_queue")).toMatchObject({
+      ok: false,
+      error: { code: "queue_unverified" },
+    });
+    vi.mocked(fetchCloudLibrarySync).mockResolvedValue({
+      playlists: [
+        { id: "p", name: "Saved", tracks: [createPlaylistTrack(saved)] },
+      ],
+      favorites: [],
+    });
+    await run("drivebeats_list_collections");
+    expect(await run("drivebeats_get_queue")).toMatchObject({
+      ok: true,
+      entries: [{ entryId: "restored", track: { id: "saved-only" } }],
+    });
+    expect(useLibrarySearchStore.getState().ensureReady).not.toHaveBeenCalled();
+    expect(usePlayerStore.getState().isPlaying).toBe(false);
+    const first = await run("drivebeats_get_queue");
+    expect(
+      await run("drivebeats_get_queue", {
+        revision: `previous-page:${first.revision}`,
+      }),
+    ).toMatchObject({ ok: false, error: { code: "queue_changed" } });
+  });
   it("does not expose a restored foreign queue", async () => {
     usePlayerStore.setState({
       playbackAccountId: "other",
@@ -1410,7 +1445,7 @@ describe("shared local metadata tools", () => {
     expect(first).toMatchObject({
       ok: true,
       total: 2,
-      search: { format: "compact", query: "", complete: true },
+      search: { format: "compact", query: null, complete: true },
       tracks: [
         {
           id: "imported",
@@ -1433,6 +1468,14 @@ describe("shared local metadata tools", () => {
       search: { format: "compact" },
       nextCursor: null,
     });
+    expect(
+      await run("drivebeats_search_library", {
+        cursor: first.nextCursor,
+        format: "compact",
+        filters: {},
+        limit: 1,
+      }),
+    ).toMatchObject({ ok: true, search: { format: "compact" } });
     expect(
       await run("drivebeats_search_library", {
         cursor: first.nextCursor,

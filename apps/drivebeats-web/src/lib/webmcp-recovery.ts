@@ -71,10 +71,11 @@ export function webMcpRecovery(
       };
     case "queue_unverified":
       return {
-        action: "open_library",
+        action: "verify_queue",
         message:
-          "Open or play your Library on the page to verify the saved queue for this account.",
+          "Read saved collections or search the Library to verify the restored queue, then read the queue again.",
         automaticRetry: false,
+        verificationTool: "drivebeats_list_collections",
       };
     case "search_snapshot_expired":
     case "search_changed":

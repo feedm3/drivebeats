@@ -193,7 +193,7 @@ const searchSnapshots = createSearchSnapshots<
   | ReturnType<typeof compactTrack>,
   SearchContext
 >();
-let queueRevision = 0;
+let queueRevision = crypto.randomUUID();
 usePlayerStore.subscribe((state, previous) => {
   if (
     state.playbackSequence !== previous.playbackSequence ||
@@ -203,7 +203,7 @@ usePlayerStore.subscribe((state, previous) => {
     state.playbackAccountId !== previous.playbackAccountId ||
     state.queuedAccountId !== previous.queuedAccountId
   )
-    queueRevision++;
+    queueRevision = crypto.randomUUID();
 });
 async function backupStatus(userId: string) {
   const pending = await getDriveAppDataLogoutState();
@@ -252,7 +252,7 @@ async function backupStatus(userId: string) {
 useAuthStore.subscribe((state, previous) => {
   if (state.user?.id !== previous.user?.id || state.isLoggingOut) {
     searchSnapshots.clear();
-    queueRevision++;
+    queueRevision = crypto.randomUUID();
   }
 });
 function ownedCatalog() {
@@ -768,7 +768,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
     ),
     tool(
       "drivebeats_search_library",
-      "Browse or search the imported Library to discover music, curate Playlists, or select what to play. Omit query or use an empty string to browse all tracks. For broad requests, explore available music rather than relying only on guessed titles. Use format compact for discovery; detailed includes folder context. Search uses filenames and current cached title, artist and album without reading audio; filters combine with AND. Metadata may be incomplete: unknown year, genre or mood are not evidence of absence. Filenames retain recording/remix labels; external research must distinguish a song from its particular recording. Follow nextCursor until null for a complete scan, checking search.complete for restrictions. Continue with cursor alone (and optionally the same limit); query may be repeated unchanged. Filters and format are retained. Active scans renew a five-minute idle timeout, capped at thirty minutes. Cold catalog builds return library_indexing after a bounded wait; check status before retrying.",
+      "Browse or search the imported Library to discover music, curate Playlists, or select what to play. Omit query or use an empty string to browse all tracks. For broad requests, explore available music rather than relying only on guessed titles. Use format compact for discovery; detailed includes folder context. Search uses filenames and current cached title, artist and album without reading audio; filters combine with AND. Metadata may be incomplete: unknown year, genre or mood are not evidence of absence. Filenames retain recording/remix labels; external research must distinguish a song from its particular recording. Follow nextCursor until null for a complete scan, checking search.complete for restrictions. Continue with cursor alone or repeat unchanged query, limit, filters and format; options are retained. Active scans renew a five-minute idle timeout, capped at thirty minutes. Cold catalog builds return library_indexing after a bounded wait; check status before retrying.",
       z.object({
         query: z
           .string()
@@ -794,10 +794,10 @@ export function createDriveBeatsTools(): WebMcpTool[] {
           | ReturnType<typeof searchSnapshots.start>
           | ReturnType<typeof searchSnapshots.continue>;
         if (cursor) {
-          if (format !== undefined || filters !== undefined || offset !== 0)
+          if (offset !== 0)
             throw new ToolError(
               "invalid_input",
-              "Continue with cursor alone and optionally the same query or limit. Filters and format are retained.",
+              "Continue with cursor and no offset; search options are retained and may be repeated unchanged.",
             );
           if (!current) throw new SearchSnapshotError("search_changed");
           result = searchSnapshots.continue(
@@ -806,6 +806,18 @@ export function createDriveBeatsTools(): WebMcpTool[] {
             scope(),
             query,
             limit,
+            (context) => {
+              if (
+                (format !== undefined && format !== context?.format) ||
+                (filters !== undefined &&
+                  JSON.stringify(filters) !==
+                    JSON.stringify(context?.filters ?? {}))
+              )
+                throw new ToolError(
+                  "invalid_input",
+                  "Search options changed. Start a new search without a cursor, or repeat the original options.",
+                );
+            },
           );
         } else {
           const catalogTracks = await library(userId, signal);
@@ -924,7 +936,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
         return {
           ...pageResult,
           search: {
-            query: snapshotQuery,
+            query: snapshotQuery || null,
             format: context?.format ?? "detailed",
             filters: context?.filters ?? {},
             searchFields: [
@@ -1114,7 +1126,7 @@ export function createDriveBeatsTools(): WebMcpTool[] {
       "Read the current browser's Playback Queue in the same order as the page, including played, current and upcoming occurrences. Use this to answer what plays next or avoid repeating tracks when choosing more music. Repeated tracks have distinct entryIds. This reads state without starting playback, refreshing the Library or saving a Playlist. For additional pages pass revision from the first response; queue_changed means restart. Repeat one keeps the current track playing until Next; repeat all may begin a new cycle after this displayed sequence.",
       z.strictObject({
         ...page,
-        revision: z.number().int().nonnegative().optional(),
+        revision: id.optional(),
       }),
       true,
       async ({ offset, limit, revision }, userId) => {
@@ -1125,7 +1137,6 @@ export function createDriveBeatsTools(): WebMcpTool[] {
             "The Playback Queue changed. Read again from offset zero.",
           );
         const entries = getPlaybackQueueTracks(state);
-        const catalog = ownedCatalog();
         if (
           entries.some(({ track, sourceIndex }) => {
             const owner =
@@ -1134,12 +1145,12 @@ export function createDriveBeatsTools(): WebMcpTool[] {
                 : state.playbackAccountId;
             return owner
               ? owner !== userId
-              : !catalog?.tracks.some((item) => item.id === track.id);
+              : !resolveKnownTrack(userId, track.id);
           })
         )
           throw new ToolError(
             "queue_unverified",
-            "The saved queue has not been verified for this account. Open or play your Library on the page first.",
+            "The saved queue has not been verified for this account. Read saved collections or search the Library, then read the queue again.",
           );
         return {
           observedAt: Date.now(),

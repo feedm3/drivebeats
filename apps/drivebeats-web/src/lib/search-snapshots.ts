@@ -136,6 +136,7 @@ export function createSearchSnapshots<T, Context = undefined>(now = Date.now) {
       scope: string,
       query?: string,
       limit?: number,
+      validateContext?: (context: Context | undefined) => void,
     ) {
       prune();
       const continuation = cursors.get(cursor);
@@ -149,6 +150,7 @@ export function createSearchSnapshots<T, Context = undefined>(now = Date.now) {
         (limit !== undefined && snapshot.limit !== limit)
       )
         throw new SearchSnapshotError("search_changed");
+      validateContext?.(structuredClone(snapshot.context));
       return page(continuation.key, snapshot, continuation.position);
     },
     clear() {

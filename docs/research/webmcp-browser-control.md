@@ -80,20 +80,23 @@ their existing behavior.
   Library, not a way to search unimported saved tracks. Unknown tags do not match
   tag filters. Collection filters verify saved collections through ordinary sync;
   tag-only discovery does not need that extra read.
-- Follow `nextCursor` with cursor alone (or the same query/limit). Format, filters,
-  membership and track data remain frozen in that search. To change them, start
-  a new search. `expiresAt` renews after successful reads: five minutes idle,
-  thirty minutes absolute. The four-snapshot, 50,000-row and 16 MiB limits remain.
+- Follow `nextCursor` with cursor alone (or repeat unchanged search options).
+  Format, filters, membership and track data remain frozen. To change them, start
+  a new search. `search.query` reports the original query on all pages, with
+  `null` for empty browsing. `expiresAt` renews after successful reads: five
+  minutes idle, thirty minutes absolute. Rejected changes to search options do
+  not renew the idle timeout. The four-snapshot, 50,000-row and 16 MiB limits remain.
   Account/import changes invalidate results. `search.complete: false` means a
   restricted result, even if `nextCursor` is null. Metadata coverage is separate
   from catalog/result completeness.
 - `drivebeats_get_queue` reads the same finite sequence shown by the Queue UI,
   including played/current/upcoming occurrences, distinct `entryId`s, current
   index, shuffle and repeat. It neither starts playback nor refreshes the Library.
-  Pass the returned `revision` with later offset pages; a change returns
-  `queue_changed`, requiring a fresh read. Restored entries need current-account
-  ownership or catalog verification. Repeat-one and repeat-all behavior is
-  described rather than pretending the finite list predicts infinite playback.
+  Pass the returned opaque `revision` with later offset pages; a change or page
+  reload returns `queue_changed`, requiring a fresh read. Restored entries need current-account
+  ownership or verification through the shared known-track resolver, including
+  verified saved collections even when the catalog is unavailable. Repeat-one
+  and repeat-all behavior is described rather than predicting infinite playback.
 - `drivebeats_status.backup` separates this device's pending operations/checkpoints,
   confirmed saved metadata count and last save from metadata extraction coverage.
   A clean backup does not mean every track has tags or every device is up to date.
@@ -126,3 +129,14 @@ identity, active/idle/absolute cursor expiry, duplicate queue occurrences,
 revision changes, account isolation and incomplete backup checkpoints. Re-run
 these natural-language workflows after changes; a correct tool contract alone
 does not establish that every agent will persist or choose suitable music.
+
+### Review verification on 3 November 2026
+
+An isolated local browser exercised the real WebMCP tool handlers with synthetic
+account, catalog and collection state. Checks covered a restored queue blocked
+before collection verification and readable afterward, foreign queue rejection,
+compact pagination with repeated options, rejection of changed options, rejection
+of a previous page's queue revision after reload, and signed-out rejection. No
+API or Google Drive requests occurred, and queue reads did not start playback.
+The browser fixture supplied cloud readiness and collection verification; it did
+not verify Google sign-in, Drive import, real collection sync or audible playback.

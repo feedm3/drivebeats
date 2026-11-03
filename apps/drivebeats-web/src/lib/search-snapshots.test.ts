@@ -60,6 +60,33 @@ describe("search snapshots", () => {
       "search_snapshot_expired",
     );
   });
+  it("does not renew the idle timeout when continuation options are rejected", () => {
+    let time = 0;
+    const snapshots = createSearchSnapshots<
+      { id: string; title: string },
+      { format: string }
+    >(() => time);
+    const cursor =
+      snapshots.start({ ...input, context: { format: "compact" } })
+        .nextCursor ?? "";
+    time = 4 * 60_000;
+    expect(() =>
+      snapshots.continue(
+        cursor,
+        "a",
+        "imports:v1",
+        undefined,
+        undefined,
+        (context) => {
+          if (context?.format !== "detailed") throw new Error("invalid_input");
+        },
+      ),
+    ).toThrow("invalid_input");
+    time = 5 * 60_000;
+    expect(() => snapshots.continue(cursor, "a", "imports:v1")).toThrow(
+      "search_snapshot_expired",
+    );
+  });
   it("evicts the oldest of four account snapshots", () => {
     const snapshots = createSearchSnapshots<{ id: string; title: string }>();
     const cursor = snapshots.start(input).nextCursor ?? "";

@@ -139,13 +139,150 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("metadata activity subscriptions", () => {
+  it("counts unreadable attempts as processed and updates the scheduled retry independently", () => {
+    const nextRetryAt = Date.now() + 30 * 60_000;
+    const status = {
+      indexingState: "paused",
+      total: 10,
+      checked: 7,
+      unresolved: 2,
+      remaining: 1,
+      pauseReason: "waiting",
+      coveragePending: false,
+      observedAt: 1,
+      nextRetryAt,
+    };
+    fixtures.status.mockReturnValue(status);
+    const view = render(<MetadataActivity />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Music metadata progress" }),
+    );
+    expect(screen.getByText("9 of 10 processed")).toBeVisible();
+    expect(screen.getByText("2 tracks could not be read.")).toBeVisible();
+    expect(screen.getByText("1 track remaining.")).toBeVisible();
+    expect(screen.getByText(/Next retry scheduled for/)).toBeVisible();
+    expect(view.container.querySelector("time")).toHaveAttribute(
+      "dateTime",
+      new Date(nextRetryAt).toISOString(),
+    );
+    const laterRetryAt = nextRetryAt + 30 * 60_000;
+    fixtures.status.mockReturnValue({ ...status, nextRetryAt: laterRetryAt });
+    act(() => useMetadataIndexStore.setState({ retryAt: laterRetryAt }));
+    expect(view.container.querySelector("time")).toHaveAttribute(
+      "dateTime",
+      new Date(laterRetryAt).toISOString(),
+    );
+  });
+
+  it("finishes with unreadable tracks and suppresses stale waiting information", () => {
+    fixtures.status.mockReturnValue({
+      indexingState: "partial",
+      total: 10,
+      checked: 8,
+      unresolved: 2,
+      remaining: 0,
+      pauseReason: "waiting",
+      nextRetryAt: Date.now() + 30 * 60_000,
+      coveragePending: false,
+      observedAt: 1,
+    });
+    const view = render(<MetadataActivity />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Music metadata progress" }),
+    );
+    expect(screen.getByText("10 of 10 processed")).toBeVisible();
+    expect(screen.getByText("Metadata processing finished.")).toBeVisible();
+    expect(screen.getByText("2 tracks could not be read.")).toBeVisible();
+    expect(
+      screen.queryByText(
+        /Waiting|awaiting retry|Next retry|Finishing these checks/,
+      ),
+    ).not.toBeInTheDocument();
+    expect(view.container.querySelector(".animate-spin")).toBeNull();
+  });
+
+  it("does not describe unattempted tracks as retries during a mid-scan pause", () => {
+    fixtures.status.mockReturnValue({
+      indexingState: "paused",
+      total: 10,
+      checked: 2,
+      unresolved: 1,
+      remaining: 7,
+      pauseReason: "waiting",
+      nextRetryAt: Date.now() + 60_000,
+      coveragePending: false,
+      observedAt: 1,
+    });
+    render(<MetadataActivity />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Music metadata progress" }),
+    );
+    expect(screen.getByText("3 of 10 processed")).toBeVisible();
+    expect(screen.getByText("7 tracks remaining.")).toBeVisible();
+    expect(screen.queryByText(/awaiting retry/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Next retry scheduled for/)).toBeVisible();
+  });
+
+  it.each([
+    "appdata_restore_required",
+    "offline",
+    "hidden",
+    "hydrating",
+    "data_saver",
+    "slow_connection",
+  ])(
+    "does not promise a timed retry while blocked by %s despite an old cooldown",
+    (pauseReason) => {
+      fixtures.status.mockReturnValue({
+        indexingState: "paused",
+        total: 10,
+        checked: 7,
+        unresolved: 2,
+        remaining: 1,
+        pauseReason,
+        nextRetryAt: Date.now() + 60_000,
+        coveragePending: false,
+        observedAt: 1,
+      });
+      const view = render(<MetadataActivity />);
+      fireEvent.click(
+        screen.getByRole("button", { name: "Music metadata progress" }),
+      );
+      expect(screen.getByText("9 of 10 processed")).toBeVisible();
+      expect(
+        screen.queryByText(/Next retry scheduled for/),
+      ).not.toBeInTheDocument();
+      expect(view.container.querySelector("time")).toBeNull();
+    },
+  );
+
+  it("keeps discovery truthful when a visible track waits before the Library catalog is ready", () => {
+    fixtures.status.mockReturnValue({
+      indexingState: "paused",
+      total: null,
+      checked: 0,
+      unresolved: 0,
+      remaining: null,
+      pauseReason: "waiting",
+      nextRetryAt: Date.now() + 30_000,
+      catalogItemsDiscovered: 0,
+    });
+    render(<MetadataActivity />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Music metadata progress" }),
+    );
+    expect(screen.getByText("Checking your Library…")).toBeVisible();
+    expect(screen.queryByText(/tracks remaining/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Next retry scheduled for/)).toBeVisible();
+  });
+
   it("keeps the open details panel stable while row jobs and unrelated parent tooltip state stream", () => {
     const view = render(
       <div data-tooltip="0">
         <MetadataActivity />
       </div>,
     );
-    expect(screen.getByText("1 of 3000 checked")).toBeInTheDocument();
+    expect(screen.getByText("1 of 3000 processed")).toBeInTheDocument();
     for (let tick = 1; tick <= 100; tick++) {
       act(() => {
         useMetadataLoaderStore.setState({ revision: tick });
@@ -172,7 +309,7 @@ describe("metadata activity subscriptions", () => {
         revision: state.revision + 1,
       })),
     );
-    expect(screen.getByText("100 of 3000 checked")).toBeInTheDocument();
+    expect(screen.getByText("100 of 3000 processed")).toBeInTheDocument();
     expect(fixtures.status).toHaveBeenCalledTimes(2);
   });
   it("keeps the same animation through count updates and pauses between reads", () => {
@@ -246,7 +383,7 @@ describe("metadata activity subscriptions", () => {
       screen.getByText("This audio format is not supported yet."),
     ).toBeVisible();
     const heading = screen.getByText("Music metadata");
-    const count = screen.getByText("82 of 2913 checked");
+    const count = screen.getByText("86 of 2913 processed");
     const spinner = view.container.querySelector(".animate-spin");
     fixtures.status.mockReturnValue({
       indexingState: "running",
@@ -264,7 +401,7 @@ describe("metadata activity subscriptions", () => {
         revision: state.revision + 1,
       })),
     );
-    expect(screen.getByText("82 of 2913 checked")).toBe(count);
+    expect(screen.getByText("86 of 2913 processed")).toBe(count);
     expect(screen.getByText("Music metadata")).toBe(heading);
     expect(expand).toHaveAttribute("aria-expanded", "true");
     expect(view.container.querySelector(".animate-spin")).toBe(spinner);
@@ -284,9 +421,9 @@ describe("metadata activity subscriptions", () => {
         revision: state.revision + 1,
       })),
     );
-    expect(screen.getByText("83 of 2913 checked")).toBe(count);
+    expect(screen.getByText("87 of 2913 processed")).toBe(count);
     expect(screen.getByText("Music metadata")).toBe(heading);
-    expect(screen.queryByText("0 of 2913 checked")).not.toBeInTheDocument();
+    expect(screen.queryByText("0 of 2913 processed")).not.toBeInTheDocument();
     expect(fixtures.diagnostics).toHaveBeenCalledOnce();
   });
 
@@ -392,7 +529,7 @@ describe("metadata activity subscriptions", () => {
       })),
     );
     expect(screen.getByText("Music metadata")).toBe(heading);
-    expect(screen.getByText("3000 of 3000 checked")).toBeInTheDocument();
+    expect(screen.getByText("3000 of 3000 processed")).toBeInTheDocument();
     expect(view.container.querySelector(".animate-spin")).toBeNull();
     fireEvent.click(
       screen.getByRole("button", { name: "Music metadata progress" }),

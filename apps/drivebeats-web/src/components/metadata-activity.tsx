@@ -43,6 +43,16 @@ const UNKNOWN_REASON = {
   title: "Metadata unavailable",
   explanation: "The track's metadata could not be read during this check.",
 };
+const TIMED_PAUSE_REASONS = new Set([
+  "waiting",
+  "rate_limited",
+  "budget_exceeded",
+  "temporarily_unavailable",
+  "coordination_unavailable",
+  "metadata_auth_required",
+  "metadata_setup_error",
+  "drive_auth_required",
+]);
 type Diagnostics = Awaited<ReturnType<typeof getMetadataUnresolvedDiagnostics>>;
 
 export const MetadataActivity = memo(function MetadataActivity() {
@@ -51,6 +61,7 @@ export const MetadataActivity = memo(function MetadataActivity() {
       revision: state.revision,
       running: state.running,
       pauseReason: state.pauseReason,
+      retryAt: state.retryAt,
     })),
   );
   useLibrarySearchStore(
@@ -60,6 +71,8 @@ export const MetadataActivity = memo(function MetadataActivity() {
     })),
   );
   const status = getMetadataIndexStatus();
+  const finished =
+    status.indexingState === "partial" || status.indexingState === "complete";
   const detailsId = useId();
   const [open, setOpen] = useState(false);
   const [retryingRestore, setRetryingRestore] = useState(false);
@@ -155,7 +168,7 @@ export const MetadataActivity = memo(function MetadataActivity() {
                   : "Checking your Library…"
                 : status.coveragePending && status.observedAt === null
                   ? "Checking your Library…"
-                  : `${status.checked} of ${status.total} checked`}
+                  : `${status.checked + status.unresolved} of ${status.total} processed`}
             </p>
           </div>
           {status.unresolved > 0 ? (
@@ -240,7 +253,11 @@ export const MetadataActivity = memo(function MetadataActivity() {
               </p>
             ) : null}
           </section>
-          {status.pauseReason === "appdata_restore_required" ? (
+          {finished ? (
+            <p className="text-muted-foreground">
+              Metadata processing finished.
+            </p>
+          ) : status.pauseReason === "appdata_restore_required" ? (
             <div className="flex flex-col gap-2">
               <p className="text-muted-foreground">
                 Metadata checks are paused until your Google Drive backup is
@@ -263,6 +280,13 @@ export const MetadataActivity = memo(function MetadataActivity() {
                 </p>
               )}
             </div>
+          ) : status.pauseReason === "waiting" &&
+            status.nextRetryAt &&
+            status.remaining !== null ? (
+            <p className="text-muted-foreground">
+              {status.remaining} {status.remaining === 1 ? "track" : "tracks"}{" "}
+              remaining.
+            </p>
           ) : status.pauseReason ? (
             <p className="text-muted-foreground">
               {status.pauseReason === "metadata_auth_required" ||
@@ -273,14 +297,29 @@ export const MetadataActivity = memo(function MetadataActivity() {
                   : "Waiting. Metadata checks will continue when available."}
             </p>
           ) : null}
+          {!finished &&
+          TIMED_PAUSE_REASONS.has(status.pauseReason ?? "") &&
+          status.nextRetryAt ? (
+            <p className="text-muted-foreground">
+              Next retry scheduled for{" "}
+              <time dateTime={new Date(status.nextRetryAt).toISOString()}>
+                {new Date(status.nextRetryAt).toLocaleString(undefined, {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </time>
+              .
+            </p>
+          ) : null}
           {status.sessionOnlyCatalog ? (
             <p className="text-muted-foreground">
               Library progress is available for this session only.
             </p>
           ) : null}
           <p className="border-foreground/10 border-t pt-3 text-pretty text-muted-foreground">
-            Finishing these checks helps you find more tracks by title, artist,
-            and album.
+            {finished
+              ? "Available metadata helps you find tracks by title, artist, and album."
+              : "Finishing these checks helps you find more tracks by title, artist, and album."}
           </p>
         </div>
       </PopoverContent>

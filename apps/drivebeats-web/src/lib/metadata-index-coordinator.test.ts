@@ -624,17 +624,18 @@ describe("automatic metadata coordinator", () => {
       userId: "account",
       importsSignature: "imports",
       fetchedAt: 13,
-      tracks: [track("limited"), track("good")],
+      tracks: [track("later"), track("limited"), track("good")],
     };
     const checkedAt = Date.now();
     fixtures.loadedCache.mockImplementation(async (file) =>
-      file.id === "limited"
+      file.id !== "good"
         ? {
             freshness: "current",
             record: {
               status: "unresolved",
               reason: "budget_exceeded",
               checkedAt,
+              retryCount: file.id === "later" ? 2 : 1,
             },
           }
         : { freshness: "unknown" },
@@ -646,6 +647,9 @@ describe("automatic metadata coordinator", () => {
     );
     expect(coordinator.useMetadataIndexStore.getState().pauseReason).toBe(
       "waiting",
+    );
+    expect(coordinator.getMetadataIndexStatus().nextRetryAt).toBe(
+      checkedAt + 30 * 60_000,
     );
     await vi.advanceTimersByTimeAsync(30 * 60_000);
     expect(fixtures.ensure.mock.calls.map(([known]) => known.track.id)).toEqual(

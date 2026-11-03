@@ -266,6 +266,13 @@ export function getMetadataIndexStatus() {
     !coveragePending && coverage.metadataSearchComplete;
   const state = useMetadataIndexStore.getState();
   const coordination = accountId ? getDriveCoordinationStatus(accountId) : null;
+  const now = Date.now();
+  const retryAfterMs = Math.max(
+    0,
+    state.retryAt - now,
+    coordination?.retryAfterMs ?? 0,
+    coordination?.metadataRetryAfterMs ?? 0,
+  );
   return {
     ...coverage,
     metadataSearchComplete,
@@ -283,12 +290,8 @@ export function getMetadataIndexStatus() {
             ? "paused"
             : "idle",
     pauseReason: state.pauseReason,
-    retryAfterMs: Math.max(
-      0,
-      state.retryAt - Date.now(),
-      coordination?.retryAfterMs ?? 0,
-      coordination?.metadataRetryAfterMs ?? 0,
-    ),
+    retryAfterMs,
+    nextRetryAt: retryAfterMs > 0 ? now + retryAfterMs : null,
     sessionOnlyCatalog: useLibrarySearchStore.getState().sessionOnly,
     catalogItemsDiscovered: useLibrarySearchStore.getState().buildProgress,
     coordinationAvailable: coordination?.available ?? false,
@@ -789,6 +792,9 @@ export function startMetadataIndex() {
                 if (!valid()) break;
                 const pending =
                   libraryRemaining > 0 || priorityOffset < priorities.length;
+                const nearestRetry = Math.min(
+                  ...[...retries.values()].map((item) => item.at),
+                );
                 const status = getMetadataIndexStatus();
                 useMetadataIndexStore.setState((state) => ({
                   revision: state.revision + (attempted ? 1 : 0),
@@ -801,11 +807,12 @@ export function startMetadataIndex() {
                   pauseReason:
                     globalPause ??
                     (!pending && retries.size ? "waiting" : null),
-                  retryAt: progress.retryAt,
+                  // Publish the next eligible track attempt, not just scan pacing.
+                  retryAt:
+                    !pending && retries.size
+                      ? Math.max(progress.retryAt, nearestRetry)
+                      : progress.retryAt,
                 }));
-                const nearestRetry = Math.min(
-                  ...[...retries.values()].map((item) => item.at),
-                );
                 const delay =
                   progress.retryAt > Date.now()
                     ? Math.min(2000, progress.retryAt - Date.now())

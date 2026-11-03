@@ -165,8 +165,8 @@ export const MetadataActivity = memo(function MetadataActivity() {
         render={
           <Button
             variant="ghost"
-            size="icon"
-            className="min-h-11 min-w-11"
+            size="icon-sm"
+            className="text-muted-foreground"
             aria-label="Music metadata progress"
           />
         }

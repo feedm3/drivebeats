@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getAppDataContext } from "@/lib/appdata-context";
+import {
+  getAppDataContext,
+  getAppDataContextForSession,
+} from "@/lib/appdata-context";
 import { readAppDataCommand } from "@/lib/appdata-request";
 import { appDataHeaders, withAppDataErrors } from "@/lib/appdata-response";
 import { getServerAuthSession } from "@/lib/server-auth";
@@ -13,11 +16,16 @@ export const GET = withAppDataErrors(async function GET(request: Request) {
       { error: "App-folder approval and migration required" },
       { status: 403, headers: appDataHeaders },
     );
-  const { identity, service } = await getAppDataContext(session.user);
+  const { identity, service } = await getAppDataContextForSession(session);
   const cursor = new URL(request.url).searchParams.get("cursor") ?? undefined;
-  return NextResponse.json(await service.readPage(identity, cursor), {
-    headers: appDataHeaders,
-  });
+  const checkpoint =
+    request.headers.get("X-DriveBeats-Checkpoint") ?? undefined;
+  return NextResponse.json(
+    await service.readPage(identity, cursor, checkpoint),
+    {
+      headers: appDataHeaders,
+    },
+  );
 });
 
 export const POST = withAppDataErrors(async function POST(request: Request) {

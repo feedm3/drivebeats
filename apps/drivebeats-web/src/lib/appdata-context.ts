@@ -1,6 +1,6 @@
 import { AppDataError } from "@/db/appdata-control";
 import { getGoogleOAuthGrant } from "@/db/google-oauth-grants";
-import type { AuthUser } from "@/lib/auth-session";
+import type { AuthSession, AuthUser } from "@/lib/auth-session";
 import { getDriveAppDataService } from "@/lib/drive-appdata-service";
 import { hasRequiredGoogleScopes, refreshAccessToken } from "@/lib/google";
 import { decryptGoogleRefreshToken } from "@/lib/google-grant-encryption";
@@ -12,6 +12,16 @@ export async function getAppDataContext(
   allowIncomplete = false,
 ) {
   const session = await getServerAuthSession({ allowIncomplete });
+  return contextForSession(user, session);
+}
+
+/** Reuse a session already checked by this route; service reads still fence
+ * their identity before and after provider access. Never cache across requests. */
+export async function getAppDataContextForSession(session: AuthSession) {
+  return contextForSession(session.user, session);
+}
+
+async function contextForSession(user: AuthUser, session: AuthSession | null) {
   if (
     !session?.accountGeneration ||
     session.user.id !== user.id ||

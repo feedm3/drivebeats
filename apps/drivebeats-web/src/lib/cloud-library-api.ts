@@ -13,6 +13,12 @@ import type { Playlist, PlaylistTrack } from "@/types";
 
 const CLOUD_API_TIMEOUT_MS = 30_000;
 const COLLECTION_JOURNAL_LOCK = "drivebeats-collection-journal-v1";
+let collectionSnapshot: {
+  accountId: string;
+  generation: string;
+  checkpoint: string;
+  payload: CloudLibrarySyncPayload;
+} | null = null;
 
 function orderedCollectionSaves(prefix: string) {
   const entries = Object.keys(window.localStorage)
@@ -46,6 +52,7 @@ async function writeCollectionJournal<T>(action: () => T) {
 }
 
 export async function clearPendingCollectionSaves() {
+  collectionSnapshot = null;
   const clear = () => {
     for (const key of Object.keys(window.localStorage))
       if (key.startsWith("drivebeats-collection-outbox-v1:"))
@@ -201,7 +208,7 @@ async function request(
       window.clearTimeout(timeoutId);
     }
 
-    if (!response.ok) {
+    if (!response.ok && !(!init?.method && response.status === 304)) {
       // Definitively rejected operations never entered the durable server queue.
       if (outboxKey && [400, 401, 403, 404, 422].includes(response.status))
         await removeCollectionSave(outboxKey);
@@ -243,8 +250,40 @@ async function request(
 
 export async function fetchCloudLibrarySync() {
   await resumeCollectionSaves();
-  const response = await request("/api/sync/library");
-  return (await response.json()) as CloudLibrarySyncPayload;
+  const { accountId, generation } = useDriveAppDataStore.getState();
+  const cached =
+    collectionSnapshot?.accountId === accountId &&
+    collectionSnapshot.generation === generation
+      ? collectionSnapshot
+      : null;
+  const response = await request("/api/sync/library", {
+    headers: cached ? { "X-DriveBeats-Checkpoint": cached.checkpoint } : {},
+  });
+  if (response.status === 304) {
+    if (
+      !cached ||
+      response.headers.get("X-DriveBeats-Checkpoint") !== cached.checkpoint
+    )
+      throw new Error("Invalid collection checkpoint");
+    return structuredClone(cached.payload);
+  }
+  const payload = (await response.json()) as CloudLibrarySyncPayload;
+  const checkpoint = response.headers.get("X-DriveBeats-Checkpoint");
+  const current = useDriveAppDataStore.getState();
+  if (
+    checkpoint &&
+    accountId &&
+    generation &&
+    current.accountId === accountId &&
+    current.generation === generation
+  )
+    collectionSnapshot = {
+      accountId,
+      generation,
+      checkpoint,
+      payload: structuredClone(payload),
+    };
+  return payload;
 }
 
 let replayFlight: Promise<void> | null = null;

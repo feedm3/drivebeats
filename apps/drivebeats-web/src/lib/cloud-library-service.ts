@@ -6,7 +6,10 @@ import {
   isAppDataLegacySourceAvailable,
 } from "@/db/appdata-control";
 import { getSql } from "@/db/client";
-import { getAppDataContext } from "@/lib/appdata-context";
+import {
+  getAppDataContext,
+  getAppDataContextForSession,
+} from "@/lib/appdata-context";
 import { appDataControl } from "@/lib/appdata-control-service";
 import type { AuthSession, AuthUser } from "@/lib/auth-session";
 import type { CloudLibrarySyncPayload } from "@/lib/cloud-library-shared";
@@ -111,6 +114,18 @@ export async function getCloudLibrarySyncPayload(
 ): Promise<CloudLibrarySyncPayload> {
   const { identity, service } = await getAppDataContext(user);
   return readCollections((await service.readCollections(identity)).envelopes);
+}
+
+export async function getCloudLibrarySyncResult(
+  session: AuthSession,
+  checkpoint?: string,
+) {
+  const { identity, service } = await getAppDataContextForSession(session);
+  const saved = await service.readCollections(identity, checkpoint ?? "");
+  return {
+    checkpoint: saved.checkpoint,
+    payload: saved.unchanged ? null : readCollections(saved.envelopes),
+  };
 }
 
 async function mutate(

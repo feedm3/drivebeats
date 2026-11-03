@@ -51,6 +51,7 @@ interface RemoteData {
   envelopes: Envelope[];
   cutoff?: string | null;
   migrationVersion?: number;
+  checkpoint?: string;
 }
 interface Command {
   operationId: string;
@@ -67,6 +68,8 @@ let restoreRetryAttempts = 0;
 let session = 0;
 let revision = 0;
 let restoreFlight: Promise<void> | null = null;
+// Valid only after a complete restore in this live session; never persisted.
+let restoredCheckpoint: string | undefined;
 let flushFlight: Promise<void> | null = null;
 let checkpointFlight: Promise<void> | null = null;
 let checkpointSession = -1;
@@ -292,7 +295,17 @@ async function request(path: string, init?: RequestInit) {
 async function readRemoteData(
   accountId: string,
   captured: number,
-): Promise<RemoteData> {
+): Promise<RemoteData>;
+async function readRemoteData(
+  accountId: string,
+  captured: number,
+  checkpoint: string | undefined,
+): Promise<RemoteData | null>;
+async function readRemoteData(
+  accountId: string,
+  captured: number,
+  checkpoint?: string,
+): Promise<RemoteData | null> {
   const envelopes: Envelope[] = [];
   const completed = new Set<string>();
   const cursors = new Set<string>();
@@ -303,6 +316,7 @@ async function readRemoteData(
     source?: string;
     migrationVersion?: number;
     cutoff?: string | null;
+    checkpoint?: string;
   } | null = null;
   let partialId: string | null = null;
   let partial: Uint8Array[] = [];
@@ -312,6 +326,13 @@ async function readRemoteData(
     if (!current(accountId, captured)) throw new Error("scope_changed");
     const value = (await request(
       `/api/appdata${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+      {
+        cache: "no-store",
+        headers:
+          !cursor && checkpoint
+            ? { "X-DriveBeats-Checkpoint": checkpoint }
+            : {},
+      },
     )) as RemoteData & {
       format?: number;
       fragments?: {
@@ -322,8 +343,18 @@ async function readRemoteData(
       }[];
       nextCursor?: string | null;
       source?: string;
+      unchanged?: boolean;
     };
     if (!current(accountId, captured)) throw new Error("scope_changed");
+    if (pageNumber === 0 && value.unchanged === true) {
+      if (
+        !checkpoint ||
+        value.checkpoint !== checkpoint ||
+        value.generation !== useDriveAppDataStore.getState().generation
+      )
+        throw new Error("invalid_backup_page");
+      return null;
+    }
     // Compatibility with pre-pagination servers; new servers always return pages.
     if (
       pageNumber === 0 &&
@@ -357,6 +388,7 @@ async function readRemoteData(
       source: value.source,
       migrationVersion: value.migrationVersion,
       cutoff: value.cutoff,
+      checkpoint: value.checkpoint,
     };
     if (!first) first = header;
     else if (JSON.stringify(header) !== JSON.stringify(first))
@@ -952,6 +984,7 @@ export function restoreDriveAppData(
     remoteVariants.clear();
     acknowledgedRoots.clear();
     revision = 0;
+    restoredCheckpoint = undefined;
     useDriveAppDataStore.setState({
       accountId,
       generation: generation ?? null,
@@ -962,54 +995,77 @@ export function restoreDriveAppData(
     });
   }
   const captured = session;
+  const checkpoint = state.status === "ready" ? restoredCheckpoint : undefined;
+  restoredCheckpoint = undefined;
   listenForLocalChanges();
   useDriveAppDataStore.setState({ status: "restoring", error: null });
   const flight = (async () => {
     if (!current(accountId, captured)) return;
     await useId3MetadataStore.getState().setAccount(accountId);
-    const data = await readRemoteData(accountId, captured);
+    let data = await readRemoteData(accountId, captured, checkpoint);
     if (!current(accountId, captured)) return;
-    // Only a truly uninitialized remote root history may adopt this browser's
-    // previous local choices. A peer removal history always takes precedence.
-    if (
-      importedState.accountGeneration &&
-      importedState.accountGeneration !== data.generation
-    ) {
-      await clearPortableCache(accountId);
-      await useId3MetadataStore.getState().resetCachedMetadata();
+    if (!data) {
+      // Root choices made during revalidation need the normal restore/rebase
+      // path. Never acknowledge a staged command solely from a checkpoint.
+      let stagedRoots = false;
+      await enqueue(async () => {
+        const pending = await readPortableCache(accountId);
+        if (!current(accountId, captured)) return;
+        stagedRoots =
+          preRestoreOperations.length > 0 ||
+          pending.some(
+            (entry) => entry.kind === "outbox" && entry.readyToSeal === false,
+          );
+        // Release queued root writers only after choosing the restore path.
+        if (!stagedRoots) useDriveAppDataStore.setState({ status: "ready" });
+      });
+      if (stagedRoots) data = await readRemoteData(accountId, captured);
+    }
+    if (!current(accountId, captured)) return;
+    if (data) {
+      // Only a truly uninitialized remote root history may adopt this browser's
+      // previous local choices. A peer removal history always takes precedence.
+      if (
+        importedState.accountGeneration &&
+        importedState.accountGeneration !== data.generation
+      ) {
+        await clearPortableCache(accountId);
+        await useId3MetadataStore.getState().resetCachedMetadata();
+        if (!current(accountId, captured)) return;
+      }
+      useImportedDriveStore.getState().bindAccount(accountId, data.generation);
+      if (
+        (!importedState.accountGeneration ||
+          importedState.accountGeneration === data.generation) &&
+        !data.envelopes.some((envelope) => envelope.kind === "roots")
+      ) {
+        preRestoreOperations.unshift(
+          ...legacyRoots.map(
+            (descriptor): RootOperation => ({
+              type: "add",
+              rootKind:
+                descriptor.mimeType === "application/vnd.google-apps.folder"
+                  ? "folder"
+                  : "track",
+              id: descriptor.id,
+              descriptor,
+            }),
+          ),
+        );
+      }
+      await applyRemote(data, accountId, captured);
+      if (!current(accountId, captured)) return;
+      if (preRestoreOperations.length) {
+        await queueImportedRootOperations(preRestoreOperations.splice(0));
+        await applyRemote(data, accountId, captured);
+      }
       if (!current(accountId, captured)) return;
     }
-    useImportedDriveStore.getState().bindAccount(accountId, data.generation);
-    if (
-      (!importedState.accountGeneration ||
-        importedState.accountGeneration === data.generation) &&
-      !data.envelopes.some((envelope) => envelope.kind === "roots")
-    ) {
-      preRestoreOperations.unshift(
-        ...legacyRoots.map(
-          (descriptor): RootOperation => ({
-            type: "add",
-            rootKind:
-              descriptor.mimeType === "application/vnd.google-apps.folder"
-                ? "folder"
-                : "track",
-            id: descriptor.id,
-            descriptor,
-          }),
-        ),
-      );
-    }
-    await applyRemote(data, accountId, captured);
-    if (!current(accountId, captured)) return;
-    if (preRestoreOperations.length) {
-      await queueImportedRootOperations(preRestoreOperations.splice(0));
-      await applyRemote(data, accountId, captured);
-    }
-    if (!current(accountId, captured)) return;
     const entries = await readPortableCache(accountId);
     if (!current(accountId, captured)) return;
     for (const entry of entries) {
-      if (entry.generation !== data.generation) continue;
+      if (entry.generation !== useDriveAppDataStore.getState().generation)
+        continue;
       if (entry.kind === "outbox" && commandFor(entry).kind === "tags") {
         for (const record of (
           commandFor(entry).payload as { records: MetadataRecord[] }
@@ -1022,11 +1078,15 @@ export function restoreDriveAppData(
       savedCount: savedTrackCount(),
     });
     await updatePending(accountId, captured);
+    if (!current(accountId, captured)) return;
     // Persist the checkpoint intent before returning, but never await a full
     // local-cache walk or its uploads in the normal-use gate.
-    await markPortableMetadataDirty(accountId, data.generation);
-    if (!current(accountId, captured)) return;
-    checkpointLocalMetadata(accountId, data.generation, captured);
+    if (data) {
+      await markPortableMetadataDirty(accountId, data.generation);
+      if (!current(accountId, captured)) return;
+      checkpointLocalMetadata(accountId, data.generation, captured);
+    }
+    restoredCheckpoint = data ? data.checkpoint : checkpoint;
     restoreRetryAttempts = 0;
     scheduleFlush();
   })()
@@ -1379,6 +1439,7 @@ export async function stopDriveAppData(
   restoreRetryAttempts = 0;
   draft = null;
   restoreFlight = null;
+  restoredCheckpoint = undefined;
   flushFlight = null;
   checkpointFlight = null;
   savedKeys.clear();

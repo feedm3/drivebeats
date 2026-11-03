@@ -24,6 +24,8 @@ interface PageCursor {
   migrationVersion: number;
   index: number;
   offset: number;
+  /** First-page inventory, authenticated by the cursor signature. */
+  checkpoint?: string;
 }
 export interface AppDataPageFragment {
   operationId: string;
@@ -40,6 +42,8 @@ export interface AppDataPage {
   cutoff: string | null;
   fragments: AppDataPageFragment[];
   nextCursor: string | null;
+  checkpoint: string;
+  unchanged?: true;
 }
 const digest = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -77,6 +81,9 @@ function decodeCursor(value: string, key: string): PageCursor {
       typeof parsed.authority !== "string" ||
       typeof parsed.manifest !== "string" ||
       typeof parsed.source !== "string" ||
+      (parsed.checkpoint !== undefined &&
+        (typeof parsed.checkpoint !== "string" ||
+          !/^[a-f0-9]{64}$/.test(parsed.checkpoint))) ||
       !Number.isSafeInteger(parsed.migrationVersion)
     )
       throw new Error();
@@ -121,10 +128,12 @@ export async function readDriveAppDataPage(
   dependencies: {
     control: AppDataControl;
     readEnvelope: (op: AppDataOperation) => Promise<AppDataEnvelope>;
+    fingerprint?: (fileIds: string[]) => Promise<string>;
     cursorSecret?: string;
   },
   identity: AppDataIdentity,
   cursor?: string,
+  checkpoint?: string,
 ): Promise<AppDataPage> {
   const { control, readEnvelope } = dependencies;
   const key = signingKey(dependencies.cursorSecret);
@@ -181,6 +190,21 @@ export async function readDriveAppDataPage(
     (state.index === selected.length && state.offset !== 0)
   )
     throw new AppDataError("appdata_invalid_cursor");
+  // Continuations already validate each envelope and the live journal. Pin the
+  // first inventory in the signed cursor instead of listing Drive on every page.
+  const snapshotCheckpoint =
+    state.checkpoint ??
+    digest([
+      identity,
+      state.revision,
+      state.authority,
+      state.manifest,
+      state.source,
+      state.migrationVersion,
+      rollout?.cleanupDueAt ?? null,
+      await dependencies.fingerprint?.(selected.map((op) => op.fileId)),
+    ]);
+  state.checkpoint = snapshotCheckpoint;
   const page: AppDataPage = {
     format: 1,
     generation: identity.generation,
@@ -190,7 +214,15 @@ export async function readDriveAppDataPage(
     cutoff: rollout?.cleanupDueAt ?? null,
     fragments: [],
     nextCursor: null,
+    checkpoint: snapshotCheckpoint,
   };
+  // Match the committed manifest, not just the reservation revision: an upload
+  // can commit without incrementing the account revision again.
+  const unchanged =
+    Boolean(dependencies.fingerprint) &&
+    !cursor &&
+    checkpoint === page.checkpoint;
+  if (unchanged) page.unchanged = true;
   const rawBudget = Math.floor((APPDATA_MAX_PAGE_BYTES * 3) / 4) - 8192;
   const envelopeBytes = (op: AppDataOperation) =>
     op.bytes +
@@ -208,6 +240,7 @@ export async function readDriveAppDataPage(
   let stop = state.index;
   let estimate = 0;
   while (
+    !unchanged &&
     stop < selected.length &&
     stop - state.index < MAX_PAGE_FILES &&
     (stop === state.index || estimate < rawBudget)
@@ -262,7 +295,8 @@ export async function readDriveAppDataPage(
       break;
     }
   }
-  if (state.index < selected.length) page.nextCursor = encodeCursor(state, key);
+  if (!unchanged && state.index < selected.length)
+    page.nextCursor = encodeCursor(state, key);
   if (Buffer.byteLength(JSON.stringify(page), "utf8") > APPDATA_MAX_PAGE_BYTES)
     throw new AppDataError("appdata_page_too_large");
   const finalAccount = await control.assertIdentity(identity);

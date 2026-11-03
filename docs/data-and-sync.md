@@ -18,6 +18,26 @@ Google Drive access policy remains in [AGENTS.md](../AGENTS.md).
 - Restore saved tags before missing-tag extraction. WebMCP `cache_only` stays
   network-free.
 
+## Conditional reads
+
+Collection sync and portable restore may reuse a completed snapshot within the
+current browser session. A checkpoint covers the account generation, committed
+operation manifest and a fresh inventory of the saved Drive files' checksums.
+Reservation revision alone is insufficient: an upload can commit without
+advancing it. Missing files, changed checksums, incomplete provider listings and
+authorization failures must never produce an unchanged response.
+
+Checkpoints are memory-only and cleared on logout/account replacement. A failed
+or incomplete portable restore cannot establish one. Root choices staged during
+revalidation take the full restore/rebase path before they may be uploaded.
+Conditional reads retain the final live identity and manifest checks; neither
+authorization nor account state is cached across server requests.
+
+Collection-only reads skip tag-compaction discovery. Read routes may reuse the
+session already validated during that same request, preserving service-level
+identity checks before and after Drive access. Writes, durable retry receipts,
+upload settlement and account-deletion fences retain their existing behavior.
+
 ## Sync verification
 
 For sync changes, verify these scenarios in addition to the base code-change checks

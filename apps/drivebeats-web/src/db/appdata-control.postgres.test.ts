@@ -48,6 +48,14 @@ function memoryDrive() {
   const transport: AppDataTransport = {
     generateId: vi.fn(async () => `generated_${next++}`),
     list: vi.fn(async () => [...files.keys()].map((id) => ({ id }))),
+    fingerprint: async (ids) =>
+      JSON.stringify(
+        ids.map((id) => {
+          if (!files.has(id))
+            throw new AppDataError("appdata_saved_file_missing");
+          return [id, files.get(id)];
+        }),
+      ),
     read: vi.fn(async (id) => files.get(id) ?? null),
     create: vi.fn(async (id, json) => {
       files.set(id, json);
@@ -100,6 +108,36 @@ describe("durable app-data coordination against PostgreSQL", () => {
   });
   afterAll(async () => {
     await fixture.db?.close();
+  });
+
+  it("conditionally reads collections without Drive downloads or tag-compaction queries", async () => {
+    const { service, identity, transport } = await ready();
+    const pending = vi.spyOn(appDataControl, "listPending");
+    const first = await service.readCollections(identity, "");
+    const downloads = vi.mocked(transport.read).mock.calls.length;
+    const same = await service.readCollections(identity, first.checkpoint);
+    expect(same.unchanged).toBe(true);
+    expect(transport.read).toHaveBeenCalledTimes(downloads);
+    expect(pending).not.toHaveBeenCalled();
+    await service.append(identity, {
+      kind: "collections",
+      operationId: "peer-favorite",
+      baseRevision: first.revision,
+      payload: {
+        playlists: [],
+        favorites: [{ fileId: "track", fileName: "Track.mp3" }],
+      },
+    });
+    const changed = await service.readCollections(identity, first.checkpoint);
+    expect(changed.unchanged).toBe(false);
+    expect(changed.envelopes[0].payload).toMatchObject({
+      favorites: [{ fileId: "track" }],
+    });
+    await appDataControl.fence(identity);
+    await expect(
+      service.readCollections(identity, changed.checkpoint),
+    ).rejects.toMatchObject({ code: "appdata_deletion_in_progress" });
+    pending.mockRestore();
   });
 
   it("reuses an acknowledged operation after response loss and rejects changed bodies", async () => {

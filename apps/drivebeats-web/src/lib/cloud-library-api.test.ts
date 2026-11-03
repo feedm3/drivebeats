@@ -37,6 +37,45 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
 });
+
+it("reuses only the matching account's collections after a validated unchanged response", async () => {
+  await clearPendingCollectionSaves();
+  const original = {
+    playlists: [{ id: "p", name: "Saved", tracks: [] }],
+    favorites: [],
+  };
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(original), {
+        headers: { "X-DriveBeats-Checkpoint": "saved-version" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(null, {
+        status: 304,
+        headers: { "X-DriveBeats-Checkpoint": "saved-version" },
+      }),
+    )
+    .mockResolvedValue(response(200, { playlists: [], favorites: [] }));
+  vi.stubGlobal("fetch", fetcher);
+  const first = await fetchCloudLibrarySync();
+  first.playlists[0].name = "Optimistic edit";
+  expect(await fetchCloudLibrarySync()).toEqual(original);
+  expect(
+    new Headers(fetcher.mock.calls[1][1].headers).get(
+      "X-DriveBeats-Checkpoint",
+    ),
+  ).toBe("saved-version");
+  useDriveAppDataStore.setState({ generation: "replacement" });
+  await fetchCloudLibrarySync();
+  expect(
+    new Headers(fetcher.mock.calls[2][1].headers).get(
+      "X-DriveBeats-Checkpoint",
+    ),
+  ).toBeNull();
+  await clearPendingCollectionSaves();
+});
 describe("collection retry journal", () => {
   it("serializes concurrent sends behind the older request's acknowledgment", async () => {
     let finishFirst!: (value: Response) => void;

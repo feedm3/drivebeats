@@ -177,6 +177,13 @@ function fixture(count = 1709) {
     control,
     readEnvelope,
     cursorSecret: "local-pagination-test-secret",
+    fingerprint: async (fileIds: string[]) =>
+      JSON.stringify(
+        fileIds.map((id) => {
+          const op = operations.find((op) => op.fileId === id);
+          return op && envelopes.get(op.operationId);
+        }),
+      ),
   };
   return { records, operations, envelopes, account, append, dependencies };
 }
@@ -190,6 +197,196 @@ beforeEach(() => {
 afterEach(async () => {
   for (const client of clients.splice(0)) await client.stopDriveAppData();
   vi.unstubAllGlobals();
+});
+
+it("revalidates a completed multipage restore without downloading unchanged Drive files", async () => {
+  const data = fixture();
+  const inventory = vi.spyOn(data.dependencies, "fingerprint");
+  const requests: { cursor?: string; checkpoint?: string }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string, init?: RequestInit) => {
+      const cursor =
+        new URL(path, "https://drivebeats.test").searchParams.get("cursor") ??
+        undefined;
+      const checkpoint =
+        new Headers(init?.headers).get("X-DriveBeats-Checkpoint") ?? undefined;
+      requests.push({ cursor, checkpoint });
+      return Response.json(
+        await readDriveAppDataPage(
+          data.dependencies,
+          identity,
+          cursor,
+          checkpoint,
+        ),
+      );
+    }),
+  );
+  const client = await import("./drive-appdata-client");
+  clients.push(client);
+  await client.restoreDriveAppData("a", identity.generation);
+  expect(requests.length).toBeGreaterThan(1);
+  expect(inventory).toHaveBeenCalledTimes(1);
+  const downloads = data.dependencies.readEnvelope.mock.calls.length;
+  requests.length = 0;
+  await client.restoreDriveAppData("a", identity.generation);
+  expect(requests).toHaveLength(1);
+  expect(inventory).toHaveBeenCalledTimes(2);
+  expect(requests[0].checkpoint).toEqual(expect.any(String));
+  expect(data.dependencies.readEnvelope).toHaveBeenCalledTimes(downloads);
+  expect(mocks.restore).toHaveBeenCalledTimes(data.records.length);
+  // A peer's new committed tags invalidate the manifest, even on this device.
+  data.append("tags", { records: [record(9999)] });
+  await client.restoreDriveAppData("a", identity.generation);
+  expect(mocks.records.has("track-9999")).toBe(true);
+  await client.stopDriveAppData();
+  requests.length = 0;
+  await client.restoreDriveAppData("a", identity.generation);
+  expect(requests[0].checkpoint).toBeUndefined();
+}, 15_000);
+
+it("rejects a modified checkpoint inside a signed continuation cursor", async () => {
+  const data = fixture();
+  const inventory = vi.spyOn(data.dependencies, "fingerprint");
+  const first = await readDriveAppDataPage(data.dependencies, identity);
+  expect(first.nextCursor).toEqual(expect.any(String));
+  const [body, signature] = (first.nextCursor as string).split(".");
+  const changed = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+  changed.checkpoint = "0".repeat(64);
+  const tampered = `${Buffer.from(JSON.stringify(changed)).toString("base64url")}.${signature}`;
+  await expect(
+    readDriveAppDataPage(data.dependencies, identity, tampered),
+  ).rejects.toMatchObject({ code: "appdata_invalid_cursor" });
+  expect(inventory).toHaveBeenCalledTimes(1);
+});
+
+it("detects an upload committing at the same account revision and keeps final deletion fences", async () => {
+  const data = fixture(1);
+  const op = data.operations[0];
+  op.status = "uploading";
+  const before = await readDriveAppDataPage(data.dependencies, identity);
+  op.status = "committed"; // Completion does not reserve another revision.
+  const after = await readDriveAppDataPage(
+    data.dependencies,
+    identity,
+    undefined,
+    before.checkpoint,
+  );
+  expect(after.unchanged).toBeUndefined();
+  expect(after.fragments).toHaveLength(1);
+  const assert = vi.spyOn(data.dependencies.control, "assertIdentity");
+  assert
+    .mockResolvedValueOnce({ ...data.account })
+    .mockRejectedValueOnce(new AppDataError("appdata_stale_session"));
+  await expect(
+    readDriveAppDataPage(
+      data.dependencies,
+      identity,
+      undefined,
+      after.checkpoint,
+    ),
+  ).rejects.toMatchObject({ code: "appdata_stale_session" });
+});
+
+it("never reuses a checkpoint from an incomplete restore", async () => {
+  const data = fixture();
+  let failSecondPage = true;
+  const checkpoints: (string | null)[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string, init?: RequestInit) => {
+      const cursor =
+        new URL(path, "https://drivebeats.test").searchParams.get("cursor") ??
+        undefined;
+      const checkpoint = new Headers(init?.headers).get(
+        "X-DriveBeats-Checkpoint",
+      );
+      if (!cursor) checkpoints.push(checkpoint);
+      if (cursor && failSecondPage)
+        return Response.json(
+          { code: "appdata_restore_changed" },
+          { status: 409 },
+        );
+      return Response.json(
+        await readDriveAppDataPage(
+          data.dependencies,
+          identity,
+          cursor,
+          checkpoint ?? undefined,
+        ),
+      );
+    }),
+  );
+  const client = await import("./drive-appdata-client");
+  clients.push(client);
+  await expect(
+    client.restoreDriveAppData("a", identity.generation),
+  ).rejects.toThrow("appdata_restore_changed");
+  expect(mocks.restore).not.toHaveBeenCalled();
+  failSecondPage = false;
+  await client.restoreDriveAppData("a", identity.generation);
+  expect(checkpoints).toEqual([null, null]);
+  expect(mocks.records.size).toBe(data.records.length);
+}, 15_000);
+
+it("falls back to full restore when a root choice is made during an unchanged check", async () => {
+  const data = fixture(1);
+  let release!: () => void;
+  let checked!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const reached = new Promise<void>((resolve) => {
+    checked = resolve;
+  });
+  const requests: (string | undefined)[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_path: string, init?: RequestInit) => {
+      const checkpoint =
+        new Headers(init?.headers).get("X-DriveBeats-Checkpoint") ?? undefined;
+      requests.push(checkpoint);
+      const page = await readDriveAppDataPage(
+        data.dependencies,
+        identity,
+        undefined,
+        checkpoint,
+      );
+      if (page.unchanged) {
+        checked();
+        await held;
+      }
+      return Response.json(page);
+    }),
+  );
+  const client = await import("./drive-appdata-client");
+  clients.push(client);
+  await client.restoreDriveAppData("a", identity.generation);
+  const restoring = client.restoreDriveAppData("a", identity.generation);
+  await reached;
+  await client.queueImportedRootOperations([
+    {
+      type: "add",
+      rootKind: "folder",
+      id: "new",
+      descriptor: {
+        id: "new",
+        name: "New",
+        mimeType: "application/vnd.google-apps.folder",
+      },
+    },
+  ]);
+  release();
+  await restoring;
+  expect(requests).toHaveLength(3);
+  expect(requests[1]).toEqual(expect.any(String));
+  expect(requests[2]).toBeUndefined();
+  const { readPortableCache } = await import("./metadata-cache-db");
+  expect(
+    (await readPortableCache("a")).some(
+      (entry) => entry.kind === "outbox" && entry.readyToSeal === true,
+    ),
+  ).toBe(true);
 });
 
 it("bounds every encoded page below2MiB and avoids rereading the entire >4.5MiB backup", async () => {

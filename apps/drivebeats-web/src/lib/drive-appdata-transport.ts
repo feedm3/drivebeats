@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { AppDataError } from "@/db/appdata-control";
 import { APPDATA_MAX_FILE_BYTES } from "@/lib/drive-appdata-schema";
 
@@ -6,10 +7,16 @@ const UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
 export interface AppDataFile {
   id: string;
   size?: number;
+  md5Checksum?: string;
 }
 export interface AppDataTransport {
   generateId(): Promise<string>;
-  list(options?: { forDeletion?: boolean }): Promise<AppDataFile[]>;
+  list(options?: {
+    forDeletion?: boolean;
+    includeChecksums?: boolean;
+  }): Promise<AppDataFile[]>;
+  /** Inventory only journal-owned files, without downloading their bodies. */
+  fingerprint?(fileIds: string[]): Promise<string>;
   read(fileId: string): Promise<string | null>;
   /** IDs taken from the durable app-data journal, never request input. */
   readKnown?(fileId: string): Promise<string | null>;
@@ -148,7 +155,9 @@ export function createDriveAppDataTransport(
           throw new AppDataError("appdata_incomplete_listing");
         const params = new URLSearchParams({
           spaces: "appDataFolder",
-          fields: "nextPageToken,incompleteSearch,files(id,size)",
+          fields: options.includeChecksums
+            ? "nextPageToken,incompleteSearch,files(id,size,md5Checksum)"
+            : "nextPageToken,incompleteSearch,files(id,size)",
           pageSize: "1000",
         });
         if (pageToken) params.set("pageToken", pageToken);
@@ -167,6 +176,9 @@ export function createDriveAppDataTransport(
           files.push({
             id: file.id,
             size: file.size === undefined ? undefined : Number(file.size),
+            ...(options.includeChecksums
+              ? { md5Checksum: file.md5Checksum }
+              : {}),
           });
         }
         if (!options.forDeletion && files.length > 10000)
@@ -180,6 +192,24 @@ export function createDriveAppDataTransport(
         if (pageToken) visited.add(pageToken);
       } while (pageToken);
       return files;
+    },
+    async fingerprint(fileIds) {
+      const files = new Map(
+        (await this.list({ includeChecksums: true })).map((file) => [
+          file.id,
+          file,
+        ]),
+      );
+      const manifest = [...fileIds].sort().map((id) => {
+        const file = files.get(id);
+        if (!file) throw new AppDataError("appdata_saved_file_missing");
+        if (!/^[a-f0-9]{32}$/.test(file.md5Checksum ?? ""))
+          throw new AppDataError("appdata_invalid_provider_response");
+        return [id, file.size, file.md5Checksum];
+      });
+      return createHash("sha256")
+        .update(JSON.stringify(manifest))
+        .digest("hex");
     },
     async read(fileId) {
       if (!(await membership(fileId))) return null;

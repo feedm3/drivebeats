@@ -87,11 +87,20 @@ export function createDriveAppDataService(dependencies: {
     }
   }
   const service = {
-    async readPage(identity: AppDataIdentity, cursor?: string) {
+    async readPage(
+      identity: AppDataIdentity,
+      cursor?: string,
+      checkpoint?: string,
+    ) {
       return readDriveAppDataPage(
-        { control, readEnvelope: (op) => verifiedEnvelope(identity, op) },
+        {
+          control,
+          readEnvelope: (op) => verifiedEnvelope(identity, op),
+          fingerprint: transport.fingerprint?.bind(transport),
+        },
         identity,
         cursor,
+        checkpoint,
       );
     },
     async getOperation(identity: AppDataIdentity, operationId: string) {
@@ -109,27 +118,30 @@ export function createDriveAppDataService(dependencies: {
     },
     async read(
       identity: AppDataIdentity,
-      options: { collectionsOnly?: boolean } = {},
+      options: { collectionsOnly?: boolean; checkpoint?: string } = {},
     ) {
-      await control.assertIdentity(identity);
-      const checkpoint = (await control.listPending(identity)).find(
-        (op) =>
-          ["reserved", "uploading", "uncertain"].includes(op.status) &&
-          op.operationId.startsWith(`compact-${op.kind}-`) &&
-          (op.kind === "tags" || op.kind === "roots"),
-      );
+      let account = await control.assertIdentity(identity);
+      const pendingCompaction = options.collectionsOnly
+        ? undefined
+        : (await control.listPending(identity)).find(
+            (op) =>
+              ["reserved", "uploading", "uncertain"].includes(op.status) &&
+              op.operationId.startsWith(`compact-${op.kind}-`) &&
+              (op.kind === "tags" || op.kind === "roots"),
+          );
       if (
         !options.collectionsOnly &&
-        checkpoint &&
-        (checkpoint.kind === "tags" || checkpoint.kind === "roots")
+        pendingCompaction &&
+        (pendingCompaction.kind === "tags" ||
+          pendingCompaction.kind === "roots")
       ) {
         try {
-          await service.compact(identity, checkpoint.kind);
+          await service.compact(identity, pendingCompaction.kind);
         } catch {
           /* Existing acknowledged sources remain restorable during maintenance failure. */
         }
+        account = await control.assertIdentity(identity);
       }
-      const account = await control.assertIdentity(identity);
       const [operations, rollout] = await Promise.all([
         control.list(identity),
         control.getRollout(),
@@ -145,7 +157,32 @@ export function createDriveAppDataService(dependencies: {
           ? [collectionHead]
           : []
         : committed;
-      const envelopes: AppDataEnvelope[] = new Array(selected.length);
+      const checkpoint = hash(
+        JSON.stringify([
+          identity,
+          account.source,
+          account.migrationVersion,
+          rollout?.cleanupDueAt ?? null,
+          selected.map((op) => [
+            op.operationId,
+            op.revision,
+            op.fileId,
+            op.bodyHash,
+          ]),
+          options.collectionsOnly && options.checkpoint !== undefined
+            ? await transport.fingerprint?.(selected.map((op) => op.fileId))
+            : undefined,
+        ]),
+      );
+      const unchanged =
+        options.collectionsOnly === true &&
+        options.checkpoint !== undefined &&
+        Boolean(transport.fingerprint) &&
+        selected.length > 0 &&
+        options.checkpoint === checkpoint;
+      const envelopes: AppDataEnvelope[] = new Array(
+        unchanged ? 0 : selected.length,
+      );
       let restoredBytes = 0;
       for (const op of selected) {
         restoredBytes += op.bytes;
@@ -154,15 +191,18 @@ export function createDriveAppDataService(dependencies: {
       }
       let cursor = 0;
       await Promise.all(
-        Array.from({ length: Math.min(8, selected.length) }, async () => {
-          while (cursor < selected.length) {
-            const index = cursor++;
-            envelopes[index] = await verifiedEnvelope(
-              identity,
-              selected[index],
-            );
-          }
-        }),
+        Array.from(
+          { length: unchanged ? 0 : Math.min(8, selected.length) },
+          async () => {
+            while (cursor < selected.length) {
+              const index = cursor++;
+              envelopes[index] = await verifiedEnvelope(
+                identity,
+                selected[index],
+              );
+            }
+          },
+        ),
       );
       // No partial generation is published after deletion/account replacement.
       const finalAccount = await control.assertIdentity(identity);
@@ -179,6 +219,7 @@ export function createDriveAppDataService(dependencies: {
           .join(",");
       if (
         finalAccount.source !== account.source ||
+        finalAccount.migrationVersion !== account.migrationVersion ||
         authoritative(operations) !== authoritative(finalOperations)
       )
         throw new AppDataError("appdata_restore_changed");
@@ -208,10 +249,12 @@ export function createDriveAppDataService(dependencies: {
             revision: op.revision,
             kind: op.kind,
           })),
+        checkpoint,
+        unchanged,
       };
     },
-    async readCollections(identity: AppDataIdentity) {
-      return service.read(identity, { collectionsOnly: true });
+    async readCollections(identity: AppDataIdentity, checkpoint?: string) {
+      return service.read(identity, { collectionsOnly: true, checkpoint });
     },
     async append(
       identity: AppDataIdentity,

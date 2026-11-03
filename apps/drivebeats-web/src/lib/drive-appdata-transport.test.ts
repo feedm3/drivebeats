@@ -9,6 +9,37 @@ const json = (value: unknown, status = 200) =>
     headers: { "Content-Type": "application/json" },
   });
 describe("hidden Drive transport", () => {
+  it("checks saved-file checksums without media reads and detects edits, deletion and incomplete inventories", async () => {
+    const file = { id: "saved", size: "42", md5Checksum: "a".repeat(32) };
+    const request = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => json({ files: [file] }));
+    const transport = createDriveAppDataTransport("test-token", request);
+    const first = await transport.fingerprint?.(["saved"]);
+    expect(await transport.fingerprint?.(["saved"])).toBe(first);
+    file.md5Checksum = "b".repeat(32);
+    expect(await transport.fingerprint?.(["saved"])).not.toBe(first);
+    expect(
+      request.mock.calls.every(([url]) => {
+        const params = new URL(String(url)).searchParams;
+        return (
+          params.get("spaces") === "appDataFolder" &&
+          params.get("fields")?.includes("md5Checksum") &&
+          !params.has("alt")
+        );
+      }),
+    ).toBe(true);
+    request.mockResolvedValueOnce(json({ files: [] }));
+    await expect(transport.fingerprint?.(["saved"])).rejects.toThrow(
+      "appdata_saved_file_missing",
+    );
+    request.mockResolvedValueOnce(
+      json({ files: [file], incompleteSearch: true }),
+    );
+    await expect(transport.fingerprint?.(["saved"])).rejects.toThrow(
+      "appdata_incomplete_listing",
+    );
+  });
   it("reads a durable coordinator ID with one media request while arbitrary reads retain membership checks", async () => {
     const request = vi
       .fn<typeof fetch>()

@@ -50,7 +50,8 @@ interface FileListProps {
 }
 
 type NameSortDirection = "asc" | "desc";
-const INITIAL_VISIBLE_FILE_COUNT = 200;
+// Cover several viewports quickly; scrolling keeps the larger existing batches.
+const INITIAL_VISIBLE_FILE_COUNT = 40;
 const VISIBLE_FILE_BATCH_SIZE = 200;
 const rowActionCellClassName = "w-11 px-0 py-0";
 

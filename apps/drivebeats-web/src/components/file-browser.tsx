@@ -39,6 +39,8 @@ import { useDriveImport } from "@/hooks/use-drive-import";
 import { useFolderContents } from "@/hooks/use-folder-contents";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { filterLibraryCatalogToCurrentImports } from "@/lib/library-search-catalog";
+import { useAuthStore } from "@/stores/auth-store";
+import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import {
   getImportedLibraryRootEntries,
   useImportedDriveStore,
@@ -46,6 +48,15 @@ import {
 import { useLibrarySearchStore } from "@/stores/library-search-store";
 import type { DriveFile, FolderEntry } from "@/types";
 import { ROOT_FOLDER_ID } from "@/types";
+
+const EMPTY_FILES: DriveFile[] = [];
+
+interface FolderContents {
+  accountId: string | null;
+  folderId: string;
+  files: DriveFile[];
+  loading: boolean;
+}
 
 interface FileBrowserProps {
   externalFolderStack: FolderEntry[];
@@ -74,8 +85,28 @@ export function FileBrowser({
     [importedRootFiles, importedRootFolders],
   );
 
-  const [files, setFiles] = useState<DriveFile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const folderStack = externalFolderStack;
+  const currentFolderId = folderStack[folderStack.length - 1].id;
+  const accountId = useAuthStore((state) => state.user?.id ?? null);
+  const cachedFiles = useFolderCacheStore(
+    (state) => state.peekFiles(currentFolderId)?.files ?? null,
+  );
+  const [folderContents, setFolderContents] = useState<FolderContents | null>(
+    null,
+  );
+  const currentContents =
+    folderContents?.folderId === currentFolderId &&
+    folderContents.accountId === accountId
+      ? folderContents
+      : null;
+  const files =
+    currentFolderId === ROOT_FOLDER_ID
+      ? importedRootEntries
+      : (cachedFiles ?? currentContents?.files ?? EMPTY_FILES);
+  const loading =
+    currentFolderId !== ROOT_FOLDER_ID &&
+    cachedFiles === null &&
+    (currentContents?.loading ?? true);
   const [search, setSearch] = useState<{
     query: string;
     scope: FileSearchScope;
@@ -108,8 +139,6 @@ export function FileBrowser({
   );
   const refreshLibrarySearch = useLibrarySearchStore((state) => state.refresh);
 
-  const folderStack = externalFolderStack;
-  const currentFolderId = folderStack[folderStack.length - 1].id;
   const folderStackRef = useRef(folderStack);
   const currentFolderIdRef = useRef(currentFolderId);
   const isMountedRef = useRef(true);
@@ -165,35 +194,43 @@ export function FileBrowser({
 
       await fetchFolderContents(folderId, {
         onFiles: (fetchedFiles) => {
-          setFiles(fetchedFiles);
+          setFolderContents({
+            accountId,
+            folderId,
+            files: fetchedFiles,
+            loading: false,
+          });
         },
-        onLoadingChange: setLoading,
+        onLoadingChange: (loading) => {
+          setFolderContents((current) => ({
+            accountId,
+            folderId,
+            files:
+              current?.folderId === folderId && current.accountId === accountId
+                ? current.files
+                : EMPTY_FILES,
+            loading,
+          }));
+        },
         canCommit,
         signal,
       });
     },
-    [fetchFolderContents],
+    [accountId, fetchFolderContents],
   );
 
   useEffect(() => {
-    if (currentFolderId === ROOT_FOLDER_ID) {
-      setFiles(importedRootEntries);
-      setLoading(false);
-      return;
-    }
+    if (currentFolderId === ROOT_FOLDER_ID) return;
 
     const controller = new AbortController();
     void navigateToFolder(currentFolderId, controller.signal);
     return () => controller.abort();
-  }, [currentFolderId, importedRootEntries, navigateToFolder]);
+  }, [currentFolderId, navigateToFolder]);
 
   const [refreshingFolder, setRefreshingFolder] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const onRefresh = useCallback(async () => {
-    if (currentFolderIdRef.current === ROOT_FOLDER_ID) {
-      setFiles(getImportedLibraryRootEntries(useImportedDriveStore.getState()));
-      return;
-    }
+    if (currentFolderIdRef.current === ROOT_FOLDER_ID) return;
 
     const folderId = currentFolderIdRef.current;
     setRefreshingFolder(true);
@@ -207,14 +244,14 @@ export function FileBrowser({
         isMountedRef.current &&
         currentFolderIdRef.current === folderId
       ) {
-        setFiles(data);
+        setFolderContents({ accountId, folderId, files: data, loading: false });
       }
     } finally {
       if (isMountedRef.current) {
         setRefreshingFolder(false);
       }
     }
-  }, [fetchFromApi]);
+  }, [accountId, fetchFromApi]);
 
   const pushFolderStack = useCallback(
     (newStack: FolderEntry[]) => {

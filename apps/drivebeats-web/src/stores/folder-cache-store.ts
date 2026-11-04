@@ -200,6 +200,8 @@ interface FolderCacheState {
    */
   hydrate: () => Promise<void>;
   getFiles: (folderId: string) => CacheEntry | null;
+  /** Reads an owned entry without adopting accounts or touching persistence. */
+  peekFiles: (folderId: string) => CacheEntry | null;
   setFiles: (folderId: string, files: DriveFile[]) => void;
   isStale: (folderId: string) => boolean;
   invalidate: (folderId?: string) => void;
@@ -421,6 +423,12 @@ export const useFolderCacheStore = create<FolderCacheState>((set, get) => ({
       hydrationPromise = runHydration();
     }
     return hydrationPromise;
+  },
+
+  peekFiles: (folderId) => {
+    const liveUserId = useAuthStore.getState().user?.id;
+    if (cacheSealed || (liveUserId && liveUserId !== activeUserId)) return null;
+    return get().cache.get(folderId) ?? null;
   },
 
   getFiles: (folderId) => {

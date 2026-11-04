@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -6,9 +7,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FileBrowser } from "@/components/file-browser";
 import type { LibrarySearchTrack } from "@/lib/library-search-catalog";
+import { useAuthStore } from "@/stores/auth-store";
+import { useFolderCacheStore } from "@/stores/folder-cache-store";
 import type { DriveFile, FolderEntry } from "@/types";
 
 const { fetchFolderContents, importedFolder, libraryTrack } = vi.hoisted(() => {
@@ -72,10 +75,12 @@ vi.mock("@/components/metadata-activity", () => ({
 vi.mock("@/components/file-list", () => ({
   FileList: ({
     files,
+    loading,
     searchQuery,
     searchScope,
   }: {
     files: DriveFile[];
+    loading: boolean;
     searchQuery: string;
     searchScope: string;
   }) => (
@@ -84,7 +89,11 @@ vi.mock("@/components/file-list", () => ({
       data-search-query={searchQuery}
       data-search-scope={searchScope}
     >
-      {files.map((file) => file.name).join(", ")}
+      {loading ? (
+        <span role="status">Loading folder</span>
+      ) : (
+        files.map((file) => file.name).join(", ")
+      )}
     </div>
   ),
 }));
@@ -464,5 +473,115 @@ describe("FileBrowser player navigation", () => {
         "Friends.mp3",
       );
     });
+  });
+});
+
+describe("FileBrowser cached reload", () => {
+  const user = {
+    id: "cached-browser-user",
+    email: "cached-browser@example.test",
+    name: null,
+    picture: null,
+  };
+
+  beforeEach(async () => {
+    useAuthStore.getState().hydrateServerSession(user);
+    await useFolderCacheStore.getState().hydrate();
+    useFolderCacheStore.getState().invalidate();
+    fetchFolderContents.mockImplementation(() => new Promise(() => {}));
+  });
+
+  afterEach(() => {
+    cleanup();
+    fetchFolderContents.mockReset();
+    useFolderCacheStore.getState().invalidate();
+  });
+
+  it("shows a cached Current Folder while its asynchronous read is pending", () => {
+    useFolderCacheStore.getState().setFiles("album", [albumTrack]);
+
+    render(
+      <FileBrowser
+        externalFolderStack={albumStack}
+        onFolderNavigate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("file-list")).toHaveTextContent(albumTrack.name);
+    expect(screen.queryByText("Loading folder")).not.toBeInTheDocument();
+  });
+
+  it("replaces cached contents when background revalidation completes", () => {
+    useFolderCacheStore.getState().setFiles("album", [albumTrack]);
+    render(
+      <FileBrowser
+        externalFolderStack={albumStack}
+        onFolderNavigate={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("file-list")).toHaveTextContent(albumTrack.name);
+    const refreshedTrack = { ...albumTrack, name: "Updated track.mp3" };
+
+    act(() => {
+      useFolderCacheStore.getState().setFiles("album", [refreshedTrack]);
+    });
+
+    expect(screen.getByTestId("file-list")).toHaveTextContent(
+      refreshedTrack.name,
+    );
+    expect(screen.getByTestId("file-list")).not.toHaveTextContent(
+      albumTrack.name,
+    );
+    expect(screen.queryByText("Loading folder")).not.toBeInTheDocument();
+  });
+
+  it("does not show cached contents from the preceding Current Folder", () => {
+    useFolderCacheStore.getState().setFiles("album", [albumTrack]);
+    const { rerender } = render(
+      <FileBrowser
+        externalFolderStack={albumStack}
+        onFolderNavigate={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("file-list")).toHaveTextContent(albumTrack.name);
+
+    rerender(
+      <FileBrowser
+        externalFolderStack={[
+          ...rootStack,
+          { id: "uncached-album", name: "Uncached Album" },
+        ]}
+        onFolderNavigate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("file-list")).not.toHaveTextContent(
+      albumTrack.name,
+    );
+    expect(screen.getByText("Loading folder")).toBeInTheDocument();
+  });
+
+  it("does not show another account's cached folder after account replacement", async () => {
+    useFolderCacheStore.getState().setFiles("album", [albumTrack]);
+    await act(async () => {
+      useAuthStore.getState().hydrateServerSession({
+        ...user,
+        id: "other-browser-user",
+        email: "other-browser@example.test",
+      });
+      await useFolderCacheStore.getState().hydrate();
+    });
+
+    render(
+      <FileBrowser
+        externalFolderStack={albumStack}
+        onFolderNavigate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("file-list")).not.toHaveTextContent(
+      albumTrack.name,
+    );
+    expect(screen.getByText("Loading folder")).toBeInTheDocument();
   });
 });

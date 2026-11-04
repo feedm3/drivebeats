@@ -23,7 +23,12 @@ const mocks = vi.hoisted(() => ({
   records: new Map<string, MetadataRecord>(),
   local: [] as MetadataRecord[],
   scanBarrier: null as Promise<void> | null,
+  metadataBarrier: null as Promise<void> | null,
+  portableReadBarrier: null as Promise<void> | null,
+  acknowledgmentBarrier: null as Promise<void> | null,
+  acknowledgmentStarted: vi.fn(),
   roots: [] as { id: string; name: string; mimeType: string }[],
+  importedAccount: null as string | null,
   importedGeneration: null as string | null,
   fetch: vi.fn(),
   audio: vi.fn(),
@@ -40,10 +45,13 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 vi.mock("@/lib/metadata-cache-db", () => ({
-  readPortableCache: async (accountId: string) =>
-    [...mocks.entries.values()]
+  readPortableCache: async (accountId: string) => {
+    const entries = [...mocks.entries.values()]
       .filter((entry) => entry.accountId === accountId)
-      .map((entry) => structuredClone(entry)),
+      .map((entry) => structuredClone(entry));
+    if (mocks.portableReadBarrier) await mocks.portableReadBarrier;
+    return entries;
+  },
   readPortableOutbox: async (id: string) =>
     structuredClone(mocks.entries.get(id)),
   savePortableOutbox: async (
@@ -145,6 +153,8 @@ vi.mock("@/lib/metadata-cache-db", () => ({
       JSON.stringify(existing.payload) !== JSON.stringify(payload)
     )
       return false;
+    mocks.acknowledgmentStarted();
+    if (mocks.acknowledgmentBarrier) await mocks.acknowledgmentBarrier;
     mocks.entries.delete(id);
     return true;
   },
@@ -174,7 +184,7 @@ vi.mock("@/stores/id3-metadata-store", () => {
   const state = {
     accountId: "a",
     generation: 1,
-    setAccount: async () => {},
+    setAccount: () => mocks.metadataBarrier ?? Promise.resolve(),
     resetCachedMetadata: async () => mocks.records.clear(),
     observeDescriptor: () => {},
     getRecord: record,
@@ -196,8 +206,10 @@ vi.mock("@/stores/imported-drive-store", () => ({
     getState: () => ({
       rootFolders: [],
       rootFiles: [],
+      accountId: mocks.importedAccount,
       accountGeneration: mocks.importedGeneration,
-      bindAccount: (_account: string, generation: string) => {
+      bindAccount: (account: string, generation: string) => {
+        mocks.importedAccount = account;
         mocks.importedGeneration = generation;
       },
       hydrateRemoteRoots: (roots: typeof mocks.roots) => {
@@ -281,7 +293,11 @@ beforeEach(() => {
   mocks.records.clear();
   mocks.local = [];
   mocks.scanBarrier = null;
+  mocks.metadataBarrier = null;
+  mocks.portableReadBarrier = null;
+  mocks.acknowledgmentBarrier = null;
   mocks.roots = [];
+  mocks.importedAccount = null;
   mocks.importedGeneration = null;
   Object.assign(mocks.auth, {
     user: { id: "a" },
@@ -499,6 +515,247 @@ describe("portable metadata and imported choices", () => {
     await client.restoreDriveAppData("a", "generation-a");
     expect(await client.waitForDriveAppDataRestore("a")).toBe(true);
   });
+
+  it("releases a matching cached Library before tag hydration without releasing restore", async () => {
+    mocks.importedAccount = "a";
+    mocks.importedGeneration = "generation-a";
+    let finishHydration!: () => void;
+    mocks.metadataBarrier = new Promise<void>((resolve) => {
+      finishHydration = resolve;
+    });
+    const { client, state } = await load();
+    let resumed = false;
+    const resume = client
+      .deferDriveAppDataRestore("a", "generation-a", "revalidating")
+      .then(() => {
+        resumed = true;
+      });
+    let restore: Promise<void> | undefined;
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(resumed).toBe(true);
+      expect(state.getState()).toMatchObject({
+        accountId: "a",
+        generation: "generation-a",
+        status: "restoring",
+      });
+      expect(await client.waitForDriveAppDataRestore("a")).toBe(false);
+      restore = client.restoreDriveAppData("a", "generation-a");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mocks.fetch).not.toHaveBeenCalled();
+      expect(mocks.audio).not.toHaveBeenCalled();
+    } finally {
+      finishHydration();
+      await resume;
+      await restore;
+    }
+    expect(state.getState().status).toBe("ready");
+  });
+
+  it("releases a matching cached Library while its pending-save count is loading", async () => {
+    mocks.importedAccount = "a";
+    mocks.importedGeneration = "generation-a";
+    mocks.entries.set("pending-tags", {
+      id: "pending-tags",
+      accountId: "a",
+      generation: "generation-a",
+      kind: "outbox",
+      bytes: 100,
+      payload: {
+        operationId: "pending-tags",
+        generation: "generation-a",
+        kind: "tags",
+        payload: { records: [metadata(1)] },
+      },
+    });
+    let finishRead!: () => void;
+    mocks.portableReadBarrier = new Promise<void>((resolve) => {
+      finishRead = resolve;
+    });
+    const { client, state } = await load();
+    let resumed = false;
+    const resume = client
+      .deferDriveAppDataRestore("a", "generation-a", "revalidating")
+      .then(() => {
+        resumed = true;
+      });
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(resumed).toBe(true);
+      expect(state.getState().pendingCount).toBe(0);
+      expect(await client.waitForDriveAppDataRestore("a")).toBe(false);
+      expect(mocks.fetch).not.toHaveBeenCalled();
+    } finally {
+      finishRead();
+      await resume;
+    }
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.getState().pendingCount).toBe(1);
+  });
+
+  it.each([
+    { account: null, generation: null },
+    { account: "b", generation: "generation-a" },
+    { account: "a", generation: "older-generation" },
+  ])(
+    "keeps uncached or replaced Library binding behind hydration ($account / $generation)",
+    async ({ account, generation }) => {
+      mocks.importedAccount = account;
+      mocks.importedGeneration = generation;
+      let finishHydration!: () => void;
+      mocks.metadataBarrier = new Promise<void>((resolve) => {
+        finishHydration = resolve;
+      });
+      const { client } = await load();
+      let resumed = false;
+      const resume = client
+        .deferDriveAppDataRestore("a", "generation-a", "revalidating")
+        .then(() => {
+          resumed = true;
+        });
+      try {
+        await vi.advanceTimersByTimeAsync(0);
+        expect(resumed).toBe(false);
+        expect(mocks.importedAccount).toBe(account);
+        expect(mocks.importedGeneration).toBe(generation);
+        expect(mocks.fetch).not.toHaveBeenCalled();
+      } finally {
+        finishHydration();
+        await resume;
+      }
+      expect(mocks.importedAccount).toBe("a");
+      expect(mocks.importedGeneration).toBe("generation-a");
+      expect(await client.waitForDriveAppDataRestore("a")).toBe(false);
+    },
+  );
+
+  it("does not repopulate pending-save state after logout during a cached resume", async () => {
+    mocks.importedAccount = "a";
+    mocks.importedGeneration = "generation-a";
+    let finishRead!: () => void;
+    mocks.portableReadBarrier = new Promise<void>((resolve) => {
+      finishRead = resolve;
+    });
+    const { client, state } = await load();
+    await client.deferDriveAppDataRestore("a", "generation-a", "revalidating");
+    await client.stopDriveAppData("a");
+    finishRead();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.getState()).toMatchObject({
+      accountId: null,
+      generation: null,
+      status: "idle",
+      pendingCount: 0,
+      error: null,
+    });
+  });
+
+  it("does not replace a completed restore with an older pending-count failure", async () => {
+    mocks.importedAccount = "a";
+    mocks.importedGeneration = "generation-a";
+    let failRead!: (error: Error) => void;
+    mocks.portableReadBarrier = new Promise<void>((_resolve, reject) => {
+      failRead = reject;
+    });
+    const { client, state } = await load();
+    await client.deferDriveAppDataRestore("a", "generation-a", "revalidating");
+    mocks.portableReadBarrier = null;
+    await client.restoreDriveAppData("a", "generation-a");
+    failRead(new Error("old cache read failed"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.getState()).toMatchObject({
+      accountId: "a",
+      generation: "generation-a",
+      status: "ready",
+      error: null,
+    });
+  });
+
+  it("does not retain a background pending-count failure through a successful restore", async () => {
+    mocks.importedAccount = "a";
+    mocks.importedGeneration = "generation-a";
+    let failRead!: (error: Error) => void;
+    mocks.portableReadBarrier = new Promise<void>((_resolve, reject) => {
+      failRead = reject;
+    });
+    const { client, state } = await load();
+    await client.deferDriveAppDataRestore("a", "generation-a", "revalidating");
+    mocks.portableReadBarrier = null;
+    let finishRestore!: (response: Response) => void;
+    mocks.fetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          finishRestore = resolve;
+        }),
+    );
+    const restore = client.restoreDriveAppData("a", "generation-a");
+    await vi.advanceTimersByTimeAsync(0);
+    failRead(new Error("background cache read failed"));
+    await vi.advanceTimersByTimeAsync(0);
+    finishRestore(respond(remote()));
+    await restore;
+    expect(state.getState()).toMatchObject({ status: "ready", error: null });
+  });
+
+  it("retains a newer pending-save count when an earlier cache snapshot finishes last", async () => {
+    mocks.importedAccount = "a";
+    mocks.importedGeneration = "generation-a";
+    mocks.entries.set("pending-tags", {
+      id: "pending-tags",
+      accountId: "a",
+      generation: "generation-a",
+      kind: "outbox",
+      bytes: 100,
+      payload: {
+        operationId: "pending-tags",
+        generation: "generation-a",
+        kind: "tags",
+        payload: { records: [metadata(1)] },
+      },
+    });
+    let finishRead!: () => void;
+    mocks.portableReadBarrier = new Promise<void>((resolve) => {
+      finishRead = resolve;
+    });
+    const { client, state } = await load();
+    await client.deferDriveAppDataRestore("a", "generation-a", "revalidating");
+    mocks.portableReadBarrier = null;
+    mocks.entries.clear();
+    try {
+      await client.restoreDriveAppData("a", "generation-a");
+      expect(state.getState().pendingCount).toBe(0);
+    } finally {
+      finishRead();
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(state.getState().pendingCount).toBe(0);
+  });
+
+  it.each(["metadata", "pending-count"])(
+    "does not resume an uncached Library after logout during %s initialization",
+    async (stage) => {
+      let finishInitialization!: () => void;
+      const barrier = new Promise<void>((resolve) => {
+        finishInitialization = resolve;
+      });
+      if (stage === "metadata") mocks.metadataBarrier = barrier;
+      else mocks.portableReadBarrier = barrier;
+      const { client, state } = await load();
+      const resume = client
+        .deferDriveAppDataRestore("a", "generation-a", "revalidating")
+        .catch((error: Error) => error.message);
+      await vi.advanceTimersByTimeAsync(0);
+      await client.stopDriveAppData("a");
+      finishInitialization();
+      expect(await resume).toBe("scope_changed");
+      expect(state.getState()).toMatchObject({
+        accountId: null,
+        generation: null,
+        status: "idle",
+        pendingCount: 0,
+      });
+    },
+  );
 
   it.each([3, 67, 129])(
     "restores %i acknowledged tags before loader work without descriptor/audio requests",
@@ -947,6 +1204,76 @@ describe("portable metadata and imported choices", () => {
         ([, options]) => options?.method === "POST",
       ),
     ).toHaveLength(1);
+  });
+
+  it("preserves a new session's pending count when an old flush finishes after rebind", async () => {
+    const { client, state } = await load();
+    await client.restoreDriveAppData("a");
+    await settleLocalCheckpoint();
+    await client.queueImportedRootOperations([
+      {
+        type: "add",
+        rootKind: "folder",
+        id: "folder",
+        descriptor: {
+          id: "folder",
+          name: "Music",
+          mimeType: "application/vnd.google-apps.folder",
+        },
+      },
+    ]);
+    mocks.fetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ code: "appdata_revision_conflict" }), {
+        status: 409,
+      }),
+    );
+    mocks.fetch.mockResolvedValueOnce(
+      respond(
+        remote([
+          envelope("roots", {
+            operations: [{ type: "remove", rootKind: "folder", id: "folder" }],
+          }),
+        ]),
+      ),
+    );
+    let finishAcknowledgment!: () => void;
+    mocks.acknowledgmentBarrier = new Promise<void>((resolve) => {
+      finishAcknowledgment = resolve;
+    });
+    const oldFlush = client.flushDriveAppData();
+    await vi.waitFor(() =>
+      expect(mocks.acknowledgmentStarted).toHaveBeenCalledOnce(),
+    );
+    await client.stopDriveAppData("a", { clearLocal: true });
+    mocks.entries.set("new-session-tags", {
+      id: "new-session-tags",
+      accountId: "a",
+      generation: "generation-a",
+      kind: "outbox",
+      bytes: 100,
+      payload: {
+        operationId: "new-session-tags",
+        generation: "generation-a",
+        kind: "tags",
+        payload: { records: [metadata(1)] },
+      },
+    });
+    let finishRead!: () => void;
+    mocks.portableReadBarrier = new Promise<void>((resolve) => {
+      finishRead = resolve;
+    });
+    await client.deferDriveAppDataRestore("a", "generation-a", "revalidating");
+    finishAcknowledgment();
+    await vi.advanceTimersByTimeAsync(0);
+    finishRead();
+    await oldFlush;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.getState()).toMatchObject({
+      accountId: "a",
+      generation: "generation-a",
+      status: "restoring",
+      pendingCount: 1,
+    });
   });
 
   it("uses original tombstone revision from a later checkpoint when retaining newer pending imports", async () => {

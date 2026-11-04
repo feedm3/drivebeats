@@ -73,6 +73,7 @@ let restoredCheckpoint: string | undefined;
 let flushFlight: Promise<void> | null = null;
 let checkpointFlight: Promise<void> | null = null;
 let checkpointSession = -1;
+let pendingReadVersion = 0;
 let queueTail: Promise<unknown> = Promise.resolve();
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
 let draft: PortableCacheEntry | null = null;
@@ -481,8 +482,11 @@ function commandFor(entry: PortableCacheEntry) {
   return entry.payload as Command;
 }
 async function updatePending(accountId: string, captured: number) {
-  const entries = await readPortableCache(accountId);
   if (!current(accountId, captured)) return;
+  const readVersion = ++pendingReadVersion;
+  const entries = await readPortableCache(accountId);
+  if (!current(accountId, captured) || readVersion !== pendingReadVersion)
+    return;
   useDriveAppDataStore.setState({
     pendingCount: entries
       .filter(
@@ -1112,26 +1116,51 @@ export async function deferDriveAppDataRestore(
   generation: string,
   reason: "offline" | "revalidating" = "offline",
 ) {
+  let captured = session;
   if (
     useDriveAppDataStore.getState().accountId !== accountId ||
     useDriveAppDataStore.getState().generation !== generation
   ) {
-    await stopDriveAppData();
+    const stopping = stopDriveAppData();
+    captured = session;
+    await stopping;
+    if (captured !== session) throw new Error("scope_changed");
     useDriveAppDataStore.setState({ accountId, generation });
   }
   listenForLocalChanges();
+  const status = reason === "offline" ? "error" : "restoring";
+  const error = reason === "offline" ? "offline_restore_pending" : null;
   useDriveAppDataStore.setState({
-    status: reason === "offline" ? "error" : "restoring",
-    error: reason === "offline" ? "offline_restore_pending" : null,
+    status,
+    error,
   });
-  await useId3MetadataStore.getState().setAccount(accountId);
   const imported = useImportedDriveStore.getState();
+  const hydration = useId3MetadataStore.getState().setAccount(accountId);
+  if (
+    imported.accountId === accountId &&
+    imported.accountGeneration === generation
+  ) {
+    // Account binding is synchronous. Metadata consumers and the network restore
+    // await the shared hydration themselves; the cached Library need not wait
+    // for every saved tag or the pending-save count before it can render.
+    // Local display initialization is best effort; the authoritative restore
+    // owns error state, including while its network read is still pending.
+    void Promise.all([hydration, updatePending(accountId, captured)]).catch(
+      () => undefined,
+    );
+    return;
+  }
+  await hydration;
+  if (!current(accountId, captured)) throw new Error("scope_changed");
   if (imported.accountGeneration && imported.accountGeneration !== generation) {
     await clearPortableCache(accountId);
+    if (!current(accountId, captured)) throw new Error("scope_changed");
     await useId3MetadataStore.getState().resetCachedMetadata();
+    if (!current(accountId, captured)) throw new Error("scope_changed");
   }
   useImportedDriveStore.getState().bindAccount(accountId, generation);
-  await updatePending(accountId, session);
+  await updatePending(accountId, captured);
+  if (!current(accountId, captured)) throw new Error("scope_changed");
 }
 
 /** Does not start restore; on failed restore it must never fall through to extraction. */

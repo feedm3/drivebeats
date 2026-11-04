@@ -311,6 +311,41 @@ describe("useFolderCacheStore account scoping", () => {
     vi.useRealTimers();
   });
 
+  it("reads a rendering snapshot without touching the listing or persistence", async () => {
+    const { store } = await loadStore(USER_A);
+    store.getState().setFiles("folder-a", [makeFile("cached")]);
+    await flush();
+    const before = store.getState();
+    const entry = before.cache.get("folder-a");
+    const lastAccessedAt = entry?.lastAccessedAt;
+    vi.advanceTimersByTime(2 * MINUTE);
+
+    expect(store.getState().peekFiles("folder-a")).toBe(entry);
+    await flush();
+
+    expect(store.getState()).toBe(before);
+    expect(entry?.lastAccessedAt).toBe(lastAccessedAt);
+    expect(persistedFor(USER_A, "folder-a")?.lastAccessedAt).toBe(
+      lastAccessedAt,
+    );
+  });
+
+  it("hides a mismatched live account without adopting it during a snapshot read", async () => {
+    const { store, authStore } = await loadStore(USER_A);
+    store.getState().setFiles("folder-a", [makeFile("private")]);
+    await flush();
+    // Logout closes account adoption before the existing cache is wiped.
+    authStore.setState({ isLoggingOut: true, user: userFor(USER_B) });
+    const before = store.getState();
+
+    expect(store.getState().peekFiles("folder-a")).toBeNull();
+    await flush();
+
+    expect(store.getState()).toBe(before);
+    expect(rememberedUserId()).toBe(USER_A);
+    expect(persistedFor(USER_A, "folder-a")).toBeDefined();
+  });
+
   it("never serves another account's cached listings", async () => {
     const { store: first } = await loadStore(USER_A);
     first.getState().setFiles("folder-a", [makeFile("secret")]);

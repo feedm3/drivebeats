@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -19,8 +20,12 @@ vi.mock("@/hooks/use-cached-track-tags", () => ({
   }),
 }));
 vi.mock("@/hooks/use-cached-track-search", () => ({
-  useCachedTrackSearch: (files: DriveFile[]) => ({
-    tracks: files,
+  useCachedTrackSearch: (
+    files: DriveFile[],
+    query: string,
+    enabled: boolean,
+  ) => ({
+    tracks: enabled ? files.filter((file) => file.name.includes(query)) : files,
     pending: false,
   }),
 }));
@@ -134,5 +139,85 @@ describe("Library row options", () => {
     fireEvent.click(hideDetails);
     expect(document.getElementById(detailsId ?? "")).toBeNull();
     expect(playTrack).not.toHaveBeenCalled();
+  });
+});
+
+describe("FileList incremental rendering", () => {
+  const tracks: DriveFile[] = Array.from({ length: 300 }, (_, index) => ({
+    id: `track-${index}`,
+    name: `Track ${String(index).padStart(3, "0")}.mp3`,
+    mimeType: "audio/mpeg",
+  }));
+  let intersect: () => void;
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: IntersectionObserverCallback) {
+          intersect = () =>
+            callback(
+              [{ isIntersecting: true }] as IntersectionObserverEntry[],
+              this as unknown as IntersectionObserver,
+            );
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function renderTracks(query = "") {
+    return (
+      <FileList
+        files={tracks}
+        loading={false}
+        folderStack={folderStack}
+        searchQuery={query}
+        onClearSearch={vi.fn()}
+        onFolderClick={vi.fn()}
+      />
+    );
+  }
+
+  it("limits the first render while retaining the full playback collection and scroll access", () => {
+    render(renderTracks());
+    const initialRows = screen.getAllByRole("button", { name: /^Play Track / });
+    // Enough rows for scrolling, without mounting hundreds before first paint.
+    expect(initialRows.length).toBeGreaterThan(10);
+    expect(initialRows.length).toBeLessThanOrEqual(50);
+    expect(
+      screen.queryByRole("button", { name: "Play Track 299.mp3" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Play Track 000.mp3" }));
+    expect(playTrack.mock.calls[0][1]).toEqual(tracks);
+
+    act(() => intersect());
+    expect(
+      screen.getByRole("button", { name: "Play Track 200.mp3" }),
+    ).toBeInTheDocument();
+    act(() => intersect());
+    expect(
+      screen.getByRole("button", { name: "Play Track 299.mp3" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Showing .* items/)).not.toBeInTheDocument();
+  });
+
+  it("finds tracks outside the rendered rows when searching the Current Folder", () => {
+    const { rerender } = render(renderTracks());
+    expect(
+      screen.queryByRole("button", { name: "Play Track 299.mp3" }),
+    ).not.toBeInTheDocument();
+
+    rerender(renderTracks("Track 299"));
+
+    expect(
+      screen.getByRole("button", { name: "Play Track 299.mp3" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Play Track 000.mp3" }),
+    ).not.toBeInTheDocument();
   });
 });

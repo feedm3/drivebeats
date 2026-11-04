@@ -47,15 +47,12 @@ function Slider({
       )}
       {...props}
     >
-      {/* The Control is the element Base UI hit-tests for track presses, and it
-          is otherwise only as tall as the 6px track. `pointer-coarse:h-11`
-          gives it a real 44px tap strip on touch devices (the track stays
-          vertically centred inside it). Only the cross-axis size changes, and
-          `getFingerState` derives the value from the control's main-axis size
-          plus its *inline* padding, so the value maths is untouched. */}
+      {/* Base UI hit-tests Control for track presses. Give every pointer a
+          44px interaction strip while keeping the visible track slim. Only
+          the cross-axis grows, preserving click and drag value mapping. */}
       <SliderPrimitive.Control
         data-slot="slider-control"
-        className="relative flex w-full items-center data-[orientation=horizontal]:pointer-coarse:h-11 data-[orientation=vertical]:h-full data-[orientation=vertical]:flex-col data-[orientation=vertical]:pointer-coarse:w-11"
+        className="relative flex w-full cursor-pointer items-center data-[disabled]:cursor-default data-[orientation=horizontal]:h-11 data-[orientation=vertical]:h-full data-[orientation=vertical]:w-11 data-[orientation=vertical]:flex-col"
       >
         <SliderPrimitive.Track
           data-slot="slider-track"
@@ -89,7 +86,7 @@ function Slider({
             data-slot="slider-thumb"
             getAriaLabel={ariaLabel ? () => ariaLabel : undefined}
             key={thumbKeys[thumbIndex]}
-            className="block size-4 shrink-0 rounded-full border border-primary bg-primary shadow-sm opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 pointer-coarse:before:absolute pointer-coarse:before:-inset-3.5 pointer-coarse:before:content-[''] transition-[color,box-shadow,opacity] ring-ring/50 hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
+            className="block size-4 shrink-0 rounded-full border border-primary bg-primary shadow-sm opacity-0 group-hover:opacity-100 has-[:focus-visible]:opacity-100 pointer-coarse:opacity-100 pointer-coarse:before:absolute pointer-coarse:before:-inset-3.5 pointer-coarse:before:content-[''] transition-[color,box-shadow,opacity] ring-ring/50 hover:ring-4 has-[:focus-visible]:ring-4 disabled:pointer-events-none disabled:opacity-50"
           />
         ))}
       </SliderPrimitive.Control>

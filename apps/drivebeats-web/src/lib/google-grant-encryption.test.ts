@@ -2,7 +2,9 @@
 import { afterEach, expect, it, vi } from "vitest";
 import {
   decryptGoogleRefreshToken,
+  decryptSessionGoogleGrant,
   encryptGoogleRefreshToken,
+  encryptSessionGoogleGrant,
 } from "./google-grant-encryption";
 
 afterEach(() => vi.unstubAllEnvs());
@@ -28,4 +30,29 @@ it("rejects ciphertext transplanted between accounts, tampering, and a changed k
   ).toThrow();
   vi.stubEnv("AUTH_SESSION_SECRET", "changed-key");
   expect(() => decryptGoogleRefreshToken(encrypted, "account-a")).toThrow();
+});
+
+it("binds session grants to both the Google account and OAuth client", () => {
+  vi.stubEnv("AUTH_SESSION_SECRET", "test-key");
+  vi.stubEnv("GOOGLE_CLIENT_ID", "client-a");
+  const encrypted = encryptSessionGoogleGrant(
+    "session-refresh",
+    "account-a",
+    "session-a",
+  );
+  expect(decryptSessionGoogleGrant(encrypted, "account-a", "session-a")).toBe(
+    "session-refresh",
+  );
+  expect(encrypted).not.toContain("session-refresh");
+  expect(() =>
+    decryptSessionGoogleGrant(encrypted, "account-b", "session-a"),
+  ).toThrow();
+  expect(() =>
+    decryptSessionGoogleGrant(encrypted, "account-a", "session-b"),
+  ).toThrow();
+  expect(() => decryptGoogleRefreshToken(encrypted, "account-a")).toThrow();
+  vi.stubEnv("GOOGLE_CLIENT_ID", "client-b");
+  expect(() =>
+    decryptSessionGoogleGrant(encrypted, "account-a", "session-a"),
+  ).toThrow();
 });

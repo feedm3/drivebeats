@@ -4,8 +4,16 @@ import { NextRequest, type NextResponse } from "next/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { assertAppDataIdentity } from "@/db/appdata-control";
 import { AppDataError } from "@/db/appdata-types";
-import { AUTH_SESSION_COOKIE, parseAuthSession } from "@/lib/auth-session";
+import {
+  AUTH_SESSION_COOKIE,
+  parseAuthSession,
+  serializeAuthSession,
+} from "@/lib/auth-session";
 import { GOOGLE_APPDATA_SCOPE, GOOGLE_DRIVE_SCOPE } from "@/lib/google";
+import {
+  decryptSessionGoogleGrant,
+  GOOGLE_SESSION_GRANT_COOKIE,
+} from "@/lib/google-grant-encryption";
 import { GET as login } from "../login/route";
 import { POST as logout } from "../logout/route";
 import { POST as refresh } from "../refresh/route";
@@ -41,6 +49,7 @@ let refreshedError: string | undefined;
 let returnedScope: string;
 let returnedUserId: string;
 let returnedNonce: string;
+let userInfoStatus: number;
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
 
 function idToken() {
@@ -106,7 +115,10 @@ beforeEach(() => {
   refreshedError = undefined;
   returnedScope = scopes;
   returnedUserId = "account-a";
+  userInfoStatus = 200;
   fetchMock = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
+    if (String(url).endsWith("/userinfo"))
+      return Response.json({ sub: returnedUserId }, { status: userInfoStatus });
     if (String(url).endsWith("/certs")) {
       return Response.json({
         keys: [{ ...publicKey.export({ format: "jwk" }), kid: "test-key" }],
@@ -133,6 +145,171 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
 });
 
+it("upgrades a legacy browser grant without using the overwritten database grant", async () => {
+  const response = await complete(await start());
+  const session = parseAuthSession(
+    response.cookies.get(AUTH_SESSION_COOKIE)?.value,
+  );
+  if (!session) throw new Error("Expected a signed session");
+  const { sessionId: _sessionId, ...legacy } = session;
+  database.grants.set("account-a", "another-client-grant");
+  const upgraded = await refresh(
+    new NextRequest("https://drivebeats.test/api/auth/refresh", {
+      method: "POST",
+      headers: {
+        cookie: `auth_session=${serializeAuthSession(legacy)}; refresh_token=test-refresh-token`,
+      },
+    }),
+  );
+  expect(upgraded.status).toBe(200);
+  const upgradedGrant = upgraded.cookies.get(GOOGLE_SESSION_GRANT_COOKIE);
+  expect(upgradedGrant?.httpOnly).toBe(true);
+  expect(upgradedGrant?.secure).toBe(true);
+  expect(upgradedGrant?.path).toBe("/api");
+  expect(
+    decryptSessionGoogleGrant(
+      upgradedGrant?.value ?? "",
+      "account-a",
+      "legacy",
+    ),
+  ).toBe("test-refresh-token");
+  // A response arriving after logout must not re-create its identity cookie.
+  expect(upgraded.cookies.get(AUTH_SESSION_COOKIE)).toBeUndefined();
+  expect(database.grants.get("account-a")).toBe("another-client-grant");
+  expect(await upgraded.text()).not.toContain("test-refresh-token");
+});
+
+it("does not bind another Google account's cookie to a legacy signed session", async () => {
+  const response = await complete(await start());
+  const session = parseAuthSession(
+    response.cookies.get(AUTH_SESSION_COOKIE)?.value,
+  );
+  if (!session) throw new Error("Expected a signed session");
+  returnedUserId = "account-b";
+  const denied = await refresh(
+    new NextRequest("https://drivebeats.test/api/auth/refresh", {
+      method: "POST",
+      headers: {
+        cookie: `auth_session=${serializeAuthSession(session)}; refresh_token=other-account-refresh`,
+      },
+    }),
+  );
+  expect(denied.status).toBe(401);
+  expect(denied.cookies.get(AUTH_SESSION_COOKIE)?.maxAge).toBe(0);
+});
+
+it("preserves sign-in when legacy grant identity verification is temporarily unavailable", async () => {
+  const signedIn = await complete(await start());
+  userInfoStatus = 503;
+  const response = await refresh(
+    new NextRequest("https://drivebeats.test/api/auth/refresh", {
+      method: "POST",
+      headers: {
+        cookie: `auth_session=${signedIn.cookies.get(AUTH_SESSION_COOKIE)?.value}; refresh_token=test-refresh-token`,
+      },
+    }),
+  );
+  expect(response.status).toBe(503);
+  expect(response.cookies.get(AUTH_SESSION_COOKIE)).toBeUndefined();
+  expect(response.cookies.get(GOOGLE_SESSION_GRANT_COOKIE)).toBeUndefined();
+});
+
+it("keeps fresh sign-in grants separate and never renews the identity during refresh", async () => {
+  const first = await complete(await start());
+  const firstSession = parseAuthSession(
+    first.cookies.get(AUTH_SESSION_COOKIE)?.value,
+  );
+  const refreshed = await refresh(
+    new NextRequest("https://drivebeats.test/api/auth/refresh", {
+      method: "POST",
+      headers: { cookie: cookiesFrom(first) },
+    }),
+  );
+  expect(refreshed.status).toBe(200);
+  expect(refreshed.cookies.get(AUTH_SESSION_COOKIE)).toBeUndefined();
+  expect(refreshed.cookies.get(GOOGLE_SESSION_GRANT_COOKIE)).toBeUndefined();
+  expect(
+    fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/userinfo")),
+  ).toHaveLength(0);
+  const second = await complete(await start());
+  const secondSession = parseAuthSession(
+    second.cookies.get(AUTH_SESSION_COOKIE)?.value,
+  );
+  expect(secondSession?.sessionId).not.toBe(firstSession?.sessionId);
+  expect(() =>
+    decryptSessionGoogleGrant(
+      first.cookies.get(GOOGLE_SESSION_GRANT_COOKIE)?.value ?? "",
+      "account-a",
+      secondSession?.sessionId ?? "legacy",
+    ),
+  ).toThrow();
+});
+
+it.each(["invalid_grant"])(
+  "ends a rejected browser connection without deleting saved grants (%s)",
+  async (error) => {
+    const signedIn = await complete(await start());
+    refreshedError = error;
+    const response = await refresh(
+      new NextRequest("https://drivebeats.test/api/auth/refresh", {
+        method: "POST",
+        headers: { cookie: cookiesFrom(signedIn) },
+      }),
+    );
+    expect(response.status).toBe(401);
+    expect(response.cookies.get(AUTH_SESSION_COOKIE)?.maxAge).toBe(0);
+    expect(response.cookies.get(GOOGLE_SESSION_GRANT_COOKIE)?.maxAge).toBe(0);
+    expect(database.remove).not.toHaveBeenCalled();
+  },
+);
+
+it("preserves the browser connection when Google rejects the OAuth client", async () => {
+  const signedIn = await complete(await start());
+  refreshedError = "unauthorized_client";
+  const response = await refresh(
+    new NextRequest("https://drivebeats.test/api/auth/refresh", {
+      method: "POST",
+      headers: { cookie: cookiesFrom(signedIn) },
+    }),
+  );
+  expect(response.status).toBe(503);
+  expect(response.headers.get("set-cookie")).toBeNull();
+  expect(database.remove).not.toHaveBeenCalled();
+});
+
+it.each(["different-session", "different-token"])(
+  "verifies a replacement browser token before repairing its grant (%s)",
+  async (kind) => {
+    const first = await complete(await start());
+    const second =
+      kind === "different-session" ? await complete(await start()) : first;
+    const session = parseAuthSession(
+      second.cookies.get(AUTH_SESSION_COOKIE)?.value,
+    );
+    if (!session?.sessionId) throw new Error("Expected a fresh session");
+    const response = await refresh(
+      new NextRequest("https://drivebeats.test/api/auth/refresh", {
+        method: "POST",
+        headers: {
+          cookie: `auth_session=${second.cookies.get(AUTH_SESSION_COOKIE)?.value}; refresh_token=replacement-refresh; ${GOOGLE_SESSION_GRANT_COOKIE}=${first.cookies.get(GOOGLE_SESSION_GRANT_COOKIE)?.value}`,
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(
+      decryptSessionGoogleGrant(
+        response.cookies.get(GOOGLE_SESSION_GRANT_COOKIE)?.value ?? "",
+        "account-a",
+        session.sessionId,
+      ),
+    ).toBe("replacement-refresh");
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/userinfo")),
+    ).toHaveLength(1);
+    expect(response.cookies.get(AUTH_SESSION_COOKIE)).toBeUndefined();
+  },
+);
+
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -145,6 +322,7 @@ it("reuses the approved connection after logout, without asking Google for conse
   const signedOut = await logout();
   expect(signedOut.cookies.get("refresh_token")?.maxAge).toBe(0);
   expect(signedOut.cookies.get(AUTH_SESSION_COOKIE)?.maxAge).toBe(0);
+  expect(signedOut.cookies.get(GOOGLE_SESSION_GRANT_COOKIE)?.maxAge).toBe(0);
   returnedRefreshToken = undefined; // Google's normal returning-user response.
   const secondLogin = await start();
   expect(

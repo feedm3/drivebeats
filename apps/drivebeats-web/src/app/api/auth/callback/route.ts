@@ -8,6 +8,11 @@ import {
   parseGrantedGoogleScopes,
 } from "@/lib/google";
 import {
+  encryptSessionGoogleGrant,
+  GOOGLE_SESSION_GRANT_COOKIE,
+  GOOGLE_SESSION_GRANT_COOKIE_OPTIONS,
+} from "@/lib/google-grant-encryption";
+import {
   GoogleGrantError,
   resolveGoogleRefreshToken,
 } from "@/lib/google-grant-service";
@@ -22,6 +27,10 @@ import {
 const AUTH_ERROR_PARAM = "authError";
 
 function clearAuthCookies(response: NextResponse) {
+  response.cookies.set(GOOGLE_SESSION_GRANT_COOKIE, "", {
+    ...GOOGLE_SESSION_GRANT_COOKIE_OPTIONS,
+    maxAge: 0,
+  });
   response.cookies.set("refresh_token", "", {
     httpOnly: true,
     secure: true,
@@ -144,21 +153,25 @@ export async function GET(request: NextRequest) {
     maxAge: 30 * 24 * 60 * 60, // 30 days
   });
 
+  const sessionId = crypto.randomUUID();
+  const signedSession = serializeAuthSession({
+    user,
+    sessionId,
+    accountGeneration,
+    grantedScopes: parseGrantedGoogleScopes(data.scope),
+  });
   response.cookies.set(
-    AUTH_SESSION_COOKIE,
-    serializeAuthSession({
-      user,
-      accountGeneration,
-      grantedScopes: parseGrantedGoogleScopes(data.scope),
-    }),
-    {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60, // 30 days
-    },
+    GOOGLE_SESSION_GRANT_COOKIE,
+    encryptSessionGoogleGrant(refreshToken, user.id, sessionId),
+    { ...GOOGLE_SESSION_GRANT_COOKIE_OPTIONS, maxAge: 30 * 24 * 60 * 60 },
   );
+  response.cookies.set(AUTH_SESSION_COOKIE, signedSession, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  });
 
   return response;
 }

@@ -62,6 +62,118 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+it.each([403, 503])(
+  "recovers the verified browser connection once before retrying a rejected saved grant (%s)",
+  async (status) => {
+    const refresh = vi
+      .spyOn(useAuthStore.getState(), "refreshAccessToken")
+      .mockResolvedValue(true);
+    fetchMock
+      .mockResolvedValueOnce(
+        Response.json(
+          {
+            code:
+              status === 503
+                ? "appdata_connection_recovery_required"
+                : "appdata_access_required",
+          },
+          { status },
+        ),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ ready: true, generation: "generation-a" }),
+      );
+    render(
+      <RequiredAppDataGate initialUser={user}>
+        <p>Recovered Library</p>
+      </RequiredAppDataGate>,
+    );
+    expect(await screen.findByText("Recovered Library")).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  },
+);
+
+it("requires reconnection when the saved grant remains rejected after one browser recovery", async () => {
+  const refresh = vi
+    .spyOn(useAuthStore.getState(), "refreshAccessToken")
+    .mockResolvedValue(true);
+  fetchMock.mockImplementation(async () =>
+    Response.json({ code: "appdata_access_required" }, { status: 403 }),
+  );
+  render(
+    <RequiredAppDataGate initialUser={user}>
+      <p>Must stay gated</p>
+    </RequiredAppDataGate>,
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Connect Google Drive backup" }),
+  ).toBeInTheDocument();
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(screen.queryByText("Must stay gated")).not.toBeInTheDocument();
+});
+
+it("keeps the verified cached Library during a transient browser recovery failure", async () => {
+  saveVerifiedAppDataReadiness(user.id, "generation-a", 1);
+  useAuthStore.setState({ authStatus: "authenticated" });
+  const refresh = vi
+    .spyOn(useAuthStore.getState(), "refreshAccessToken")
+    .mockResolvedValue(false);
+  fetchMock.mockImplementation(async () =>
+    Response.json({ code: "appdata_access_required" }, { status: 403 }),
+  );
+  render(
+    <RequiredAppDataGate
+      initialUser={user}
+      initialAccountGeneration="generation-a"
+      initialGrantedScopes={requiredScopes}
+    >
+      <p>Cached Library</p>
+    </RequiredAppDataGate>,
+  );
+  await act(async () => {});
+  expect(screen.getByText("Cached Library")).toBeInTheDocument();
+  expect(
+    screen.queryByRole("heading", { name: "Connect Google Drive backup" }),
+  ).not.toBeInTheDocument();
+  expect(
+    hasVerifiedAppDataReadiness(user.id, "generation-a", requiredScopes),
+  ).toBe(true);
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(fetchMock).toHaveBeenCalledOnce();
+});
+
+it("shows reconnection after the browser rejects its connection recovery", async () => {
+  saveVerifiedAppDataReadiness(user.id, "generation-a", 1);
+  const refresh = vi
+    .spyOn(useAuthStore.getState(), "refreshAccessToken")
+    .mockImplementation(async () => {
+      useAuthStore.getState().clearTokens();
+      return false;
+    });
+  fetchMock.mockImplementation(async () =>
+    Response.json(
+      { code: "appdata_connection_recovery_required" },
+      { status: 503 },
+    ),
+  );
+  render(
+    <RequiredAppDataGate
+      initialUser={user}
+      initialAccountGeneration="generation-a"
+      initialGrantedScopes={requiredScopes}
+    >
+      <p>Cached Library</p>
+    </RequiredAppDataGate>,
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Connect Google Drive backup" }),
+  ).toBeInTheDocument();
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(fetchMock).toHaveBeenCalledOnce();
+});
+
 it("does not mount player and tool consumers until migration and restore finish", async () => {
   let finishMigration!: (response: Response) => void;
   let finishRestore!: () => void;

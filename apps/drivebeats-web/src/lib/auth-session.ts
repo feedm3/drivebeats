@@ -10,6 +10,8 @@ export interface AuthUser {
 }
 
 export interface AuthSession {
+  /** Distinguishes new sign-ins when binding server-only provider credentials. */
+  sessionId?: string;
   // Legacy sessions have no generation and must reconnect before normal use.
   accountGeneration?: string;
   grantedScopes: string[];
@@ -99,6 +101,7 @@ export function parseAuthSession(value: string | undefined) {
           grantedScopes?: unknown;
           user?: unknown;
           accountGeneration?: unknown;
+          sessionId?: unknown;
         });
 
     const user = parseAuthUserPayload(parsed.user ?? parsed);
@@ -116,6 +119,9 @@ export function parseAuthSession(value: string | undefined) {
     return {
       user,
       grantedScopes,
+      ...(typeof parsed.sessionId === "string"
+        ? { sessionId: parsed.sessionId }
+        : {}),
       accountGeneration:
         typeof parsed.accountGeneration === "string"
           ? parsed.accountGeneration

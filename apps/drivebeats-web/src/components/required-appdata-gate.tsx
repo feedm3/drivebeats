@@ -150,6 +150,8 @@ export function RequiredAppDataGate({
       return true;
     };
     let receivedResponse = false;
+    let recoveryUnavailable = false;
+    let recoveryRejected = false;
     void (async () => {
       try {
         const resumed = canResume
@@ -160,17 +162,50 @@ export function RequiredAppDataGate({
         if (!navigator.onLine && resumed) return;
         const { response, result } = await withinDeadline(
           (async () => {
-            const response = await fetch("/api/appdata/bootstrap", {
-              method: "POST",
-              signal: controller.signal,
-            });
-            receivedResponse = true;
-            const result = await response.json().catch(() => ({}));
-            return { response, result };
+            const bootstrap = async () => {
+              const response = await fetch("/api/appdata/bootstrap", {
+                method: "POST",
+                signal: controller.signal,
+              });
+              receivedResponse = true;
+              const result = await response.json().catch(() => ({}));
+              return { response, result };
+            };
+            const first = await bootstrap();
+            // A different OAuth client may have replaced the legacy saved grant.
+            // Recover only through the verified browser connection, once.
+            if (
+              (first.response.status === 503 &&
+                first.result.code === "appdata_connection_recovery_required") ||
+              (first.response.status === 403 &&
+                first.result.code === "appdata_access_required")
+            ) {
+              if (await useAuthStore.getState().refreshAccessToken())
+                return bootstrap();
+              const auth = useAuthStore.getState();
+              recoveryUnavailable =
+                auth.authStatus === "authenticated" &&
+                !auth.appDataConsentRequired;
+              recoveryRejected = !recoveryUnavailable;
+            }
+            return first;
           })(),
           45_000,
         );
         if (disposed) return;
+        if (recoveryRejected) {
+          clearVerifiedAppDataReadiness(initialUser.id);
+          blockPlayback();
+          setStatus("consent");
+          return;
+        }
+        if (recoveryUnavailable) {
+          if (resumed) {
+            recheckLater();
+            return;
+          }
+          throw new Error("Google connection recovery unavailable");
+        }
         if (
           typeof result.cutoff === "string" &&
           Number.isFinite(Date.parse(result.cutoff))

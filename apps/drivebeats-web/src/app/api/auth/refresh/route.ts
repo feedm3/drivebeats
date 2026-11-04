@@ -3,8 +3,19 @@ import { assertAppDataIdentity } from "@/db/appdata-control";
 import { AppDataError } from "@/db/appdata-types";
 import { AUTH_SESSION_COOKIE, parseAuthSession } from "@/lib/auth-session";
 import { hasRequiredGoogleScopes, refreshAccessToken } from "@/lib/google";
+import { fetchGoogleAccessTokenUserId } from "@/lib/google-api";
+import {
+  decryptSessionGoogleGrant,
+  encryptSessionGoogleGrant,
+  GOOGLE_SESSION_GRANT_COOKIE,
+  GOOGLE_SESSION_GRANT_COOKIE_OPTIONS,
+} from "@/lib/google-grant-encryption";
 
 function clearAuthCookies(response: NextResponse) {
+  response.cookies.set(GOOGLE_SESSION_GRANT_COOKIE, "", {
+    ...GOOGLE_SESSION_GRANT_COOKIE_OPTIONS,
+    maxAge: 0,
+  });
   response.cookies.set("refresh_token", "", {
     httpOnly: true,
     secure: true,
@@ -22,10 +33,9 @@ function clearAuthCookies(response: NextResponse) {
 }
 
 export async function POST(request: NextRequest) {
-  const refresh_token = request.cookies.get("refresh_token")?.value;
-  const authSession = parseAuthSession(
-    request.cookies.get(AUTH_SESSION_COOKIE)?.value,
-  );
+  let refresh_token = request.cookies.get("refresh_token")?.value;
+  const signedSession = request.cookies.get(AUTH_SESSION_COOKIE)?.value;
+  const authSession = parseAuthSession(signedSession);
 
   if (!authSession) {
     const response = NextResponse.json(
@@ -92,6 +102,26 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const encryptedGrant = request.cookies.get(
+    GOOGLE_SESSION_GRANT_COOKIE,
+  )?.value;
+  let sessionBound = false;
+  if (encryptedGrant && signedSession) {
+    try {
+      const boundToken = decryptSessionGoogleGrant(
+        encryptedGrant,
+        authSession.user.id,
+        authSession.sessionId ?? "legacy",
+      );
+      if (!refresh_token || refresh_token === boundToken) {
+        refresh_token = boundToken;
+        sessionBound = true;
+      }
+    } catch {
+      // A late response may carry a different session's grant. Only the
+      // browser's independently verified connection may replace it below.
+    }
+  }
   if (!refresh_token) {
     return NextResponse.json(
       { error: "No refresh token provided" },
@@ -149,7 +179,32 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.json(
+  let upgradedGrant: string | undefined;
+  if (!sessionBound && signedSession) {
+    let googleUserId: string;
+    try {
+      googleUserId = await fetchGoogleAccessTokenUserId(data.access_token);
+    } catch {
+      return NextResponse.json(
+        { error: "Google identity is temporarily unavailable" },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    if (googleUserId !== authSession.user.id) {
+      const response = NextResponse.json(
+        { error: "Reconnect your Google connection" },
+        { status: 401, headers: { "Cache-Control": "no-store" } },
+      );
+      clearAuthCookies(response);
+      return response;
+    }
+    upgradedGrant = encryptSessionGoogleGrant(
+      refresh_token,
+      googleUserId,
+      authSession.sessionId ?? "legacy",
+    );
+  }
+  const response = NextResponse.json(
     {
       access_token: data.access_token,
       expires_at: Date.now() + data.expires_in * 1000,
@@ -159,4 +214,12 @@ export async function POST(request: NextRequest) {
       headers: { "Cache-Control": "no-store" },
     },
   );
+  // Never reissue the identity cookie here: a late refresh must not sign a
+  // logged-out browser back in. This separate grant requires that identity.
+  if (upgradedGrant)
+    response.cookies.set(GOOGLE_SESSION_GRANT_COOKIE, upgradedGrant, {
+      ...GOOGLE_SESSION_GRANT_COOKIE_OPTIONS,
+      maxAge: 30 * 24 * 60 * 60,
+    });
+  return response;
 }

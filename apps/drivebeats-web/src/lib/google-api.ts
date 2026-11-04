@@ -7,6 +7,7 @@ import type { DriveFile } from "@/types";
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
+const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
 const GOOGLE_DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
 
 export const GOOGLE_APIS = {
@@ -156,6 +157,21 @@ export function getGoogleAuthUrlBase() {
 
 export async function fetchGoogleSigningKeys() {
   return fetch(GOOGLE_JWKS_URL);
+}
+
+/** Only used to bind a legacy browser grant to its signed account. */
+export async function fetchGoogleAccessTokenUserId(accessToken: string) {
+  const response = await fetch(GOOGLE_USERINFO_URL, {
+    headers: getGoogleAuthHeaders(accessToken),
+    cache: "no-store",
+    redirect: "error",
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error("Google identity verification unavailable");
+  const user = await response.json();
+  if (typeof user.sub !== "string" || !user.sub)
+    throw new Error("Google identity verification unavailable");
+  return user.sub as string;
 }
 
 export async function exchangeGoogleOAuthCode(

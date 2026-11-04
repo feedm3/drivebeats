@@ -5,6 +5,14 @@ import {
   randomBytes,
 } from "node:crypto";
 
+export const GOOGLE_SESSION_GRANT_COOKIE = "google_appdata_grant";
+export const GOOGLE_SESSION_GRANT_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: true,
+  sameSite: "lax",
+  path: "/api",
+} as const;
+
 function getEncryptionKey() {
   const secret = process.env.AUTH_SESSION_SECRET;
   if (!secret) throw new Error("Missing AUTH_SESSION_SECRET");
@@ -46,4 +54,33 @@ export function decryptGoogleRefreshToken(value: string, googleUserId: string) {
     decipher.update(Buffer.from(encrypted, "base64url")),
     decipher.final(),
   ]).toString("utf8");
+}
+
+function sessionGrantBinding(googleUserId: string, sessionId: string) {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) throw new Error("Missing GOOGLE_CLIENT_ID");
+  return JSON.stringify([googleUserId, clientId, sessionId]);
+}
+
+/** Session grants cannot be moved between Google accounts or OAuth clients. */
+export function encryptSessionGoogleGrant(
+  token: string,
+  googleUserId: string,
+  sessionId: string,
+) {
+  return encryptGoogleRefreshToken(
+    token,
+    sessionGrantBinding(googleUserId, sessionId),
+  );
+}
+
+export function decryptSessionGoogleGrant(
+  value: string,
+  googleUserId: string,
+  sessionId: string,
+) {
+  return decryptGoogleRefreshToken(
+    value,
+    sessionGrantBinding(googleUserId, sessionId),
+  );
 }

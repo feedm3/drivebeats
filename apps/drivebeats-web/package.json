@@ -37,7 +37,7 @@
     "@types/node": "^26.6.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "fake-indexeddb": "^6.2.7",
+    "fake-indexeddb": "^6.2.8",
     "jsdom": "^31.0.0",
     "shadcn": "^4.23.0",
     "tailwindcss": "^4",

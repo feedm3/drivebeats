@@ -13,6 +13,8 @@ import type { Playlist, PlaylistTrack } from "@/types";
 
 const CLOUD_API_TIMEOUT_MS = 30_000;
 const COLLECTION_JOURNAL_LOCK = "drivebeats-collection-journal-v1";
+// A completed local edit can overtake a read even after the save queue empties.
+let collectionEditVersion = 0;
 let collectionSnapshot: {
   accountId: string;
   generation: string;
@@ -154,7 +156,8 @@ async function request(
     throw new Error(
       "Prepare your Google Drive backup before changing collections",
     );
-  if (outboxKey)
+  if (outboxKey) {
+    collectionEditVersion++;
     await writeCollectionJournal(() => {
       if (
         useDriveAppDataStore.getState().accountId !== identity.accountId ||
@@ -176,6 +179,7 @@ async function request(
         }),
       );
     });
+  }
   const send = async () => {
     const controller = new AbortController();
     const timeoutId = window.setTimeout(
@@ -248,42 +252,47 @@ async function request(
   );
 }
 
-export async function fetchCloudLibrarySync() {
-  await resumeCollectionSaves();
+export async function fetchCloudLibrarySync(): Promise<CloudLibrarySyncPayload> {
   const { accountId, generation } = useDriveAppDataStore.getState();
-  const cached =
-    collectionSnapshot?.accountId === accountId &&
-    collectionSnapshot.generation === generation
-      ? collectionSnapshot
-      : null;
-  const response = await request("/api/sync/library", {
-    headers: cached ? { "X-DriveBeats-Checkpoint": cached.checkpoint } : {},
-  });
-  if (response.status === 304) {
-    if (
-      !cached ||
-      response.headers.get("X-DriveBeats-Checkpoint") !== cached.checkpoint
-    )
-      throw new Error("Invalid collection checkpoint");
-    return structuredClone(cached.payload);
+  const sameAccount = () => {
+    const current = useDriveAppDataStore.getState();
+    return current.accountId === accountId && current.generation === generation;
+  };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const editVersion = collectionEditVersion;
+    await resumeCollectionSaves();
+    if (!sameAccount()) throw new Error("Account changed during library sync");
+    if (editVersion !== collectionEditVersion) continue;
+    const cached =
+      collectionSnapshot?.accountId === accountId &&
+      collectionSnapshot.generation === generation
+        ? collectionSnapshot
+        : null;
+    const response = await request("/api/sync/library", {
+      headers: cached ? { "X-DriveBeats-Checkpoint": cached.checkpoint } : {},
+    });
+    const checkpoint = response.headers.get("X-DriveBeats-Checkpoint");
+    let payload: CloudLibrarySyncPayload;
+    if (response.status === 304) {
+      if (!cached || checkpoint !== cached.checkpoint)
+        throw new Error("Invalid collection checkpoint");
+      payload = structuredClone(cached.payload);
+    } else {
+      payload = (await response.json()) as CloudLibrarySyncPayload;
+    }
+
+    if (!sameAccount()) throw new Error("Account changed during library sync");
+    if (editVersion !== collectionEditVersion) continue;
+    if (response.status !== 304 && checkpoint && accountId && generation)
+      collectionSnapshot = {
+        accountId,
+        generation,
+        checkpoint,
+        payload: structuredClone(payload),
+      };
+    return payload;
   }
-  const payload = (await response.json()) as CloudLibrarySyncPayload;
-  const checkpoint = response.headers.get("X-DriveBeats-Checkpoint");
-  const current = useDriveAppDataStore.getState();
-  if (
-    checkpoint &&
-    accountId &&
-    generation &&
-    current.accountId === accountId &&
-    current.generation === generation
-  )
-    collectionSnapshot = {
-      accountId,
-      generation,
-      checkpoint,
-      payload: structuredClone(payload),
-    };
-  return payload;
+  throw new Error("Collections changed during library sync. Retry shortly.");
 }
 
 let replayFlight: Promise<void> | null = null;

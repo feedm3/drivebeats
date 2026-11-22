@@ -76,6 +76,45 @@ it("reuses only the matching account's collections after a validated unchanged r
   ).toBeNull();
   await clearPendingCollectionSaves();
 });
+it.each([200, 304])(
+  "keeps a completed playlist rename when an older %i read returns afterward",
+  async (status) => {
+    const before = {
+      playlists: [{ id: "road", name: "Old name", tracks: [] }],
+      favorites: [],
+    };
+    const after = {
+      playlists: [{ id: "road", name: "Road trip", tracks: [] }],
+      favorites: [],
+    };
+    const oldHeaders = { "X-DriveBeats-Checkpoint": "before-rename" };
+    const delayed = Promise.withResolvers<Response>();
+    const readStarted = Promise.withResolvers<void>();
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(before, { headers: oldHeaders }))
+      .mockImplementationOnce(() => {
+        readStarted.resolve();
+        return delayed.promise;
+      })
+      .mockResolvedValueOnce(response())
+      .mockResolvedValueOnce(Response.json(after));
+    vi.stubGlobal("fetch", fetcher);
+    await fetchCloudLibrarySync();
+
+    const refresh = fetchCloudLibrarySync();
+    await readStarted.promise;
+    await renameCloudPlaylist("road", "Road trip");
+    delayed.resolve(
+      status === 304
+        ? new Response(null, { status, headers: oldHeaders })
+        : Response.json(before, { headers: oldHeaders }),
+    );
+
+    expect(await refresh).toEqual(after);
+  },
+);
+
 describe("collection retry journal", () => {
   it("serializes concurrent sends behind the older request's acknowledgment", async () => {
     let finishFirst!: (value: Response) => void;

@@ -239,6 +239,9 @@ importers:
       '@types/react-dom':
         specifier: ^19
         version: 19.3.0(@types/react@19.3.3)
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
       fake-indexeddb:
         specifier: ^6.2.8
         version: 6.2.8

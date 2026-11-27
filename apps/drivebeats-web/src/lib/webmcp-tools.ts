@@ -37,6 +37,7 @@ import {
   getTrackMetadataState,
   type MetadataView,
 } from "@/lib/track-metadata-loader";
+import { webMcpOutputSchemas } from "@/lib/webmcp-output-schemas";
 import { webMcpRecovery } from "@/lib/webmcp-recovery";
 import type { WebMcpTool } from "@/lib/webmcp-registration";
 import { useAuthStore } from "@/stores/auth-store";
@@ -637,7 +638,7 @@ async function guardedPlayback<T>(
 }
 
 function tool<T extends z.ZodType>(
-  name: string,
+  name: keyof typeof webMcpOutputSchemas,
   description: string,
   schema: T,
   readOnly: boolean,
@@ -656,6 +657,7 @@ function tool<T extends z.ZodType>(
       ...z.toJSONSchema(schema, { io: "input" }),
       type: "object",
     } as Record<string, unknown>,
+    outputSchema: webMcpOutputSchemas[name],
     annotations: { readOnlyHint: readOnly, untrustedContentHint: true },
     execute: async (input, options) => {
       let userId: string | undefined;

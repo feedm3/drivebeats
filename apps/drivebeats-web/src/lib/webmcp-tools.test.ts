@@ -1,3 +1,4 @@
+import Ajv, { type ValidateFunction } from "ajv";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPlaylistTrack } from "@/lib/audio";
 import * as cachedTags from "@/lib/cached-track-tags";
@@ -7,9 +8,16 @@ import {
 } from "@/lib/cloud-library-api";
 import { resetCloudLibrarySyncState } from "@/lib/cloud-library-sync-runner";
 import * as appDataClient from "@/lib/drive-appdata-client";
+import { googleDriveReadError } from "@/lib/drive-read-error";
+import { setDriveProviderCooldown } from "@/lib/drive-request-scheduler";
 import type { LibrarySearchTrack } from "@/lib/library-search-catalog";
 import * as metadataCacheDb from "@/lib/metadata-cache-db";
+import { getPlaybackFailure } from "@/lib/playback-failure";
 import * as metadataLoader from "@/lib/track-metadata-loader";
+import {
+  registerWebMcpTools,
+  type WebMcpTool,
+} from "@/lib/webmcp-registration";
 import { createDriveBeatsTools } from "@/lib/webmcp-tools";
 import { useAuthStore } from "@/stores/auth-store";
 import { useDriveAppDataStore } from "@/stores/drive-appdata-store";
@@ -51,12 +59,31 @@ function signIn(userId = "account-a") {
     },
   });
 }
-function run(name: string, input: unknown = {}, signal?: AbortSignal) {
-  const selected = createDriveBeatsTools().find((tool) => tool.name === name);
+const ajv = new Ajv({ strict: true });
+const validators = new Map<string, ValidateFunction>();
+const tools = createDriveBeatsTools();
+
+function outputValidator(tool: WebMcpTool) {
+  let validate = validators.get(tool.name);
+  if (!validate) {
+    expect(tool.outputSchema, tool.name).toBeDefined();
+    validate = ajv.compile(JSON.parse(JSON.stringify(tool.outputSchema)));
+    validators.set(tool.name, validate);
+  }
+  return validate;
+}
+
+async function run(name: string, input: unknown = {}, signal?: AbortSignal) {
+  const selected = tools.find((tool) => tool.name === name);
   if (!selected) throw new Error(`Missing ${name}`);
-  return selected.execute(input, { signal }) as Promise<
-    Record<string, unknown>
-  >;
+  const value = await selected.execute(input, { signal });
+  const serialized: Record<string, unknown> = JSON.parse(JSON.stringify(value));
+  const validate = outputValidator(selected);
+  expect(
+    validate(serialized),
+    `${name}: ${JSON.stringify(validate.errors)}`,
+  ).toBe(true);
+  return serialized;
 }
 function audio() {
   return {
@@ -131,6 +158,81 @@ beforeEach(async () => {
 });
 
 describe("DriveBeats WebMCP actions", () => {
+  it("validates every registered tool's serialized page-closed result", async () => {
+    const registered: WebMcpTool[] = [];
+    const cleanup = registerWebMcpTools(
+      { registerTool: (tool) => void registered.push(tool) },
+      tools,
+    );
+    cleanup();
+
+    expect(registered).toHaveLength(tools.length);
+    for (const descriptor of registered) {
+      const value = JSON.parse(JSON.stringify(await descriptor.execute({})));
+      expect(value).toMatchObject({
+        ok: false,
+        error: { code: "page_closed" },
+        recovery: { action: "reopen_page", automaticRetry: false },
+      });
+      expect(descriptor.outputSchema).toBeDefined();
+      const validate = ajv.compile(
+        JSON.parse(JSON.stringify(descriptor.outputSchema)),
+      );
+      expect(validate(value), descriptor.name).toBe(true);
+      expect(validate({ ...value, recovery: undefined }), descriptor.name).toBe(
+        false,
+      );
+    }
+  });
+
+  it("preserves fractional provider retry delays in serialized status", async () => {
+    const failure = getPlaybackFailure(
+      googleDriveReadError(
+        new Response(null, {
+          status: 429,
+          headers: { "Retry-After": "300.0005" },
+        }),
+      ),
+    );
+    const accountId = "fractional-retry";
+    signIn(accountId);
+    usePlayerStore.setState({ lastPlaybackFailure: failure });
+    await setDriveProviderCooldown(accountId, 300_000.5, false);
+
+    const result = await run("drivebeats_status");
+    expect(result.playback).toMatchObject({
+      lastFailure: { code: "drive_rate_limited", retryAfterMs: 300_000.5 },
+    });
+    const coverage = result.metadataCoverage as {
+      retryAfterMs: number;
+      nextRetryAt: number;
+    };
+    expect(coverage.retryAfterMs % 1).toBe(0.5);
+    expect(coverage.nextRetryAt % 1).toBe(0.5);
+  });
+
+  it("represents an empty queue and both search formats with no matches", async () => {
+    expect(await run("drivebeats_get_queue")).toMatchObject({
+      ok: true,
+      total: 0,
+      currentIndex: -1,
+      entries: [],
+      nextOffset: null,
+    });
+    for (const format of ["compact", "detailed"]) {
+      expect(
+        await run("drivebeats_search_library", { query: "absent", format }),
+      ).toMatchObject({
+        ok: true,
+        tracks: [],
+        total: 0,
+        nextCursor: null,
+        nextOffset: null,
+        search: { format, complete: true },
+      });
+    }
+  });
+
   it("reads the visible queue with duplicate occurrences and rejects changed pagination without network work", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     usePlayerStore.setState({
@@ -1083,6 +1185,40 @@ describe("DriveBeats WebMCP actions", () => {
     expect(useLibrarySearchStore.getState().ensureReady).not.toHaveBeenCalled();
   });
 
+  it("returns the saved Playlist identity and the removed track ID", async () => {
+    vi.spyOn(usePlaylistStore.getState(), "createPlaylist").mockImplementation(
+      async (name) => {
+        usePlaylistStore.setState({
+          playlists: [{ id: "p", name, tracks: [createPlaylistTrack(track)] }],
+        });
+        return "p";
+      },
+    );
+    expect(await run("drivebeats_save_playlist", { name: "Evening" })).toEqual({
+      ok: true,
+      playlistId: "p",
+      name: "Evening",
+    });
+
+    const playlist = usePlaylistStore.getState().playlists[0];
+    vi.mocked(fetchCloudLibrarySync).mockResolvedValue({
+      favorites: [],
+      playlists: [playlist],
+    });
+    vi.spyOn(usePlaylistStore.getState(), "removeTrack").mockImplementation(
+      async () => {
+        usePlaylistStore.setState({ playlists: [{ ...playlist, tracks: [] }] });
+      },
+    );
+    expect(
+      await run("drivebeats_edit_playlist_tracks", {
+        action: "remove",
+        playlistId: "p",
+        trackId: track.id,
+      }),
+    ).toEqual({ ok: true, playlistId: "p", removedTrackId: track.id });
+  });
+
   it("requires collection verification after a creation whose completion became uncertain", async () => {
     vi.spyOn(usePlaylistStore.getState(), "createPlaylist").mockImplementation(
       async () => {
@@ -1600,6 +1736,53 @@ describe("shared local metadata tools", () => {
     });
     expect(next).not.toHaveProperty("tracks");
   });
+  it("reports timed-out metadata separately from an unknown track", async () => {
+    vi.spyOn(metadataLoader, "ensureTrackMetadata").mockImplementation(
+      async (_entry, { signal } = {}) =>
+        new Promise((_resolve, reject) => {
+          signal?.throwIfAborted();
+          signal?.addEventListener("abort", () => reject(signal.reason), {
+            once: true,
+          });
+        }),
+    );
+    const result = await run("drivebeats_load_track_metadata", {
+      trackIds: [track.id],
+      mode: "load_missing",
+      timeoutMs: 1000,
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      timedOut: true,
+      remainingTrackIds: [track.id],
+      tracks: [
+        {
+          id: track.id,
+          loadedNow: false,
+          metadata: { status: "deferred", freshness: "unknown" },
+          error: { code: "timeout", retryable: true },
+        },
+      ],
+    });
+
+    const tool = tools.find(
+      ({ name }) => name === "drivebeats_load_track_metadata",
+    );
+    if (!tool) throw new Error("Missing metadata tool");
+    const [deferredTrack] = result.tracks as Record<string, unknown>[];
+    expect(
+      outputValidator(tool)({
+        ...result,
+        tracks: [
+          {
+            ...deferredTrack,
+            error: { code: "track_not_found", retryable: false },
+          },
+        ],
+      }),
+    ).toBe(false);
+  });
+
   it("cache_only never verifies unknown IDs with the cloud or Drive", async () => {
     await seed();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
